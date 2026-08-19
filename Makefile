@@ -1,16 +1,19 @@
 CC ?= cc
 AR ?= ar
-CPPFLAGS ?= -Iinclude
+CPPFLAGS ?= -Iinclude -Ithird_party
 CFLAGS ?= -O2 -g
 CFLAGS += -std=c17 -Wall -Wextra -Wpedantic
 LDLIBS += -lm
 
-CORE_SRC = src/core/image.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c
+CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
 
 .PHONY: all clean check install fetch-luts fetch-polaroid-lut
 
 all: polajuice libpolajuice.a
+
+# third-party code compiles in its own TU with warnings off; ours stay strict
+src/core/stb_impl.o: CFLAGS += -w
 
 libpolajuice.a: $(CORE_OBJ)
 	$(AR) rcs $@ $^

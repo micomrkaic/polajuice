@@ -1,17 +1,19 @@
-# Polajuice 0.2.0
+# Polajuice 0.3.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
 look as an ordered pipeline—camera, emulsion, development, print/scan and
 age—rather than as a bag of unrelated filters.
 
-This first working prototype deliberately uses dependency-free PPM I/O so the
-core can be built and tested anywhere. The processing engine works
-in linear floating-point RGB and includes film-like tone response, color
-matrices, optical softness, vignette, halation, luminance-dependent grain,
-square crops, exact-proportion instant-print framing and standard `.cube` 3D
-color LUTs. JPEG, TIFF, PNG, HEIC, ICC and RAW are
-the next I/O layer, intended to be implemented through libvips and Little CMS.
+The engine reads and writes JPEG, PNG and PPM directly; the format is chosen
+from the file extension, JPEG loading honors the EXIF orientation tag, and the
+only build requirements remain a C17 compiler and `libm` (JPEG/PNG codecs are
+the vendored public-domain stb single-header libraries in `third_party/`).
+The processing core works in linear floating-point RGB and includes film-like
+tone response, color matrices, optical softness, vignette, halation,
+luminance-dependent grain, square crops, exact-proportion instant-print
+framing, an age stage and standard `.cube` 3D color LUTs. HEIC, TIFF, ICC and
+RAW remain future work (libvips and Little CMS territory).
 
 ## Build
 
@@ -30,13 +32,13 @@ List the nine built-in recipes:
 ./polajuice presets
 ```
 
-Render an image:
+Render an image; the output format follows the output extension, and when
+`--output` is omitted the result lands next to the input as
+`<input>_<preset>.<ext>` in the input's own format:
 
 ```sh
-./polajuice apply input.ppm \
-    --preset 35mm-negative \
-    --seed 42 \
-    --output result.ppm
+./polajuice apply IMG_2041.jpg --preset 35mm-negative --seed 42
+# -> IMG_2041_35mm-negative.jpg
 ```
 
 Apply a commonly used film-emulation LUT for the stock tone/color transform
@@ -46,10 +48,10 @@ stage so its tone curve is not applied twice; it no longer suppresses direct
 flash or other camera stages:
 
 ```sh
-./polajuice apply input.ppm \
+./polajuice apply IMG_2041.jpg \
     --preset polaroid-600 \
-    --lut polaroid_px-680.cube \
-    --output result.ppm
+    --lut data/luts/instant_consumer/polaroid_px-680.cube \
+    --output polaroid.jpg
 ```
 
 G'MIC publishes downloadable `.cube` versions of its established film CLUTs,
@@ -69,21 +71,12 @@ make fetch-luts
 Partial-strength render:
 
 ```sh
-./polajuice apply input.ppm -p polaroid-600 \
-    --strength 0.75 -o result.ppm
+./polajuice apply IMG_2041.jpg -p polaroid-600 --strength 0.75
 ```
 
-For ordinary images during this PPM-only stage, ImageMagick or GIMP can perform
-the temporary conversion:
-
-```sh
-magick input.heic -auto-orient input.ppm
-./polajuice apply input.ppm -p 35mm-slide -o output.ppm
-magick output.ppm output.jpg
-```
-
-PPM files are treated as sRGB at the boundary and converted to linear RGB for
-processing.
+HEIC still needs one external conversion (`magick input.heic input.jpg`, or
+`sips -s format jpeg` on macOS). All files are treated as 8-bit sRGB at the
+boundary and converted to linear RGB for processing.
 
 ## Presets
 

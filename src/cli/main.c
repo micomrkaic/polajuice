@@ -10,13 +10,14 @@ static void usage(FILE *stream)
     fprintf(stream,
         "Polajuice %s - photographic process emulator\n\n"
         "Usage:\n"
-        "  polajuice apply INPUT.ppm -p PRESET -o OUTPUT.ppm [options]\n"
+        "  polajuice apply INPUT -p PRESET [-o OUTPUT] [options]\n"
         "  polajuice presets\n"
         "  polajuice describe PRESET\n"
-        "  polajuice inspect INPUT.ppm\n\n"
+        "  polajuice inspect INPUT\n\n"
         "Options:\n"
         "  -p, --preset NAME       select a photographic recipe\n"
-        "  -o, --output PATH       output PPM path\n"
+        "  -o, --output PATH       output path; default INPUT_PRESET.ext\n"
+        "                          formats by extension: .ppm .png .jpg .jpeg\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
         "      --seed INTEGER      deterministic grain seed\n"
         "      --lut FILE.cube     apply a standard 3D color LUT\n"
@@ -42,9 +43,9 @@ static int list_presets(void)
 static int inspect_image(const char *path)
 {
     PjError error = {{0}};
-    PjImage *image = pj_image_load_ppm(path, &error);
+    PjImage *image = pj_image_load(path, &error);
     if (!image) return fail(&error);
-    printf("path: %s\nwidth: %zu\nheight: %zu\nformat: PPM P6 / sRGB\n",
+    printf("path: %s\nwidth: %zu\nheight: %zu\ncolorspace: sRGB\n",
            path, pj_image_width(image), pj_image_height(image));
     pj_image_free(image);
     return EXIT_SUCCESS;
@@ -80,9 +81,22 @@ static int apply(int argc, char **argv)
             return EXIT_FAILURE;
         }
     }
-    if (!input || !preset || !output) {
+    if (!input || !preset) {
         usage(stderr);
         return EXIT_FAILURE;
+    }
+    char derived[4096];
+    if (!output) {
+        const char *dot = strrchr(input, '.');
+        const char *slash = strrchr(input, '/');
+        if (!dot || (slash && dot < slash)) dot = input + strlen(input);
+        int n = snprintf(derived, sizeof derived, "%.*s_%s%s",
+                         (int)(dot - input), input, preset, dot);
+        if (n < 0 || (size_t)n >= sizeof derived) {
+            fprintf(stderr, "input path too long\n");
+            return EXIT_FAILURE;
+        }
+        output = derived;
     }
 
     PjError error = {{0}};
@@ -92,7 +106,7 @@ static int apply(int argc, char **argv)
         if (!lut) return fail(&error);
         options.color_lut = lut;
     }
-    PjImage *source = pj_image_load_ppm(input, &error);
+    PjImage *source = pj_image_load(input, &error);
     if (!source) {
         pj_lut3d_free(lut);
         return fail(&error);
@@ -101,7 +115,7 @@ static int apply(int argc, char **argv)
     pj_image_free(source);
     pj_lut3d_free(lut);
     if (!result) return fail(&error);
-    bool saved = pj_image_save_ppm(result, output, &error);
+    bool saved = pj_image_save(result, output, &error);
     pj_image_free(result);
     return saved ? EXIT_SUCCESS : fail(&error);
 }

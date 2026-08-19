@@ -185,4 +185,4 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
     return ok;
 }
 
-const char *pj_version_string(void) { return "0.2.0"; }
+const char *pj_version_string(void) { return "0.3.0"; }

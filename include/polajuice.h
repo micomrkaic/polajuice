@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 0
-#define PJ_VERSION_MINOR 2
+#define PJ_VERSION_MINOR 3
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -27,6 +27,12 @@ typedef struct {
 } PjRenderOptions;
 
 PjImage *pj_image_new(size_t width, size_t height, PjError *error);
+
+/* Format chosen from the file extension: .ppm, .png, .jpg/.jpeg.
+ * JPEG loading honors the EXIF orientation tag. */
+PjImage *pj_image_load(const char *path, PjError *error);
+bool pj_image_save(const PjImage *image, const char *path, PjError *error);
+
 PjImage *pj_image_load_ppm(const char *path, PjError *error);
 bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error);
 void pj_image_free(PjImage *image);

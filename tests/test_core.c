@@ -71,6 +71,33 @@ int main(void)
     pj_image_free(roundtrip);
     assert(remove(roundtrip_path) == 0);
 
+    /* PNG must round-trip losslessly through the stb path; JPEG must come
+     * back close (lossy) at the same dimensions.  Format is picked from the
+     * extension by pj_image_save/pj_image_load. */
+    const char *png_path = "/tmp/polajuice-test.png";
+    assert(pj_image_save(input, png_path, &error));
+    PjImage *png_back = pj_image_load(png_path, &error);
+    assert(png_back);
+    assert(pj_image_width(png_back) == pj_image_width(input));
+    {
+        size_t n = pj_image_width(input) * pj_image_height(input) * 3;
+        const float *x = pj_image_pixels_const(input);
+        const float *y = pj_image_pixels_const(png_back);
+        for (size_t i = 0; i < n; ++i)
+            assert(fabsf(x[i] - y[i]) < 0.004f);   /* 8-bit quantization only */
+    }
+    pj_image_free(png_back);
+    assert(remove(png_path) == 0);
+
+    const char *jpg_path = "/tmp/polajuice-test.jpg";
+    assert(pj_image_save(input, jpg_path, &error));
+    PjImage *jpg_back = pj_image_load(jpg_path, &error);
+    assert(jpg_back);
+    assert(pj_image_width(jpg_back) == pj_image_width(input));
+    assert(pj_image_height(jpg_back) == pj_image_height(input));
+    pj_image_free(jpg_back);
+    assert(remove(jpg_path) == 0);
+
     PjRenderOptions a = {.seed = 42, .strength = 1.0f};
     PjImage *first = pj_render(input, "35mm-negative", &a, &error);
     PjImage *second = pj_render(input, "35mm-negative", &a, &error);
