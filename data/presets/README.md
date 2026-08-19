@@ -7,6 +7,10 @@ identified by a content hash in the recipe.
 
 ## Fetching stock LUTs
 
+As of 0.4.0 each camera applies its canonical film automatically when the
+film library is installed; the table below documents those defaults and
+sensible alternatives. `-f NAME` overrides, `--no-film` forces scalars.
+
 `make fetch-luts` (or `scripts/fetch_luts.sh`) downloads the G'MIC color-preset
 family packs, already in `.cube` format, into `data/luts/`:
 

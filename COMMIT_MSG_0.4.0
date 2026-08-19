@@ -1,0 +1,21 @@
+0.4.0: camera/film vocabulary, film library, canonical defaults
+
+CLI renamed to match the architecture: -c/--camera selects the
+format/process archetype (optics, grain, flash, framing, age),
+-f/--film the color chemistry. 0.3.x -p/--preset/--lut remain as
+quiet aliases.
+
+Films are now named, not pathed: -f matches against the film library
+(data/luts, or $POLAJUICE_FILMS) by exact stem, then case-insensitive
+substring; ambiguity lists candidates. Each camera declares a
+canonical film applied automatically when installed, falling back to
+the built-in scalar engine with a note; --no-film forces scalars.
+New 'films [filter]' subcommand lists installed stocks; 'cameras'
+shows each archetype with its default film.
+
+Makefile: auto header dependencies via -MMD (editing internal.h
+previously left stale objects with a mismatched struct layout);
+portable install target (BSD install has no -D). New
+scripts/release.sh automates import-build-test-commit-tag-push with
+preflight checks that refuse non-fast-forward states and existing
+tags.

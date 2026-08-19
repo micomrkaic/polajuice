@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 0
-#define PJ_VERSION_MINOR 3
+#define PJ_VERSION_MINOR 4
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -50,6 +50,9 @@ void pj_lut3d_apply(const PjLut3D *lut, float rgb[3]);
 size_t pj_preset_count(void);
 const char *pj_preset_name(size_t index);
 const char *pj_preset_description(const char *name);
+/* Canonical film-stock LUT stem for a camera preset, or NULL when the
+ * scalar engine carries the look (e.g. expired-film). */
+const char *pj_preset_default_film(const char *name);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,

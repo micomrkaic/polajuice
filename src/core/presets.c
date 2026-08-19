@@ -7,6 +7,7 @@
 static const PjPreset presets[] = {
     {
         .name = "35mm-negative",
+        .default_film = "kodak_portra_400",
         .description = "Clean 35mm color negative: fine grain, gentle shoulder",
         .exposure_ev = 0.00f, .contrast = 1.05f, .black_lift = 0.006f,
         .highlight_rolloff = 0.70f, .saturation = 1.08f,
@@ -21,6 +22,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "polaroid-600",
+        .default_film = "polaroid_px-680",
         .description = "Soft, nearly grainless Color 600-style instant print",
         .exposure_ev = 0.05f, .contrast = 1.18f, .black_lift = 0.018f,
         .highlight_rolloff = 0.34f, .saturation = 1.04f,
@@ -36,6 +38,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "super8",
+        .default_film = "kodak_ektachrome_100_vs",
         .description = "Super 8 reversal frame: 1.36:1 gate, coarse grain, halation",
         .crop_aspect = 1.362f,
         .exposure_ev = -0.02f, .contrast = 1.18f, .black_lift = 0.003f,
@@ -51,6 +54,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "disposable-flash",
+        .default_film = "fuji_superia_800",
         .description = "ISO 800 disposable: harsh near flash, dark falloff and soft lens",
         .exposure_ev = 0.02f, .contrast = 1.20f, .black_lift = 0.002f,
         .highlight_rolloff = 0.32f, .saturation = 1.06f,
@@ -68,6 +72,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "35mm-slide",
+        .default_film = "fuji_provia_100f",
         .description = "35mm reversal slide: very fine grain, hard shoulder, rich color",
         .exposure_ev = -0.03f, .contrast = 1.15f, .black_lift = 0.001f,
         .highlight_rolloff = 0.40f, .saturation = 1.08f,
@@ -82,6 +87,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "bw-35",
+        .default_film = "ilford_hp_5_plus_400",
         .description = "35mm ISO 400 black-and-white: medium contrast, honest grain",
         .exposure_ev = 0.00f, .contrast = 1.06f, .black_lift = 0.006f,
         .highlight_rolloff = 0.58f, .saturation = 0.0f,
@@ -93,6 +99,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "toy-camera-120",
+        .default_film = "lomography_x-pro_slide_200",
         .description = "Square plastic-lens camera with vignette and edge softness",
         .exposure_ev = 0.02f, .contrast = 1.08f, .black_lift = 0.010f,
         .highlight_rolloff = 0.58f, .saturation = 1.12f,
@@ -135,6 +142,12 @@ static const PjPreset presets[] = {
         .highlight_tint = {0.006f,0.004f,-0.002f}
     }
 };
+
+const char *pj_preset_default_film(const char *name)
+{
+    const PjPreset *preset = pj_find_preset(name);
+    return preset ? preset->default_film : NULL;
+}
 
 size_t pj_preset_count(void) { return sizeof presets / sizeof presets[0]; }
 

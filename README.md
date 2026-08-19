@@ -1,4 +1,4 @@
-# Polajuice 0.3.0
+# Polajuice 0.4.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -26,20 +26,38 @@ make check
 
 ## Use
 
-List the nine built-in recipes:
+List the nine built-in cameras and their canonical films:
 
 ```sh
-./polajuice presets
+./polajuice cameras
 ```
 
-Render an image; the output format follows the output extension, and when
-`--output` is omitted the result lands next to the input as
-`<input>_<preset>.<ext>` in the input's own format:
+A look is a **camera** plus a **film**. The camera (`-c`) is the format and
+process archetype: optics, grain, flash, framing, age. The film (`-f`) is the
+color chemistry, a `.cube` 3D LUT named by stock and found automatically in
+the film library (`data/luts/`, populated by `make fetch-luts`; override the
+location with `$POLAJUICE_FILMS`). Every camera has a canonical film applied
+by default when installed, so the everyday command is just:
 
 ```sh
-./polajuice apply IMG_2041.jpg --preset 35mm-negative --seed 42
-# -> IMG_2041_35mm-negative.jpg
+./polajuice apply IMG_2041.jpg -c polaroid-600
+# -> IMG_2041_polaroid-600.jpg, graded through polaroid_px-680.cube
 ```
+
+Choose a different stock by name (case-insensitive substring; exact stem
+wins; ambiguity lists candidates) or by path, list what is installed with
+`polajuice films [filter]`, or force the built-in scalar color engine:
+
+```sh
+./polajuice apply IMG_2041.jpg -c 35mm-negative -f portra_800
+./polajuice apply IMG_2041.jpg -c bw-35 -f ./my_custom.cube
+./polajuice apply IMG_2041.jpg -c polaroid-600 --no-film
+```
+
+The output format follows the output extension; when `--output` is omitted
+the result lands next to the input as `<input>_<camera>.<ext>` in the
+input's own format. The 0.3.x flags `-p/--preset/--lut` remain as quiet
+aliases.
 
 Apply a commonly used film-emulation LUT for the stock tone/color transform
 while retaining Polajuice's preset-specific lighting, input balance, optical,
@@ -48,10 +66,7 @@ stage so its tone curve is not applied twice; it no longer suppresses direct
 flash or other camera stages:
 
 ```sh
-./polajuice apply IMG_2041.jpg \
-    --preset polaroid-600 \
-    --lut data/luts/instant_consumer/polaroid_px-680.cube \
-    --output polaroid.jpg
+./polajuice apply IMG_2041.jpg -c polaroid-600 -f px-70 -o polaroid.jpg
 ```
 
 G'MIC publishes downloadable `.cube` versions of its established film CLUTs,
@@ -71,7 +86,7 @@ make fetch-luts
 Partial-strength render:
 
 ```sh
-./polajuice apply IMG_2041.jpg -p polaroid-600 --strength 0.75
+./polajuice apply IMG_2041.jpg -c polaroid-600 --strength 0.75
 ```
 
 HEIC still needs one external conversion (`magick input.heic input.jpg`, or

@@ -5,3 +5,6 @@
 *.ppm
 *.jpg
 data/luts/
+*.JPG
+*.jpeg
+*.png

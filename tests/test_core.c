@@ -98,6 +98,13 @@ int main(void)
     pj_image_free(jpg_back);
     assert(remove(jpg_path) == 0);
 
+    /* Camera archetypes declare their canonical film; process-identity
+     * cameras (expired-film) deliberately have none. */
+    assert(pj_preset_default_film("polaroid-600"));
+    assert(!strcmp(pj_preset_default_film("polaroid-600"), "polaroid_px-680"));
+    assert(pj_preset_default_film("expired-film") == NULL);
+    assert(pj_preset_default_film("no-such-camera") == NULL);
+
     PjRenderOptions a = {.seed = 42, .strength = 1.0f};
     PjImage *first = pj_render(input, "35mm-negative", &a, &error);
     PjImage *second = pj_render(input, "35mm-negative", &a, &error);

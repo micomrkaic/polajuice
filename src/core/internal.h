@@ -19,6 +19,7 @@ struct PjLut3D {
 typedef struct {
     const char *name;
     const char *description;
+    const char *default_film;   /* canonical .cube stem in data/luts, or NULL */
     float exposure_ev;
     float contrast;
     float black_lift;
