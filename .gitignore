@@ -1,0 +1,7 @@
+*.o
+*.a
+/polajuice
+/tests/test_core
+*.ppm
+*.jpg
+data/luts/
