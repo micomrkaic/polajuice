@@ -33,6 +33,8 @@ static void usage(FILE *stream)
         "  -o, --output PATH       output path; default INPUT_CAMERA.ext\n"
         "                          formats by extension: .ppm .png .jpg .jpeg\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
+        "      --age NUMBER        storage aging from 0 (fresh) to 1\n"
+        "                          (fog, faded contrast, magenta drift)\n"
         "      --seed INTEGER      deterministic grain seed\n"
         "  -h, --help              show this help\n\n"
         "Film library: $POLAJUICE_FILMS, else ./data/luts ('make fetch-luts').\n",
@@ -50,8 +52,10 @@ static int list_cameras(void)
     for (size_t i = 0; i < pj_preset_count(); ++i) {
         const char *name = pj_preset_name(i);
         const char *film = pj_preset_default_film(name);
-        printf("%-21s %s\n%-21s   film: %s\n", name,
+        char traits[512];
+        printf("%-21s %s\n%-21s   traits: %s\n%-21s   film: %s\n", name,
                pj_preset_description(name), "",
+               pj_preset_traits(name, traits, sizeof traits), "",
                film ? film : "(built-in scalar engine)");
     }
     return EXIT_SUCCESS;
@@ -258,6 +262,14 @@ static int apply(int argc, char **argv)
             film_request = argv[++i];
         else if (!strcmp(argv[i], "--no-film"))
             no_film = true;
+        else if (!strcmp(argv[i], "--age") && i + 1 < argc) {
+            char *end = NULL;
+            options.age = strtof(argv[++i], &end);
+            if (!end || *end || options.age < 0.0f || options.age > 1.0f) {
+                fprintf(stderr, "invalid age (0..1)\n");
+                return EXIT_FAILURE;
+            }
+        }
         else if ((!strcmp(argv[i], "-o") || !strcmp(argv[i], "--output")) && i + 1 < argc)
             output = argv[++i];
         else if (!strcmp(argv[i], "--strength") && i + 1 < argc) {
@@ -354,7 +366,11 @@ int main(int argc, char **argv)
             fprintf(stderr, "unknown camera: %s\n", argv[2]);
             return EXIT_FAILURE;
         }
-        printf("%s: %s\n", argv[2], description);
+        char traits[512];
+        const char *film = pj_preset_default_film(argv[2]);
+        printf("%s: %s\n  traits: %s\n  canonical film: %s\n", argv[2],
+               description, pj_preset_traits(argv[2], traits, sizeof traits),
+               film ? film : "(built-in scalar engine)");
         return EXIT_SUCCESS;
     }
     if (!strcmp(argv[1], "inspect") && argc > 2)

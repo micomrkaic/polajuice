@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 0
-#define PJ_VERSION_MINOR 6
+#define PJ_VERSION_MINOR 7
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -23,6 +23,9 @@ typedef struct {
 typedef struct {
     uint64_t seed;
     float strength;
+    float age;   /* 0..1 storage-degradation axis: base fog, contrast decay,
+                    desaturation, warm-magenta drift. Orthogonal to camera
+                    and film; applies after the color stage. */
     const PjLut3D *color_lut;
 } PjRenderOptions;
 
@@ -59,6 +62,10 @@ const char *pj_preset_description(const char *name);
 /* Canonical film-stock LUT stem for a camera preset, or NULL when the
  * scalar engine carries the look (e.g. expired-film). */
 const char *pj_preset_default_film(const char *name);
+/* Human-readable trait summary generated from the preset's own parameters
+ * (framing, flash, lens, halation, grain, ...). Returns buffer, or NULL
+ * for an unknown camera. */
+char *pj_preset_traits(const char *name, char *buffer, size_t size);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,

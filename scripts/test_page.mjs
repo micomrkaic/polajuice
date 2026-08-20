@@ -19,13 +19,15 @@ class Elem {
       { get: () => [this.options.find(o => o.value === this.value) || this.options[0]],
         configurable: true }); }
   addEventListener(ev, fn) { this.handlers[ev] = fn; }
+  append(...nodes) { (this.children ??= []).push(...nodes); }
   click() {} classListToggle() {}
   get classList() { return { toggle: () => {} }; }
 }
 const elems = {};
 globalThis.document = {
   getElementById: id => elems[id] ??= new Elem(id),
-  createElement: () => ({ click: () => {}, set href(v) {}, set download(v) {} }),
+  createElement: () => ({ click: () => {}, textContent: "", innerHTML: "",
+                          set href(v) {}, set download(v) {} }),
 };
 globalThis.Option = class { constructor(text, value) { this.text = text; this.value = value; this.dataset = {}; } };
 globalThis.Blob = class { constructor(parts) { this.parts = parts; } };
@@ -50,11 +52,14 @@ await unlink(probe);
 
 const status = elems["status"].textContent;
 if (elems["status"].className === "error") throw new Error("boot errored: " + status);
-if (elems["camera"].options.length < 9) throw new Error("camera dropdown not populated");
+if (elems["camera"].options.length < 8) throw new Error("camera dropdown not populated");
 console.log(`page boot ok: "${status}", ${elems["camera"].options.length} cameras, version ${elems["version"].textContent}`);
 
 // Rendering itself is covered by test_wasm.mjs through the same engine.js;
 // here we verify the page wired its handlers.
 if (!elems["render"].handlers["click"]) throw new Error("render button not wired");
 if (!elems["drop"].handlers["drop"]) throw new Error("drop zone not wired");
+if (!elems["helpcameras"] || !(elems["helpcameras"].children?.length >= 16))
+  throw new Error("help panel not populated");
+console.log(`help panel: ${elems["helpcameras"].children.length / 2} cameras described`);
 console.log("page handlers wired; render path covered by test_wasm.mjs");

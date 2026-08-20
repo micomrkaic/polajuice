@@ -38,6 +38,17 @@
                color:#7a7263; margin-bottom:0.3rem; }
   img.view { width:100%; display:block; border:1px solid var(--line);
              background:white; }
+  details#help { border:1px solid var(--line); background:#fbf9f4;
+    padding:0.6rem 1rem; margin:0.4rem 0 0.8rem; }
+  details#help summary { cursor:pointer; color:#7a7263; font-style:italic; }
+  .helpgrid { display:grid; grid-template-columns:1fr 1fr; gap:1.4rem;
+    margin-top:0.8rem; }
+  @media (max-width:44rem) { .helpgrid { grid-template-columns:1fr; } }
+  .helpgrid h3 { margin:0 0 0.2rem; font-size:1rem; }
+  .helpnote { font-size:0.85rem; color:#7a7263; margin:0 0 0.6rem; }
+  .helpgrid dt { font-weight:bold; margin-top:0.5rem; }
+  .helpgrid dd { margin:0.1rem 0 0 0; font-size:0.9rem; color:#4a453b; }
+  .helpgrid dd .traits { color:#7a7263; font-style:italic; }
   footer { max-width:60rem; margin:0 auto; padding:0 1.5rem 2rem;
            font-size:0.85rem; color:#7a7263; }
   a { color:var(--accent); }
@@ -70,10 +81,35 @@
       <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
     </div>
     <div>
+      <label for="age">Age <span id="ageval">fresh</span></label>
+      <input id="age" type="range" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div>
       <label for="seed">Grain seed</label>
       <input id="seed" type="number" value="42" step="1">
     </div>
   </div>
+
+  <details id="help">
+    <summary>What do these cameras and films do?</summary>
+    <div class="helpgrid">
+      <div>
+        <h3>Cameras</h3>
+        <p class="helpnote">The camera is the format and process: optics,
+        grain, flash, framing. Traits below are generated from the engine's
+        own parameters, so they always match what actually renders.</p>
+        <dl id="helpcameras"></dl>
+      </div>
+      <div>
+        <h3>Films</h3>
+        <p class="helpnote">The film is the color chemistry, applied as a
+        3D LUT. "Canonical (auto)" picks each camera's period-correct
+        stock; Age is a third axis — storage fog, faded contrast and a
+        magenta drift that works with any camera and film.</p>
+        <dl id="helpfilms"></dl>
+      </div>
+    </div>
+  </details>
 
   <div class="row">
     <button id="render" disabled>Render preview</button>
@@ -111,16 +147,33 @@ async function boot() {
   $("version").textContent = "v" + await engine.version();
 
   const cameraSel = $("camera");
-  for (const cam of await engine.cameras()) {
+  const cameraList = await engine.cameras();
+  for (const cam of cameraList) {
     const opt = new Option(`${cam.name} — ${cam.description}`, cam.name);
     opt.dataset.film = cam.film || "";
     cameraSel.add(opt);
   }
   try {
-    films = await (await fetch("films/films.json")).json();
-    for (const stem of films) $("film").add(new Option(stem, stem));
+    const manifest = await (await fetch("films/films.json")).json();
+    films = manifest.map(f => typeof f === "string" ? { stem: f, blurb: "" } : f);
+    for (const f of films) $("film").add(new Option(f.stem, f.stem));
   } catch (e) {
     setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
+  }
+  const camHelp = $("helpcameras");
+  for (const cam of cameraList) {
+    const dt = document.createElement("dt"); dt.textContent = cam.name;
+    const dd = document.createElement("dd");
+    dd.innerHTML = `${cam.description}.<br><span class="traits">${cam.traits}</span>` +
+      (cam.film ? `<br><span class="traits">canonical film: ${cam.film}</span>` : "");
+    camHelp.append(dt, dd);
+  }
+  const filmHelp = $("helpfilms");
+  for (const f of films) {
+    const dt = document.createElement("dt"); dt.textContent = f.stem;
+    const dd = document.createElement("dd");
+    dd.textContent = f.blurb || "";
+    filmHelp.append(dt, dd);
   }
   setStatus("ready — drop a photo");
 }
@@ -139,7 +192,7 @@ function resolveFilmStem() {
   if (chosen === "__none__") return null;
   if (chosen !== "__auto__") return chosen;
   const canonical = $("camera").selectedOptions[0].dataset.film;
-  return canonical && films.includes(canonical) ? canonical : null;
+  return canonical && films.some(f => f.stem === canonical) ? canonical : null;
 }
 
 async function render(maxDim) {
@@ -153,7 +206,8 @@ async function render(maxDim) {
     const out = await engine.render({
       inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
       strength: parseFloat($("strength").value),
-      seed: parseInt($("seed").value, 10) || 0, maxDim });
+      seed: parseInt($("seed").value, 10) || 0,
+      age: parseFloat($("age").value), maxDim });
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
     $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
@@ -187,6 +241,10 @@ $("file").addEventListener("change", e => e.target.files[0] && acceptFile(e.targ
   }));
 $("strength").addEventListener("input",
   () => $("strengthval").textContent = parseFloat($("strength").value).toFixed(2));
+$("age").addEventListener("input", () => {
+  const v = parseFloat($("age").value);
+  $("ageval").textContent = v === 0 ? "fresh" : v.toFixed(2);
+});
 $("render").addEventListener("click", async () => {
   const blob = await render(1400);
   if (blob) $("after").src = URL.createObjectURL(blob);

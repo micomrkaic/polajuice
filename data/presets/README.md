@@ -38,4 +38,6 @@ New in 0.2.0:
 | built-in preset   | family pack       | suggested starting cube          |
 |-------------------|-------------------|----------------------------------|
 | cinestill-night   | (PictureFX)       | a CineStill 800T cube            |
-| expired-film      | any negative pack | scalar engine carries the aging  |
+
+Aging is the `--age` option (0..1), not a camera: it composes with every
+camera/film pairing above.

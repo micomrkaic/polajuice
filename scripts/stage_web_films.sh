@@ -34,13 +34,26 @@ for stem in $CANONICAL "$@"; do
     staged="$staged $stem"
 done
 
-# films.json: a JSON array of staged stems
+blurb_for() {
+    case "$1" in
+        polaroid_px-680) echo "Impossible/Polaroid 600-era integral film: creamy highlights, gentle color" ;;
+        kodak_portra_400) echo "The portrait workhorse: warm, forgiving skin tones, soft saturation" ;;
+        kodak_ektachrome_100_vs) echo "Vivid-saturation slide film: punchy color, clean blues" ;;
+        fuji_superia_800) echo "High-speed consumer negative: cool greens, party-photo color" ;;
+        fuji_provia_100f) echo "Neutral professional slide: accurate, restrained, fine detail" ;;
+        ilford_hp_5_plus_400) echo "Classic ISO 400 black-and-white: medium contrast, honest tonality" ;;
+        lomography_x-pro_slide_200) echo "Cross-processed slide look: shifted colors, heavy contrast" ;;
+        *) echo "" ;;
+    esac
+}
+
+# films.json: a JSON array of {stem, blurb} objects
 {
     printf '['
     first=1
     for stem in $staged; do
         [ "$first" -eq 1 ] || printf ','
-        printf '"%s"' "$stem"
+        printf '{"stem":"%s","blurb":"%s"}' "$stem" "$(blurb_for "$stem")"
         first=0
     done
     printf ']\n'

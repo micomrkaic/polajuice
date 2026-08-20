@@ -281,16 +281,29 @@ static void apply_builtin_color(PjImage *image, const PjPreset *p, float strengt
  * layer degrades fastest in expired C-41), and overall contrast decays.
  * Both are display-referred operations on the developed image.
  */
-static void apply_age(PjImage *image, float fade, float strength)
+/* amount 0..1: full storage-degradation look, so that any camera and any
+ * film can be aged. Fog with magenta bias (the green-sensitive layer
+ * degrades fastest), contrast decay, desaturation, and a slight warm
+ * drift, all display-referred after the color stage. */
+static void apply_age(PjImage *image, float amount)
 {
-    float amount = fade * strength;
     if (amount <= 0.0f) return;
+    if (amount > 1.0f) amount = 1.0f;
     const float fog_color[3] = {0.58f, 0.53f, 0.57f};
     float fog = 0.18f * amount;
     float contrast = 1.0f - 0.20f * amount;
+    float desat = 0.22f * amount;
+    const float warm[3] = {1.0f + 0.020f * amount, 1.0f,
+                           1.0f - 0.025f * amount};
     for (size_t i = 0; i < image->width * image->height; ++i) {
+        float display[3];
+        for (size_t c = 0; c < 3; ++c)
+            display[c] = linear_to_srgb(image->rgb[i * 3 + c]);
+        float luma = 0.2126f * display[0] + 0.7152f * display[1] +
+                     0.0722f * display[2];
         for (size_t c = 0; c < 3; ++c) {
-            float value = linear_to_srgb(image->rgb[i * 3 + c]);
+            float value = display[c] + (luma - display[c]) * desat;
+            value *= warm[c];
             value = value * (1.0f - fog) + fog_color[c] * fog;
             value = 0.5f + (value - 0.5f) * contrast;
             image->rgb[i * 3 + c] = srgb_to_linear(clamp01(value));
@@ -469,7 +482,10 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_builtin_tone(image, preset, strength);
         apply_builtin_color(image, preset, strength);
     }
-    apply_age(image, preset->fade, strength);
+    {
+        float age = preset->fade * strength + (options ? options->age : 0.0f);
+        apply_age(image, age);
+    }
     apply_grain(image, preset->grain * strength, preset->grain_scale,
                 preset->grain_midtone_bias, seed);
 

@@ -127,11 +127,12 @@ engine's strongest halation (0.18, radius 9), cool tungsten balance and
 teal-shadow/warm-highlight split toning as a scalar approximation. For
 color accuracy pair it with a CineStill 800T CLUT (e.g. PictureFX).
 
-## Expired film (0.2.0)
+## Age axis (0.7.0; introduced as the expired-film preset in 0.2.0)
 
 Storage degradation of C-41 negatives commonly presents as raised base fog,
 lowered contrast, desaturation and a color drift often toward magenta as the
-green-sensitive layer degrades fastest. The dedicated age stage implements
-fog and contrast decay display-referred and runs after the LUT so that aging
-composes with any stock. Amounts are conservative rendering defaults, not
+green-sensitive layer degrades fastest. Age is a process axis, not a camera:
+`--age 0..1` applies fog, contrast decay, desaturation and a slight warm
+drift display-referred after the color stage, so aging composes with any
+camera and any film LUT. Amounts are conservative rendering defaults, not
 measurements of a specific storage history.

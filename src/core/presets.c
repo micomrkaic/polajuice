@@ -1,5 +1,7 @@
 #include "internal.h"
 
+#include <stdio.h>
+
 #include <string.h>
 
 #define IDENTITY {1,0,0, 0,1,0, 0,0,1}
@@ -126,22 +128,39 @@ static const PjPreset presets[] = {
         .channel_gamma = {1.00f,1.00f,1.01f},
         .shadow_tint = {-0.004f,0.001f,0.006f},
         .highlight_tint = {0.008f,0.004f,-0.006f}
-    },
-    {
-        .name = "expired-film",
-        .description = "Decades-old color negative: base fog, magenta drift, low contrast",
-        .exposure_ev = 0.00f, .contrast = 0.96f, .black_lift = 0.040f,
-        .highlight_rolloff = 0.62f, .saturation = 0.82f,
-        .temperature = 0.020f, .tint = -0.010f, .vignette = 0.10f,
-        .softness = 0.15f, .halation = 0.020f, .halation_radius = 4,
-        .grain = 0.024f, .grain_scale = 1.3f, .grain_midtone_bias = 0.55f,
-        .fade = 0.65f,
-        .matrix = {1.010f,-0.005f,-0.005f, -0.008f,1.008f,-0.010f, -0.004f,-0.006f,1.010f},
-        .channel_gamma = {0.98f,1.00f,0.99f},
-        .shadow_tint = {0.006f,-0.002f,0.005f},
-        .highlight_tint = {0.006f,0.004f,-0.002f}
     }
 };
+
+
+char *pj_preset_traits(const char *name, char *buffer, size_t size)
+{
+    const PjPreset *p = pj_find_preset(name);
+    if (!p || !buffer || size == 0) return NULL;
+    buffer[0] = '\0';
+    size_t used = 0;
+#define ADD(text) do { \
+        int n = snprintf(buffer + used, size - used, "%s%s", \
+                         used ? ", " : "", (text)); \
+        if (n > 0 && (size_t)n < size - used) used += (size_t)n; \
+    } while (0)
+    if (p->instant_frame) ADD("instant-print crop and frame");
+    if (p->square_crop) ADD("square crop");
+    if (p->crop_aspect > 0.0f) ADD("1.36:1 gate crop");
+    if (p->flash_ev > 0.0f) ADD("direct on-camera flash");
+    if (p->softness >= 0.5f) ADD("very soft lens");
+    else if (p->softness >= 0.12f) ADD("soft lens");
+    if (p->vignette >= 0.20f) ADD("heavy vignette");
+    else if (p->vignette >= 0.08f) ADD("mild vignette");
+    if (p->halation >= 0.10f) ADD("strong red halation");
+    else if (p->halation >= 0.03f) ADD("halation on highlights");
+    if (p->grain >= 0.025f) ADD("coarse grain");
+    else if (p->grain >= 0.012f) ADD("visible grain");
+    else ADD("fine grain");
+    if (p->monochrome) ADD("black and white");
+    if (p->fade > 0.05f) ADD("slightly aged by default");
+#undef ADD
+    return buffer;
+}
 
 const char *pj_preset_default_film(const char *name)
 {

@@ -1,4 +1,4 @@
-# Polajuice 0.6.0
+# Polajuice 0.7.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -111,10 +111,14 @@ the pairing table).
 - `disposable-flash` - direct on-camera flash, dark falloff, soft lens
 - `bw-35` - 35mm ISO 400 black-and-white (was `bw-documentary`)
 - `toy-camera-120` - square, heavy vignette, plastic-lens softness
-- `cinestill-night` - new: remjet-stripped cine stock, strong red halation
-- `expired-film` - new: decades-old negative; the age stage (base fog with
-  magenta drift plus contrast decay) applies even when a LUT supplies the
-  color, since age is a process trait, not a stock trait
+- `cinestill-night` - remjet-stripped cine stock rig, strong red halation
+
+Aging is not a camera: `--age 0..1` (a slider on the web) is a third axis
+alongside camera and film - base fog with magenta drift, contrast decay
+and desaturation that composes with any camera and any film, applied
+after the color stage so it survives LUTs. `polajuice describe CAMERA`
+and `polajuice cameras` print trait summaries generated from each
+preset's own parameters, so the help always matches what renders.
 
 The scalar defaults are conservative structural recipes grounded in the sources
 listed in `docs/PRESET_SOURCES.md`; they are not presented as manufacturer

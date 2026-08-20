@@ -9,7 +9,7 @@
  *   polajuice.wasm --list-cameras
  *       prints "name<TAB>default_film<TAB>description" per camera
  *   polajuice.wasm --version
- *   polajuice.wasm render IN CAMERA FILM|- STRENGTH SEED MAX_DIM OUT
+ *   polajuice.wasm render IN CAMERA FILM|- STRENGTH SEED AGE MAX_DIM OUT
  *       FILM "-" selects the built-in scalar engine; MAX_DIM 0 renders
  *       at full resolution, otherwise the input is box-average
  *       downscaled in linear light first (preview mode).
@@ -25,24 +25,27 @@ static int list_cameras(void)
     for (size_t i = 0; i < pj_preset_count(); ++i) {
         const char *name = pj_preset_name(i);
         const char *film = pj_preset_default_film(name);
-        printf("%s\t%s\t%s\n", name, film ? film : "",
-               pj_preset_description(name));
+        char traits[512];
+        printf("%s\t%s\t%s\t%s\n", name, film ? film : "",
+               pj_preset_description(name),
+               pj_preset_traits(name, traits, sizeof traits));
     }
     return 0;
 }
 
 static int render(int argc, char **argv)
 {
-    if (argc != 9) {
+    if (argc != 10) {
         fprintf(stderr,
-                "args: render IN CAMERA FILM|- STRENGTH SEED MAX_DIM OUT\n");
+                "args: render IN CAMERA FILM|- STRENGTH SEED AGE MAX_DIM OUT\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
     float strength = strtof(argv[5], NULL);
     uint64_t seed = strtoull(argv[6], NULL, 0);
-    size_t max_dim = (size_t)strtoull(argv[7], NULL, 0);
-    const char *out_path = argv[8];
+    float age = strtof(argv[7], NULL);
+    size_t max_dim = (size_t)strtoull(argv[8], NULL, 0);
+    const char *out_path = argv[9];
 
     PjError error = {{0}};
     PjLut3D *lut = NULL;
@@ -63,7 +66,7 @@ static int render(int argc, char **argv)
         return 1;
     }
     PjRenderOptions options = {.seed = seed, .strength = strength,
-                               .color_lut = lut};
+                               .age = age, .color_lut = lut};
     PjImage *result = pj_render(image, camera, &options, &error);
     pj_image_free(image);
     pj_lut3d_free(lut);

@@ -54,7 +54,7 @@ static PjLut3D *make_identity_lut(PjError *error)
 int main(void)
 {
     PjError error = {{0}};
-    assert(pj_preset_count() >= 9);
+    assert(pj_preset_count() >= 8);
     assert(pj_preset_description("35mm-negative") != NULL);
     assert(pj_preset_description("does-not-exist") == NULL);
 
@@ -98,12 +98,18 @@ int main(void)
     pj_image_free(jpg_back);
     assert(remove(jpg_path) == 0);
 
-    /* Camera archetypes declare their canonical film; process-identity
-     * cameras (expired-film) deliberately have none. */
+    /* Camera archetypes declare their canonical film. */
     assert(pj_preset_default_film("polaroid-600"));
     assert(!strcmp(pj_preset_default_film("polaroid-600"), "polaroid_px-680"));
-    assert(pj_preset_default_film("expired-film") == NULL);
     assert(pj_preset_default_film("no-such-camera") == NULL);
+
+    /* Traits are generated from the preset's own parameters. */
+    char traits[512];
+    assert(pj_preset_traits("polaroid-600", traits, sizeof traits));
+    assert(strstr(traits, "instant-print"));
+    assert(pj_preset_traits("disposable-flash", traits, sizeof traits));
+    assert(strstr(traits, "flash"));
+    assert(pj_preset_traits("nope", traits, sizeof traits) == NULL);
 
     /* Downscale: long edge bounded, aspect kept, small images untouched. */
     PjImage *big = pj_image_new(400, 300, &error);
@@ -176,16 +182,23 @@ int main(void)
     assert(fabs((double)pj_image_width(gate) / pj_image_height(gate) - 1.362) < 0.06);
     pj_image_free(gate);
 
-    /* Expired film must show base fog: pure black comes out lifted, and the
-     * age stage must survive a LUT since fade is a process, not stock, trait. */
+    /* The age axis must show base fog on any camera: pure black comes out
+     * lifted, and aging must survive a LUT since it is a process trait. */
     PjImage *black = pj_image_new(33, 33, &error);
     assert(black);
     fill_uniform(black, 0.0f);
-    PjRenderOptions aged = {.seed = 42, .strength = 1.0f, .color_lut = identity};
-    PjImage *fogged = pj_render(black, "expired-film", &aged, &error);
+    PjRenderOptions aged = {.seed = 42, .strength = 1.0f, .age = 0.65f,
+                            .color_lut = identity};
+    PjImage *fogged = pj_render(black, "35mm-negative", &aged, &error);
     assert(fogged);
     assert(luma_at(fogged, 16, 16) > 0.008f);
     pj_image_free(fogged);
+    /* age 0 must leave black essentially black */
+    PjRenderOptions fresh = {.seed = 42, .strength = 1.0f, .color_lut = identity};
+    PjImage *unaged = pj_render(black, "35mm-negative", &fresh, &error);
+    assert(unaged);
+    assert(luma_at(unaged, 16, 16) < 0.004f);
+    pj_image_free(unaged);
     pj_image_free(black);
 
     pj_image_free(instant);

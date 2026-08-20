@@ -49,14 +49,14 @@ export async function createEngine(wasmBytes) {
             const r = await run(["--list-cameras"], {});
             if (r.code !== 0) throw new Error(r.stderr || "camera listing failed");
             return r.stdout.trim().split("\n").map(line => {
-                const [name, film, description] = line.split("\t");
-                return { name, film: film || null, description };
+                const [name, film, description, traits] = line.split("\t");
+                return { name, film: film || null, description, traits: traits || "" };
             });
         },
         /* inputBytes: Uint8Array; ext: "jpg"|"png"; cubeText: string|null;
          * maxDim 0 = full resolution. Returns Uint8Array of JPEG bytes. */
         async render({ inputBytes, ext, camera, cubeText,
-                       strength = 1.0, seed = 42, maxDim = 0 }) {
+                       strength = 1.0, seed = 42, age = 0, maxDim = 0 }) {
             const inName = "in." + (ext === "png" ? "png" : "jpg");
             const workFiles = { [inName]: inputBytes };
             let filmArg = "-";
@@ -66,8 +66,8 @@ export async function createEngine(wasmBytes) {
             }
             const r = await run(
                 ["render", "work/" + inName, camera, filmArg,
-                 String(strength), String(seed >>> 0), String(maxDim),
-                 "work/out.jpg"], workFiles);
+                 String(strength), String(seed >>> 0), String(age),
+                 String(maxDim), "work/out.jpg"], workFiles);
             if (r.code !== 0)
                 throw new Error(r.stderr.trim() || `render failed (${r.code})`);
             const out = r.files.get("out.jpg");
