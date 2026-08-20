@@ -1,4 +1,4 @@
-# Polajuice 0.8.0
+# Polajuice 0.9.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -93,6 +93,11 @@ Partial-strength render:
 ```sh
 ./polajuice apply IMG_2041.jpg -c polaroid-600 --strength 0.75
 ```
+
+Sample photos ship in `web/samples/` (six of the author's own, CC BY 4.0):
+the web page shows them as a click-to-load strip with a suggested camera
+per photo, and CLI users can run e.g.
+`./polajuice apply web/samples/classic-jaguar.jpg -c technicolor-3strip`.
 
 HEIC still needs one external conversion (`magick input.heic input.jpg`, or
 `sips -s format jpeg` on macOS). All files are treated as 8-bit sRGB at the

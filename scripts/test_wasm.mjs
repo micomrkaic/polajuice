@@ -40,4 +40,16 @@ if (process.argv[3]) {
         throw new Error("age had no effect");
     console.log("age axis ok");
 }
+// a shipped sample must render through the engine (EXIF baked at build time,
+// so orientation is already correct in the file itself)
+try {
+    const sample = await readFile(new URL("../web/samples/sleeping-cat.jpg", import.meta.url));
+    const rendered = await engine.render({ inputBytes: sample, ext: "jpg",
+        camera: "polaroid-600", strength: 1.0, seed: 1, maxDim: 400 });
+    if (rendered.length < 1000) throw new Error("sample render suspiciously small");
+    console.log("sample photo renders through the engine");
+} catch (e) {
+    if (e.code === "ENOENT") console.log("(no samples staged; skipping sample render)");
+    else throw e;
+}
 console.log("wasm engine tests passed");

@@ -11,4 +11,5 @@ web/polajuice.wasm
 web/films/
 third_party/wasi-sdk*
 web/_pagecheck.mjs
+web/samples/
 *.png

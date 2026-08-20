@@ -27,6 +27,10 @@ const elems = {};
 globalThis.document = {
   getElementById: id => elems[id] ??= new Elem(id),
   createElement: () => ({ click: () => {}, textContent: "", innerHTML: "",
+                          className: "", src: "", alt: "", loading: "",
+                          children: [],
+                          append(...n) { this.children.push(...n); },
+                          addEventListener() {},
                           set href(v) {}, set download(v) {} }),
 };
 globalThis.Option = class { constructor(text, value) { this.text = text; this.value = value; this.dataset = {}; } };
@@ -61,5 +65,8 @@ if (!elems["render"].handlers["click"]) throw new Error("render button not wired
 if (!elems["drop"].handlers["drop"]) throw new Error("drop zone not wired");
 if (!elems["helpcameras"] || !(elems["helpcameras"].children?.length >= 26))
   throw new Error("help panel not populated");
+if (!(elems["samplestrip"].children?.length >= 6))
+  throw new Error("sample strip not populated: " + (elems["samplestrip"].children?.length ?? 0));
+console.log(`sample strip: ${elems["samplestrip"].children.length - 1} samples + credit`);
 console.log(`help panel: ${elems["helpcameras"].children.length / 2} cameras described`);
 console.log("page handlers wired; render path covered by test_wasm.mjs");

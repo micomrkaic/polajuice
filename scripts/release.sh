@@ -63,7 +63,7 @@ for entry in "$SRC"/* "$SRC"/.[!.]*; do
 done
 # Keep renders and the fetched film library out of history, idempotently.
 for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/' \
-               'web/polajuice.wasm' 'web/films/' 'third_party/wasi-sdk*' \
+               'web/polajuice.wasm' 'web/films/' 'web/samples/' 'third_party/wasi-sdk*' \
                'web/_pagecheck.mjs'; do
     grep -qxF "$pattern" .gitignore || echo "$pattern" >> .gitignore
 done
