@@ -360,7 +360,7 @@ static float smooth_noise(uint64_t seed, float x, float y)
 }
 
 static void apply_grain(PjImage *image, float amount, float scale,
-                        float midtone_bias, uint64_t seed)
+                        float midtone_bias, float chroma, uint64_t seed)
 {
     if (amount <= 0.0f) return;
     if (scale < 1.0f) scale = 1.0f;
@@ -376,11 +376,20 @@ static void apply_grain(PjImage *image, float amount, float scale,
             float noise = smooth_noise(seed, (float)x / scale, (float)y / scale);
             /* Display-referred grain, as in the darktable practice cited in
              * PRESET_SOURCES.md.  Adding the noise in linear light made it
-             * nearly invisible at these amplitudes after sRGB encoding. */
+             * nearly invisible at these amplitudes after sRGB encoding.
+             * grain_chroma blends toward independent per-channel noise:
+             * dyed-starch (Autochrome) grain is colored, not gray. */
             for (unsigned c = 0; c < 3; ++c) {
+                float n = noise;
+                if (chroma > 0.0f) {
+                    float channel_noise = smooth_noise(
+                        seed + UINT64_C(0x9E3779B97F4A7C15) * (c + 1),
+                        (float)x / scale, (float)y / scale);
+                    n = mixf(noise, channel_noise, chroma);
+                }
                 float display = linear_to_srgb(image->rgb[i + c]);
                 image->rgb[i + c] =
-                    srgb_to_linear(clamp01(display + density * noise));
+                    srgb_to_linear(clamp01(display + density * n));
             }
         }
     }
@@ -421,10 +430,15 @@ static PjImage *crop_aspect(const PjImage *input, double aspect, PjError *error)
     return crop;
 }
 
-static PjImage *instant_frame(const PjImage *input, PjError *error)
+static PjImage *instant_frame(const PjImage *input, const PjPreset *preset,
+                              PjError *error)
 {
-    size_t outer_width = (size_t)lrint((double)input->width * 88.47 / 78.94);
-    size_t outer_height = (size_t)lrint((double)input->height * 107.52 / 76.80);
+    double img_w = preset->frame_image_w_mm > 0 ? preset->frame_image_w_mm : 78.94;
+    double img_h = preset->frame_image_h_mm > 0 ? preset->frame_image_h_mm : 76.80;
+    double out_w = preset->frame_outer_w_mm > 0 ? preset->frame_outer_w_mm : 88.47;
+    double out_h = preset->frame_outer_h_mm > 0 ? preset->frame_outer_h_mm : 107.52;
+    size_t outer_width = (size_t)lrint((double)input->width * out_w / img_w);
+    size_t outer_height = (size_t)lrint((double)input->height * out_h / img_h);
     size_t left = (outer_width - input->width) / 2;
     size_t top = left;
     PjImage *framed = pj_image_new(outer_width, outer_height, error);
@@ -460,8 +474,11 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     strength = clamp01(strength);
 
     PjImage *image;
-    if (preset->instant_frame)
-        image = crop_aspect(input, 78.94 / 76.80, error);
+    if (preset->instant_frame) {
+        double img_w = preset->frame_image_w_mm > 0 ? preset->frame_image_w_mm : 78.94;
+        double img_h = preset->frame_image_h_mm > 0 ? preset->frame_image_h_mm : 76.80;
+        image = crop_aspect(input, img_w / img_h, error);
+    }
     else if (preset->square_crop)
         image = square_crop(input, error);
     else if (preset->crop_aspect > 0.0f)
@@ -487,10 +504,10 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_age(image, age);
     }
     apply_grain(image, preset->grain * strength, preset->grain_scale,
-                preset->grain_midtone_bias, seed);
+                preset->grain_midtone_bias, preset->grain_chroma, seed);
 
     if (preset->instant_frame) {
-        PjImage *framed = instant_frame(image, error);
+        PjImage *framed = instant_frame(image, preset, error);
         pj_image_free(image);
         return framed;
     }

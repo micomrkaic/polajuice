@@ -54,7 +54,7 @@ static PjLut3D *make_identity_lut(PjError *error)
 int main(void)
 {
     PjError error = {{0}};
-    assert(pj_preset_count() >= 8);
+    assert(pj_preset_count() >= 13);
     assert(pj_preset_description("35mm-negative") != NULL);
     assert(pj_preset_description("does-not-exist") == NULL);
 
@@ -120,6 +120,52 @@ int main(void)
     PjImage *same = pj_image_downscale(big, 500, &error);
     assert(same == big);
     pj_image_free(big);
+
+    /* Autochrome's colored grain: per-channel noise must decorrelate the
+     * channels on a gray card, unlike luminance grain which keeps R==G==B. */
+    PjImage *card2 = pj_image_new(65, 65, &error);
+    assert(card2);
+    fill_uniform(card2, 0.4f);
+    PjRenderOptions g = {.seed = 9, .strength = 1.0f};
+    PjImage *pointillist = pj_render(card2, "autochrome", &g, &error);
+    assert(pointillist);
+    {
+        const float *px = pj_image_pixels_const(pointillist);
+        size_t w = pj_image_width(pointillist);
+        float maxdiff = 0.0f;
+        for (size_t k = 0; k < 200; ++k) {
+            size_t i = ((10 + k / 20) * w + 10 + k % 20) * 3;
+            float d = fabsf(px[i] - px[i + 1]);
+            if (d > maxdiff) maxdiff = d;
+        }
+        assert(maxdiff > 0.01f);   /* channels visibly decorrelated */
+    }
+    pj_image_free(pointillist);
+    pj_image_free(card2);
+
+    /* Pack film frames to its own peel-apart geometry, not the 600 chin. */
+    PjImage *pack_in = pj_image_new(365, 476, &error);
+    assert(pack_in);
+    fill_uniform(pack_in, 0.3f);
+    PjImage *pack = pj_render(pack_in, "polaroid-packfilm", &g, &error);
+    assert(pack);
+    {
+        double ratio = (double)pj_image_width(pack) / pj_image_height(pack);
+        assert(fabs(ratio - 83.0 / 108.0) < 0.03);
+    }
+    pj_image_free(pack);
+    pj_image_free(pack_in);
+
+    /* Technicolor renders through the Academy gate. */
+    PjImage *acad_in = pj_image_new(200, 200, &error);
+    assert(acad_in);
+    fill_uniform(acad_in, 0.3f);
+    PjImage *acad = pj_render(acad_in, "technicolor-3strip", &g, &error);
+    assert(acad);
+    assert(fabs((double)pj_image_width(acad) / pj_image_height(acad) - 1.375)
+           < 0.05);
+    pj_image_free(acad);
+    pj_image_free(acad_in);
 
     PjRenderOptions a = {.seed = 42, .strength = 1.0f};
     PjImage *first = pj_render(input, "35mm-negative", &a, &error);

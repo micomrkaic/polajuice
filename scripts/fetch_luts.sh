@@ -5,7 +5,8 @@
 # .cube format at https://gmic.eu/color_presets/<family>/<family>_cube.zip
 # (verified live 2026-08). Each family covers one or more built-in presets:
 #
-#   instant_consumer  polaroid-600            Px-680/Px-70/Px-100UV/Time Zero
+#   instant_consumer  polaroid-600, polaroid-sx70   Px-680/Px-70/Px-100UV/Time Zero
+#   instant_pro       polaroid-packfilm       Polaroid 665/669/690, Fuji FP
 #   colorslide        35mm-slide, super8       Ektachrome/Provia/Velvia...
 #   bw                bw-35                   HP5 and other B/W stocks
 #   negative_old      disposable-flash        Superia 100..1600 etc.
@@ -24,7 +25,7 @@ set -u
 BASE_GMIC="https://gmic.eu/color_presets"
 URL_RT="https://rawtherapee.com/shared/HaldCLUT.zip"
 DEST="${LUT_DIR:-data/luts}"
-FAMILIES="instant_consumer colorslide bw negative_old negative_new"
+FAMILIES="instant_consumer instant_pro colorslide bw negative_old negative_new"
 
 FORCE=0 RT=0
 for arg in "$@"; do

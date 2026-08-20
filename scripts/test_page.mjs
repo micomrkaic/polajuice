@@ -52,14 +52,14 @@ await unlink(probe);
 
 const status = elems["status"].textContent;
 if (elems["status"].className === "error") throw new Error("boot errored: " + status);
-if (elems["camera"].options.length < 8) throw new Error("camera dropdown not populated");
+if (elems["camera"].options.length < 13) throw new Error("camera dropdown not populated");
 console.log(`page boot ok: "${status}", ${elems["camera"].options.length} cameras, version ${elems["version"].textContent}`);
 
 // Rendering itself is covered by test_wasm.mjs through the same engine.js;
 // here we verify the page wired its handlers.
 if (!elems["render"].handlers["click"]) throw new Error("render button not wired");
 if (!elems["drop"].handlers["drop"]) throw new Error("drop zone not wired");
-if (!elems["helpcameras"] || !(elems["helpcameras"].children?.length >= 16))
+if (!elems["helpcameras"] || !(elems["helpcameras"].children?.length >= 26))
   throw new Error("help panel not populated");
 console.log(`help panel: ${elems["helpcameras"].children.length / 2} cameras described`);
 console.log("page handlers wired; render path covered by test_wasm.mjs");

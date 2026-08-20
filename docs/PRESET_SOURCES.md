@@ -136,3 +136,28 @@ green-sensitive layer degrades fastest. Age is a process axis, not a camera:
 drift display-referred after the color stage, so aging composes with any
 camera and any film LUT. Amounts are conservative rendering defaults, not
 measurements of a specific storage history.
+
+## Instant expansion (0.8.0)
+
+polaroid-sx70 shares the 600's integral geometry but models the earlier
+chemistry and slower lens: softer, warmer, lower contrast; canonical film
+polaroid_px-70. polaroid-packfilm models peel-apart Land-camera prints:
+3 1/4 x 4 1/4 in outer (83 x 108 mm) with a roughly even thin border and a
+72.9 x 95.2 mm image area, punchier contrast; canonical film polaroid_669.
+Geometry uses the engine's per-preset frame millimeter fields; dimensions
+are nominal print sizes, not measurements of specific film batches.
+
+## 1920s-1950s color (0.8.0)
+
+autochrome: the Lumiere Autochrome process (1907-1930s) formed color
+additively through dyed potato-starch grains, giving a pastel palette and
+visibly *colored* pointillist grain; early plates without anti-halation
+backing also halate. Modeled with the grain_chroma axis (independent
+per-channel noise), heavy soft-plate optics, 4:3 crop and reduced
+saturation. midcentury-rangefinder: late-1930s-40s folding/rangefinder
+35mm with uncoated optics (veiling flare modeled as lifted blacks and
+reduced contrast); canonical film kodak_kodachrome_64.
+technicolor-3strip: the beam-splitter camera and dye-transfer printing,
+1.375:1 Academy gate, high saturation with controlled skin tones and
+near-zero grain. All three are stylizations built from process
+descriptions, not colorimetric measurements.

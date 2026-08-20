@@ -18,7 +18,8 @@ DEST="web/films"
     exit 1
 }
 
-CANONICAL="polaroid_px-680 kodak_portra_400 kodak_ektachrome_100_vs \
+CANONICAL="polaroid_px-680 polaroid_px-70 polaroid_time_zero_expired \
+polaroid_669 kodak_portra_400 kodak_ektachrome_100_vs kodak_kodachrome_64 \
 fuji_superia_800 fuji_provia_100f ilford_hp_5_plus_400 \
 lomography_x-pro_slide_200"
 
@@ -37,6 +38,10 @@ done
 blurb_for() {
     case "$1" in
         polaroid_px-680) echo "Impossible/Polaroid 600-era integral film: creamy highlights, gentle color" ;;
+        polaroid_px-70) echo "SX-70-era integral film: warmer, dreamier, lower contrast than 600" ;;
+        polaroid_time_zero_expired) echo "Expired Time-Zero: shifted, unpredictable, beautifully broken" ;;
+        polaroid_669) echo "Peel-apart pack film: punchy contrast, the Land-camera classic" ;;
+        kodak_kodachrome_64) echo "The archive look: restrained, deep reds, 1940s-70s slides" ;;
         kodak_portra_400) echo "The portrait workhorse: warm, forgiving skin tones, soft saturation" ;;
         kodak_ektachrome_100_vs) echo "Vivid-saturation slide film: punchy color, clean blues" ;;
         fuji_superia_800) echo "High-speed consumer negative: cool greens, party-photo color" ;;

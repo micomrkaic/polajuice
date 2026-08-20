@@ -48,6 +48,13 @@ typedef struct {
     bool square_crop;
     bool instant_frame;
     float crop_aspect;   /* > 0: center-crop to this width/height ratio */
+    /* instant-frame geometry in millimeters; zero fields fall back to the
+     * integral 600-series print (image 78.94x76.80, card 88.47x107.52,
+     * top border equal to the sides, remainder as the bottom chin) */
+    float frame_image_w_mm, frame_image_h_mm;
+    float frame_outer_w_mm, frame_outer_h_mm;
+    float grain_chroma;  /* 0 = luminance grain; 1 = independent per-channel
+                            noise (dyed-starch Autochrome pointillism) */
 } PjPreset;
 
 void pj_set_error(PjError *error, const char *format, ...);

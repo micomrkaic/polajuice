@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 0
-#define PJ_VERSION_MINOR 7
+#define PJ_VERSION_MINOR 8
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;

@@ -128,6 +128,86 @@ static const PjPreset presets[] = {
         .channel_gamma = {1.00f,1.00f,1.01f},
         .shadow_tint = {-0.004f,0.001f,0.006f},
         .highlight_tint = {0.008f,0.004f,-0.006f}
+    },
+    {
+        .name = "polaroid-sx70",
+        .description = "SX-70-era integral print: dreamier and warmer than 600",
+        .default_film = "polaroid_px-70",
+        .exposure_ev = 0.02f, .contrast = 1.10f, .black_lift = 0.020f,
+        .highlight_rolloff = 0.36f, .saturation = 0.92f,
+        .temperature = 0.030f, .tint = 0.00f, .vignette = 0.10f,
+        .softness = 0.85f, .halation = 0.030f, .halation_radius = 6,
+        .grain = 0.004f, .grain_scale = 1.0f, .grain_midtone_bias = 0.90f,
+        .fade = 0.04f,
+        .matrix = {1.020f,-0.008f,-0.012f, -0.014f,1.020f,-0.006f, -0.010f,-0.014f,1.024f},
+        .channel_gamma = {0.99f,1.00f,1.02f},
+        .shadow_tint = {0.004f,0.002f,-0.006f},
+        .highlight_tint = {0.016f,0.008f,-0.020f},
+        .instant_frame = true
+    },
+    {
+        .name = "polaroid-packfilm",
+        .description = "Peel-apart pack film in a Land camera: crisp, thin even border",
+        .default_film = "polaroid_669",
+        .exposure_ev = 0.00f, .contrast = 1.14f, .black_lift = 0.010f,
+        .highlight_rolloff = 0.40f, .saturation = 1.00f,
+        .temperature = 0.010f, .tint = 0.00f, .vignette = 0.08f,
+        .softness = 0.18f, .halation = 0.025f, .halation_radius = 5,
+        .grain = 0.005f, .grain_scale = 1.0f, .grain_midtone_bias = 0.85f,
+        .fade = 0.02f,
+        .matrix = {1.015f,-0.006f,-0.009f, -0.010f,1.014f,-0.004f, -0.006f,-0.010f,1.016f},
+        .channel_gamma = {1.00f,1.00f,1.01f},
+        .shadow_tint = {0.002f,0.001f,-0.003f},
+        .highlight_tint = {0.008f,0.005f,-0.008f},
+        .instant_frame = true,
+        .frame_image_w_mm = 73.0f, .frame_image_h_mm = 95.0f,
+        .frame_outer_w_mm = 82.6f, .frame_outer_h_mm = 108.0f
+    },
+    {
+        .name = "midcentury-rangefinder",
+        .description = "Late-1940s folding 35mm: uncoated-lens flare, early Kodachrome era",
+        .default_film = "kodak_kodachrome_64",
+        .exposure_ev = -0.02f, .contrast = 0.96f, .black_lift = 0.030f,
+        .highlight_rolloff = 0.48f, .saturation = 0.98f,
+        .temperature = 0.012f, .tint = 0.00f, .vignette = 0.14f,
+        .softness = 0.10f, .halation = 0.020f, .halation_radius = 4,
+        .grain = 0.006f, .grain_scale = 0.9f, .grain_midtone_bias = 0.80f,
+        .fade = 0.00f,
+        .matrix = {1.010f,-0.004f,-0.006f, -0.006f,1.008f,-0.002f, -0.004f,-0.008f,1.012f},
+        .channel_gamma = {0.99f,1.00f,1.00f},
+        .shadow_tint = {0.003f,0.002f,0.001f},
+        .highlight_tint = {0.008f,0.005f,-0.004f}
+    },
+    {
+        .name = "technicolor-3strip",
+        .description = "Three-strip dye-transfer cinema: saturated, smooth, Academy gate",
+        .exposure_ev = 0.03f, .contrast = 1.15f, .black_lift = 0.010f,
+        .highlight_rolloff = 0.50f, .saturation = 1.30f,
+        .temperature = 0.005f, .tint = 0.00f, .vignette = 0.05f,
+        .softness = 0.10f, .halation = 0.055f, .halation_radius = 5,
+        .grain = 0.004f, .grain_scale = 1.0f, .grain_midtone_bias = 0.85f,
+        .fade = 0.00f,
+        .matrix = {1.110f,-0.055f,-0.055f, -0.050f,1.100f,-0.050f, -0.040f,-0.060f,1.100f},
+        .channel_gamma = {0.99f,1.00f,1.00f},
+        .shadow_tint = {-0.002f,0.000f,0.004f},
+        .highlight_tint = {0.010f,0.006f,-0.006f},
+        .crop_aspect = 1.375f
+    },
+    {
+        .name = "autochrome",
+        .description = "Lumiere Autochrome plate: pastel pointillist colored grain",
+        .exposure_ev = 0.00f, .contrast = 0.92f, .black_lift = 0.030f,
+        .highlight_rolloff = 0.55f, .saturation = 0.72f,
+        .temperature = 0.015f, .tint = 0.00f, .vignette = 0.15f,
+        .softness = 0.45f, .halation = 0.080f, .halation_radius = 6,
+        .grain = 0.050f, .grain_scale = 2.2f, .grain_midtone_bias = 0.45f,
+        .grain_chroma = 1.0f,
+        .fade = 0.06f,
+        .matrix = {1.010f,-0.004f,-0.006f, -0.006f,1.008f,-0.002f, -0.004f,-0.008f,1.010f},
+        .channel_gamma = {0.99f,1.00f,1.01f},
+        .shadow_tint = {0.004f,0.003f,-0.002f},
+        .highlight_tint = {0.014f,0.010f,-0.006f},
+        .crop_aspect = 1.333f
     }
 };
 
@@ -145,7 +225,12 @@ char *pj_preset_traits(const char *name, char *buffer, size_t size)
     } while (0)
     if (p->instant_frame) ADD("instant-print crop and frame");
     if (p->square_crop) ADD("square crop");
-    if (p->crop_aspect > 0.0f) ADD("1.36:1 gate crop");
+    if (p->crop_aspect > 0.0f) {
+        char gate[32];
+        snprintf(gate, sizeof gate, "%.2f:1 gate crop",
+                 (double)p->crop_aspect);
+        ADD(gate);
+    }
     if (p->flash_ev > 0.0f) ADD("direct on-camera flash");
     if (p->softness >= 0.5f) ADD("very soft lens");
     else if (p->softness >= 0.12f) ADD("soft lens");
@@ -153,7 +238,8 @@ char *pj_preset_traits(const char *name, char *buffer, size_t size)
     else if (p->vignette >= 0.08f) ADD("mild vignette");
     if (p->halation >= 0.10f) ADD("strong red halation");
     else if (p->halation >= 0.03f) ADD("halation on highlights");
-    if (p->grain >= 0.025f) ADD("coarse grain");
+    if (p->grain_chroma > 0.5f) ADD("pointillist colored grain");
+    else if (p->grain >= 0.025f) ADD("coarse grain");
     else if (p->grain >= 0.012f) ADD("visible grain");
     else ADD("fine grain");
     if (p->monochrome) ADD("black and white");

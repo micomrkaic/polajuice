@@ -38,6 +38,11 @@ New in 0.2.0:
 | built-in preset   | family pack       | suggested starting cube          |
 |-------------------|-------------------|----------------------------------|
 | cinestill-night   | (PictureFX)       | a CineStill 800T cube            |
+| polaroid-sx70     | instant_consumer  | polaroid_px-70 (or time_zero)    |
+| polaroid-packfilm | instant_pro       | polaroid_669 / 690 / fuji_fp     |
+| midcentury-rangefinder | colorslide   | kodak_kodachrome_64 / 25         |
+| technicolor-3strip | (scalar engine)  | dye-transfer look is built in    |
+| autochrome        | (scalar engine)   | additive-plate look is built in  |
 
 Aging is the `--age` option (0..1), not a camera: it composes with every
 camera/film pairing above.

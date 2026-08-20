@@ -1,4 +1,4 @@
-# Polajuice 0.7.0
+# Polajuice 0.8.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -112,6 +112,15 @@ the pairing table).
 - `bw-35` - 35mm ISO 400 black-and-white (was `bw-documentary`)
 - `toy-camera-120` - square, heavy vignette, plastic-lens softness
 - `cinestill-night` - remjet-stripped cine stock rig, strong red halation
+- `polaroid-sx70` - the earlier integral Polaroid: warmer, dreamier, slower
+- `polaroid-packfilm` - peel-apart Land-camera prints, thin even border
+- `midcentury-rangefinder` - late-30s/40s 35mm, uncoated-lens flare,
+  canonical Kodachrome 64
+- `technicolor-3strip` - the beam-splitter cinema camera: Academy gate,
+  saturated dye-transfer color, near-zero grain
+- `autochrome` - Lumiere plates, 1907-1930s: pastel palette, soft plate
+  optics and pointillist *colored* grain (per-channel noise, the engine's
+  `grain_chroma` axis)
 
 Aging is not a camera: `--age 0..1` (a slider on the web) is a third axis
 alongside camera and film - base fog with magenta drift, contrast decay

@@ -102,6 +102,10 @@ else
     echo "note: no film library (make fetch-luts); deploying without films" >&2
 fi
 STAMP=$(git rev-parse --short HEAD)
+# the staging branch persists after a deploy; remove leftovers or the
+# second release on the same repo collides with the first one's branch
+git branch -D gh-pages-staging >/dev/null 2>&1 || true
+git worktree prune
 WORK=$(mktemp -d)
 git worktree add --detach "$WORK" >/dev/null
 (
@@ -114,6 +118,7 @@ git worktree add --detach "$WORK" >/dev/null
     git push --force origin HEAD:gh-pages
 )
 git worktree remove --force "$WORK"
+git branch -D gh-pages-staging >/dev/null 2>&1 || true
 
 echo
 echo "== done: $STAMP tagged $TAG, gh-pages updated"
