@@ -11,9 +11,9 @@ LDLIBS += -lm
 
 CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
-ALL_OBJ = $(CORE_OBJ) src/cli/main.o tests/test_core.o
+ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/web/pj_web.o tests/test_core.o tests/test_web_shim.o
 
-.PHONY: all clean check install fetch-luts fetch-polaroid-lut
+.PHONY: all clean check install fetch-luts fetch-polaroid-lut wasm serve
 
 all: polajuice libpolajuice.a
 
@@ -29,8 +29,21 @@ polajuice: src/cli/main.o libpolajuice.a
 tests/test_core: tests/test_core.o libpolajuice.a
 	$(CC) $(CFLAGS) -o $@ tests/test_core.o libpolajuice.a $(LDLIBS)
 
-check: tests/test_core
+tests/test_web_shim: tests/test_web_shim.o src/web/pj_web.o libpolajuice.a
+	$(CC) $(CFLAGS) -o $@ tests/test_web_shim.o src/web/pj_web.o libpolajuice.a $(LDLIBS)
+
+check: tests/test_core tests/test_web_shim
 	./tests/test_core
+	./tests/test_web_shim
+
+# WebAssembly build (requires the Emscripten SDK; see docs/WEB.md).
+# 'make' builds native; 'make wasm' builds the browser engine.
+wasm:
+	sh scripts/build_web.sh
+
+serve:
+	@echo "serving web/ at http://localhost:8000 (Ctrl-C to stop)"
+	cd web && python3 -m http.server 8000
 
 fetch-luts:
 	sh scripts/fetch_luts.sh
@@ -49,6 +62,7 @@ install: all
 
 clean:
 	$(RM) $(ALL_OBJ) $(ALL_OBJ:.o=.d)
-	$(RM) polajuice libpolajuice.a tests/test_core
+	$(RM) polajuice libpolajuice.a tests/test_core tests/test_web_shim
+	$(RM) web/polajuice.js web/polajuice.wasm
 
 -include $(ALL_OBJ:.o=.d)

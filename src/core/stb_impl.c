@@ -4,7 +4,7 @@
  * suppressed; the project's own sources keep -Wall -Wextra -Wpedantic.
  *
  * stb_image and stb_image_write are public domain (or MIT, at your
- * option); see third_party/*.h.
+ * option); see the headers under third_party/.
  */
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_JPEG

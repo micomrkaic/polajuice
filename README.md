@@ -1,4 +1,4 @@
-# Polajuice 0.4.0
+# Polajuice 0.5.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -20,9 +20,14 @@ RAW remain future work (libvips and Little CMS territory).
 Building requires only a C17 compiler and `libm`:
 
 ```sh
-make
+make          # native binary
 make check
+make wasm     # the same engine for the browser (Emscripten; see docs/WEB.md)
 ```
+
+The web build renders entirely client-side — drop a photo on the page,
+pick a camera and film, download the result; pixels are byte-identical to
+the CLI for the same inputs and seed.
 
 ## Use
 

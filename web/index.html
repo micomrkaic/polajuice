@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polajuice — photographic process emulator</title>
+<style>
+  :root { --ink:#1c1a17; --paper:#f4f1ea; --accent:#b3492c; --line:#d8d2c4; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font:16px/1.5 Georgia, 'Times New Roman', serif; }
+  header { padding:2rem 1.5rem 0.5rem; max-width:60rem; margin:0 auto; }
+  h1 { font-size:1.7rem; margin:0; letter-spacing:0.02em; }
+  h1 small { font-weight:normal; color:#7a7263; font-size:0.9rem; margin-left:0.6rem; }
+  main { max-width:60rem; margin:0 auto; padding:1rem 1.5rem 3rem; }
+  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));
+              gap:0.9rem; margin:1rem 0; padding:1rem;
+              border:1px solid var(--line); background:#fbf9f4; }
+  label { display:block; font-size:0.8rem; text-transform:uppercase;
+          letter-spacing:0.08em; color:#7a7263; margin-bottom:0.25rem; }
+  select, input[type=number] { width:100%; padding:0.4rem; font:inherit;
+          border:1px solid var(--line); background:white; }
+  input[type=range] { width:100%; }
+  #drop { border:2px dashed var(--line); padding:2.2rem 1rem; text-align:center;
+          cursor:pointer; color:#7a7263; transition:border-color .15s; }
+  #drop.armed { border-color:var(--accent); color:var(--accent); }
+  button { font:inherit; padding:0.55rem 1.4rem; border:1px solid var(--ink);
+           background:var(--ink); color:var(--paper); cursor:pointer; }
+  button.secondary { background:transparent; color:var(--ink); }
+  button:disabled { opacity:0.4; cursor:default; }
+  .row { display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap; margin:0.8rem 0; }
+  #status { color:#7a7263; font-style:italic; }
+  #status.error { color:var(--accent); }
+  .views { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1rem; }
+  @media (max-width:44rem) { .views { grid-template-columns:1fr; } }
+  figure { margin:0; }
+  figcaption { font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;
+               color:#7a7263; margin-bottom:0.3rem; }
+  img.view { width:100%; display:block; border:1px solid var(--line);
+             background:white; }
+  footer { max-width:60rem; margin:0 auto; padding:0 1.5rem 2rem;
+           font-size:0.85rem; color:#7a7263; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Polajuice <small id="version"></small></h1>
+  <p>A look is a <b>camera</b> (optics, grain, framing, process) plus a
+     <b>film</b> (color chemistry). Photos never leave your machine —
+     everything renders locally in WebAssembly.</p>
+</header>
+<main>
+  <div id="drop">drop a JPEG or PNG here, or click to choose
+    <input id="file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden>
+  </div>
+
+  <div class="controls">
+    <div>
+      <label for="camera">Camera</label>
+      <select id="camera"></select>
+    </div>
+    <div>
+      <label for="film">Film</label>
+      <select id="film"><option value="__auto__">canonical (auto)</option>
+        <option value="__none__">none — scalar engine</option></select>
+    </div>
+    <div>
+      <label for="strength">Strength <span id="strengthval">1.00</span></label>
+      <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
+    </div>
+    <div>
+      <label for="seed">Grain seed</label>
+      <input id="seed" type="number" value="42" step="1">
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="render" disabled>Render preview</button>
+    <button id="download" class="secondary" disabled>Render full size &amp; download</button>
+    <span id="status">loading engine…</span>
+  </div>
+
+  <div class="views">
+    <figure><figcaption>original</figcaption><img id="before" class="view" alt=""></figure>
+    <figure><figcaption id="aftercap">rendered</figcaption><img id="after" class="view" alt=""></figure>
+  </div>
+</main>
+<footer>
+  Film stocks are G'MIC/Pat David color presets served from
+  <code>films/</code>; camera descriptions come from the engine itself.
+  Source: <a href="https://github.com/micomrkaic/polajuice">github.com/micomrkaic/polajuice</a>.
+</footer>
+
+<script src="polajuice.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let Module = null, inputBytes = null, inputName = "photo", inputPath = "/in.jpg";
+let films = [];            // stems available under films/
+const filmCache = new Map();
+
+function setStatus(text, isError) {
+  $("status").textContent = text;
+  $("status").className = isError ? "error" : "";
+}
+
+async function boot() {
+  Module = await createPolajuice();
+  Module.renderC = Module.cwrap("pj_web_render", "number",
+      ["string", "string", "number", "number", "number", "number"]);
+  $("version").textContent = "v" + Module.UTF8ToString(Module._pj_web_version());
+
+  const cameraSel = $("camera");
+  const n = Module._pj_web_camera_count();
+  for (let i = 0; i < n; ++i) {
+    const name = Module.UTF8ToString(Module._pj_web_camera_name(i));
+    const desc = Module.UTF8ToString(Module._pj_web_camera_description(i));
+    const opt = new Option(`${name} — ${desc}`, name);
+    opt.dataset.film = Module.UTF8ToString(Module._pj_web_camera_film(i));
+    cameraSel.add(opt);
+  }
+
+  try {
+    films = await (await fetch("films/films.json")).json();
+    const sel = $("film");
+    for (const stem of films) sel.add(new Option(stem, stem));
+  } catch (e) {
+    setStatus("no films/ manifest found; canonical films unavailable, scalar engine only", false);
+  }
+  setStatus("ready — drop a photo");
+}
+
+async function loadFilmCube(stem) {
+  if (!filmCache.has(stem)) {
+    const res = await fetch(`films/${stem}.cube`);
+    if (!res.ok) throw new Error(`film '${stem}' not found under films/`);
+    filmCache.set(stem, await res.text());
+  }
+  return filmCache.get(stem);
+}
+
+function resolveFilmStem() {
+  const chosen = $("film").value;
+  if (chosen === "__none__") return null;
+  if (chosen !== "__auto__") return chosen;
+  const canonical = $("camera").selectedOptions[0].dataset.film;
+  if (!canonical) return null;                       // scalar-identity camera
+  return films.includes(canonical) ? canonical : null;
+}
+
+async function render(maxDim) {
+  if (!inputBytes) return null;
+  setStatus("rendering…");
+  await new Promise(r => setTimeout(r, 20));         // let the status paint
+
+  Module.FS.writeFile(inputPath, inputBytes);
+  const stem = resolveFilmStem();
+  let useFilm = 0;
+  if (stem) {
+    Module.FS.writeFile("/film.cube", await loadFilmCube(stem));
+    useFilm = 1;
+  }
+  const t0 = performance.now();
+  const size = Module.renderC(
+      inputPath, $("camera").value, useFilm,
+      parseFloat($("strength").value),
+      parseFloat($("seed").value) || 0, maxDim);
+  if (!size) {
+    setStatus(Module.UTF8ToString(Module._pj_web_status()), true);
+    return null;
+  }
+  const bytes = Module.FS.readFile("/out.jpg");
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
+  $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
+  return new Blob([bytes], {type: "image/jpeg"});
+}
+
+function acceptFile(file) {
+  inputName = file.name.replace(/\.[^.]+$/, "");
+  inputPath = (file.type === "image/png" || /\.png$/i.test(file.name))
+              ? "/in.png" : "/in.jpg";
+  const reader = new FileReader();
+  reader.onload = () => {
+    inputBytes = new Uint8Array(reader.result);
+    $("before").src = URL.createObjectURL(new Blob([inputBytes]));
+    $("render").disabled = $("download").disabled = false;
+    setStatus(`loaded ${file.name} (${(file.size/1048576).toFixed(1)} MB)`);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+$("drop").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", e => e.target.files[0] && acceptFile(e.target.files[0]));
+["dragover","dragleave","drop"].forEach(ev =>
+  $("drop").addEventListener(ev, e => {
+    e.preventDefault();
+    $("drop").classList.toggle("armed", ev === "dragover");
+    if (ev === "drop" && e.dataTransfer.files[0]) acceptFile(e.dataTransfer.files[0]);
+  }));
+$("strength").addEventListener("input",
+  () => $("strengthval").textContent = parseFloat($("strength").value).toFixed(2));
+$("render").addEventListener("click", async () => {
+  const blob = await render(1400);
+  if (blob) $("after").src = URL.createObjectURL(blob);
+});
+$("download").addEventListener("click", async () => {
+  const blob = await render(0);
+  if (!blob) return;
+  $("after").src = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${inputName}_${$("camera").value}.jpg`;
+  link.click();
+});
+
+boot().catch(e => setStatus("engine failed to load: " + e.message, true));
+</script>
+</body>
+</html>
