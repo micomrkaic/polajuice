@@ -11,9 +11,9 @@ LDLIBS += -lm
 
 CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
-ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/web/pj_web.o tests/test_core.o tests/test_web_shim.o
+ALL_OBJ = $(CORE_OBJ) src/cli/main.o tests/test_core.o
 
-.PHONY: all clean check install fetch-luts fetch-polaroid-lut wasm serve
+.PHONY: all clean clean-wasm check check-wasm install fetch-luts fetch-polaroid-lut wasm serve
 
 all: polajuice libpolajuice.a
 
@@ -29,17 +29,22 @@ polajuice: src/cli/main.o libpolajuice.a
 tests/test_core: tests/test_core.o libpolajuice.a
 	$(CC) $(CFLAGS) -o $@ tests/test_core.o libpolajuice.a $(LDLIBS)
 
-tests/test_web_shim: tests/test_web_shim.o src/web/pj_web.o libpolajuice.a
-	$(CC) $(CFLAGS) -o $@ tests/test_web_shim.o src/web/pj_web.o libpolajuice.a $(LDLIBS)
-
-check: tests/test_core tests/test_web_shim
+check: tests/test_core
 	./tests/test_core
-	./tests/test_web_shim
 
-# WebAssembly build (requires the Emscripten SDK; see docs/WEB.md).
-# 'make' builds native; 'make wasm' builds the browser engine.
+# WebAssembly build via wasi-sdk (auto-downloaded to third_party/ on
+# first run; see docs/WEB.md). 'make' builds native; 'make wasm' the
+# browser engine; 'make check-wasm' verifies it under node.
 wasm:
 	sh scripts/build_web.sh
+
+check-wasm:
+	cd scripts && node test_wasm.mjs && node test_page.mjs
+
+# 'clean' deliberately keeps web/polajuice.wasm: release tarballs ship it
+# prebuilt and release.sh runs 'make clean' before verifying it.
+clean-wasm:
+	$(RM) web/polajuice.wasm
 
 serve:
 	@echo "serving web/ at http://localhost:8000 (Ctrl-C to stop)"
@@ -62,7 +67,6 @@ install: all
 
 clean:
 	$(RM) $(ALL_OBJ) $(ALL_OBJ:.o=.d)
-	$(RM) polajuice libpolajuice.a tests/test_core tests/test_web_shim
-	$(RM) web/polajuice.js web/polajuice.wasm
+	$(RM) polajuice libpolajuice.a tests/test_core
 
 -include $(ALL_OBJ:.o=.d)

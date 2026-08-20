@@ -22,6 +22,11 @@ SRC=$(pwd)
     echo "run this from the root of the release tree" >&2; exit 1; }
 [ -d "$REPO/.git" ] || { echo "$REPO is not a git repository" >&2; exit 1; }
 
+[ -f "$SRC/web/polajuice.wasm" ] || {
+    echo "no web/polajuice.wasm in this tree; refuse to release without the engine" >&2
+    echo "(release tarballs ship it prebuilt; scripts/build_web.sh rebuilds it)" >&2
+    exit 1; }
+
 echo "== preflight"
 cd "$REPO"
 git remote get-url origin >/dev/null || {
@@ -47,13 +52,19 @@ if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; the
 fi
 
 echo "== importing source tree"
-# Copy the release tree over the repo. Nothing in the repo outside these
-# paths is touched; deletions of tracked files must be done by hand.
-for entry in "$SRC"/*; do
+# Copy the release tree over the repo, dotfiles included (a plain * glob
+# silently skips .gitignore, which once let a build artifact reach main).
+# Nothing in the repo outside these paths is touched; deletions of
+# tracked files must be done by hand.
+for entry in "$SRC"/* "$SRC"/.[!.]*; do
+    [ -e "$entry" ] || continue
+    case "$(basename "$entry")" in .git) continue ;; esac
     cp -R "$entry" "$REPO/"
 done
 # Keep renders and the fetched film library out of history, idempotently.
-for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/'; do
+for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/' \
+               'web/polajuice.wasm' 'web/films/' 'third_party/wasi-sdk*' \
+               'web/_pagecheck.mjs'; do
     grep -qxF "$pattern" .gitignore || echo "$pattern" >> .gitignore
 done
 
@@ -61,6 +72,12 @@ echo "== building and testing from the repo state"
 make clean
 make
 make check
+if command -v node >/dev/null; then
+    echo "== verifying the shipped wasm engine (node)"
+    ( cd scripts && node test_wasm.mjs && node test_page.mjs )
+else
+    echo "note: node not found; shipping wasm without local verification" >&2
+fi
 
 echo "== committing"
 git add -A
@@ -78,6 +95,27 @@ git tag -a "$TAG" -m "Release $TAG"
 echo "== pushing (fast-forward + new tag, no force)"
 git push origin main "refs/tags/$TAG"
 
+echo "== deploying web/ to gh-pages"
+if [ -d data/luts ] && [ -n "$(find data/luts -name '*.cube' -print -quit 2>/dev/null)" ]; then
+    sh scripts/stage_web_films.sh
+else
+    echo "note: no film library (make fetch-luts); deploying without films" >&2
+fi
+STAMP=$(git rev-parse --short HEAD)
+WORK=$(mktemp -d)
+git worktree add --detach "$WORK" >/dev/null
+(
+    cd "$WORK"
+    git checkout -q --orphan gh-pages-staging
+    git rm -rfq . 2>/dev/null || true
+    cp -R "$REPO/web/." .
+    git add -A
+    git commit -qm "pages build from $STAMP"
+    git push --force origin HEAD:gh-pages
+)
+git worktree remove --force "$WORK"
+
 echo
-echo "== done: $(git rev-parse --short HEAD) tagged $TAG"
+echo "== done: $STAMP tagged $TAG, gh-pages updated"
+echo "first release only: repo Settings -> Pages -> branch gh-pages, folder /"
 echo "verify with: git log --oneline --decorate --all | head -5"

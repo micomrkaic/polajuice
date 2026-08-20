@@ -92,12 +92,12 @@
   Source: <a href="https://github.com/micomrkaic/polajuice">github.com/micomrkaic/polajuice</a>.
 </footer>
 
-<script src="polajuice.js"></script>
-<script>
+<script type="module">
 "use strict";
+import { createEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-let Module = null, inputBytes = null, inputName = "photo", inputPath = "/in.jpg";
-let films = [];            // stems available under films/
+let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
+let films = [];
 const filmCache = new Map();
 
 function setStatus(text, isError) {
@@ -106,27 +106,21 @@ function setStatus(text, isError) {
 }
 
 async function boot() {
-  Module = await createPolajuice();
-  Module.renderC = Module.cwrap("pj_web_render", "number",
-      ["string", "string", "number", "number", "number", "number"]);
-  $("version").textContent = "v" + Module.UTF8ToString(Module._pj_web_version());
+  const wasm = await (await fetch("polajuice.wasm")).arrayBuffer();
+  engine = await createEngine(new Uint8Array(wasm));
+  $("version").textContent = "v" + await engine.version();
 
   const cameraSel = $("camera");
-  const n = Module._pj_web_camera_count();
-  for (let i = 0; i < n; ++i) {
-    const name = Module.UTF8ToString(Module._pj_web_camera_name(i));
-    const desc = Module.UTF8ToString(Module._pj_web_camera_description(i));
-    const opt = new Option(`${name} — ${desc}`, name);
-    opt.dataset.film = Module.UTF8ToString(Module._pj_web_camera_film(i));
+  for (const cam of await engine.cameras()) {
+    const opt = new Option(`${cam.name} — ${cam.description}`, cam.name);
+    opt.dataset.film = cam.film || "";
     cameraSel.add(opt);
   }
-
   try {
     films = await (await fetch("films/films.json")).json();
-    const sel = $("film");
-    for (const stem of films) sel.add(new Option(stem, stem));
+    for (const stem of films) $("film").add(new Option(stem, stem));
   } catch (e) {
-    setStatus("no films/ manifest found; canonical films unavailable, scalar engine only", false);
+    setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
   }
   setStatus("ready — drop a photo");
 }
@@ -145,42 +139,34 @@ function resolveFilmStem() {
   if (chosen === "__none__") return null;
   if (chosen !== "__auto__") return chosen;
   const canonical = $("camera").selectedOptions[0].dataset.film;
-  if (!canonical) return null;                       // scalar-identity camera
-  return films.includes(canonical) ? canonical : null;
+  return canonical && films.includes(canonical) ? canonical : null;
 }
 
 async function render(maxDim) {
-  if (!inputBytes) return null;
+  if (!inputBytes || !engine) return null;
   setStatus("rendering…");
-  await new Promise(r => setTimeout(r, 20));         // let the status paint
-
-  Module.FS.writeFile(inputPath, inputBytes);
-  const stem = resolveFilmStem();
-  let useFilm = 0;
-  if (stem) {
-    Module.FS.writeFile("/film.cube", await loadFilmCube(stem));
-    useFilm = 1;
-  }
-  const t0 = performance.now();
-  const size = Module.renderC(
-      inputPath, $("camera").value, useFilm,
-      parseFloat($("strength").value),
-      parseFloat($("seed").value) || 0, maxDim);
-  if (!size) {
-    setStatus(Module.UTF8ToString(Module._pj_web_status()), true);
+  await new Promise(r => setTimeout(r, 20));
+  try {
+    const stem = resolveFilmStem();
+    const cubeText = stem ? await loadFilmCube(stem) : null;
+    const t0 = performance.now();
+    const out = await engine.render({
+      inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
+      strength: parseFloat($("strength").value),
+      seed: parseInt($("seed").value, 10) || 0, maxDim });
+    const secs = ((performance.now() - t0) / 1000).toFixed(1);
+    setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
+    $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
+    return new Blob([out], { type: "image/jpeg" });
+  } catch (e) {
+    setStatus(e.message, true);
     return null;
   }
-  const bytes = Module.FS.readFile("/out.jpg");
-  const secs = ((performance.now() - t0) / 1000).toFixed(1);
-  setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
-  $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
-  return new Blob([bytes], {type: "image/jpeg"});
 }
 
 function acceptFile(file) {
   inputName = file.name.replace(/\.[^.]+$/, "");
-  inputPath = (file.type === "image/png" || /\.png$/i.test(file.name))
-              ? "/in.png" : "/in.jpg";
+  inputExt = (file.type === "image/png" || /\.png$/i.test(file.name)) ? "png" : "jpg";
   const reader = new FileReader();
   reader.onload = () => {
     inputBytes = new Uint8Array(reader.result);

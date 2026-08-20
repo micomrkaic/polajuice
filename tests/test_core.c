@@ -105,6 +105,16 @@ int main(void)
     assert(pj_preset_default_film("expired-film") == NULL);
     assert(pj_preset_default_film("no-such-camera") == NULL);
 
+    /* Downscale: long edge bounded, aspect kept, small images untouched. */
+    PjImage *big = pj_image_new(400, 300, &error);
+    assert(big);
+    fill_uniform(big, 0.4f);
+    big = pj_image_downscale(big, 100, &error);
+    assert(big && pj_image_width(big) == 100 && pj_image_height(big) == 75);
+    PjImage *same = pj_image_downscale(big, 500, &error);
+    assert(same == big);
+    pj_image_free(big);
+
     PjRenderOptions a = {.seed = 42, .strength = 1.0f};
     PjImage *first = pj_render(input, "35mm-negative", &a, &error);
     PjImage *second = pj_render(input, "35mm-negative", &a, &error);

@@ -1,79 +1,39 @@
 # Polajuice in the browser
 
-`make` builds the native binary; `make wasm` builds the same core for
-WebAssembly. The pipeline, the stb codecs and the EXIF orientation parser
-all compile unchanged, so a given input, camera, film, strength and seed
-renders byte-identical pixels in the browser and the CLI. Photos never
-leave the machine: decoding and rendering happen locally in the page.
+`make` builds the native binary; `make wasm` compiles the identical core to
+WebAssembly with wasi-sdk (auto-downloaded to `third_party/` on first run;
+~110 MB, no system install, delete the directory to uninstall). Release
+tarballs ship `web/polajuice.wasm` prebuilt and pre-verified, so building
+it is only needed after source changes.
 
-## Building
+The wasm is a WASI command binary: the page runs it through the vendored
+`@bjorn3/browser_wasi_shim` (MIT/Apache-2.0, `web/vendor/`), giving it an
+in-memory filesystem per render. Because the module has no JS-generated
+glue, the exact artifact that ships is testable headlessly: `make
+check-wasm` runs it under node through `web/engine.js` - the page's own
+loader - and byte-compares a render against the native CLI. Browser and
+CLI produce identical files for identical inputs and seed.
 
-One-time Emscripten SDK setup:
-
-```sh
-git clone https://github.com/emscripten-core/emsdk
-cd emsdk && ./emsdk install latest && ./emsdk activate latest
-source ./emsdk_env.sh
-```
-
-Then, from the repo:
+## Local test and deploy
 
 ```sh
-make wasm                        # -> web/polajuice.js + web/polajuice.wasm
-make fetch-luts                  # if the film library is not yet installed
+make fetch-luts                  # once, if the film library is absent
 sh scripts/stage_web_films.sh    # canonical cubes -> web/films/ + manifest
 make serve                       # http://localhost:8000
 ```
 
-A local server is required even for testing: browsers refuse to load
-`.wasm` over `file://`. Extra stocks can be staged by name:
-`sh scripts/stage_web_films.sh kodak_portra_800 fuji_velvia_50`.
+A local server is required even for testing (browsers refuse module and
+wasm loads over file://). Deployment is part of `scripts/release.sh`,
+which stages films, snapshots `web/` onto the `gh-pages` branch via a
+temporary worktree (main is never checked out from under you), and
+force-pushes that branch only - gh-pages is a build artifact, replaced
+wholesale each release, while main stays sources-only. One-time GitHub
+step: Settings -> Pages -> deploy from branch `gh-pages`, folder `/`.
 
-## How the page works
+## Memory and performance
 
-- The engine exposes camera enumeration, so the dropdown and each camera's
-  canonical film come from the same preset table the CLI uses.
-- The uploaded file's bytes are written to Emscripten's in-memory
-  filesystem as `/in.jpg` or `/in.png` (chosen from the MIME type) so
-  format dispatch and JPEG EXIF orientation work exactly as on the
-  desktop; the chosen film is written to `/film.cube`.
-- "Render preview" renders at a 1400 px long edge (a box-average
-  downscale in linear light; the pipeline is resolution-aware, so the
-  preview is a faithful miniature). "Render full size" renders at native
-  resolution and downloads `<name>_<camera>.jpg`.
-- Films are fetched lazily from `films/` per the `films.json` manifest and
-  cached; "canonical (auto)" mirrors the CLI's default-film behavior,
-  including the scalar-engine fallback.
-
-## Deploying to GitHub Pages
-
-The `web/` directory is self-contained. Simplest path: keep built
-artifacts off `main` and publish them from a `gh-pages` branch —
-
-```sh
-make wasm && sh scripts/stage_web_films.sh
-git checkout --orphan gh-pages
-git rm -rf --cached . >/dev/null
-git add -f web && git commit -m "web build"
-git subtree push --prefix web origin gh-pages   # or push and set Pages to /web
-git checkout main
-```
-
-then in the repository settings enable Pages from the `gh-pages` branch.
-(Any equivalent flow works; the only rule kept from the repo's history is
-that generated artifacts stay out of `main`.)
-
-## Performance notes
-
-The engine has been verified as WebAssembly outside the browser (clang
-wasm32-wasi + node WASI): renders are byte-identical to the native binary
-for the same input, camera, film, strength and seed.
-
-Memory: an 8-12 MP render peaks at roughly 400-600 MB of linear-light
-float buffers, hence the 256 MB initial / 2 GB maximum in build_web.sh;
-wasm32 in browsers allows up to 4 GB, so full-resolution phone photos
-fit, but the growth headroom is deliberate, not decorative. The heavy
-stages are the box blurs (halation, softness) and per-pixel color math;
-if speed ever matters, `-msimd128` and a worker thread are the standard
-next steps, and the preview/full-size split already keeps the UI
-responsive.
+An 8-12 MP render peaks around 400-600 MB of linear-light float buffers;
+the module declares 64 MB initial / 2 GB maximum memory, within wasm32
+browser limits. The preview/full-size split in the page keeps the UI
+responsive; `-msimd128` and a worker thread are the standard next steps
+if speed ever matters.

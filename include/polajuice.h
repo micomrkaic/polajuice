@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 0
-#define PJ_VERSION_MINOR 5
+#define PJ_VERSION_MINOR 6
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -32,6 +32,12 @@ PjImage *pj_image_new(size_t width, size_t height, PjError *error);
  * JPEG loading honors the EXIF orientation tag. */
 PjImage *pj_image_load(const char *path, PjError *error);
 bool pj_image_save(const PjImage *image, const char *path, PjError *error);
+
+/* Box-average downscale in linear light so the long edge is at most
+ * max_dim pixels; returns the input untouched when already small enough.
+ * The pipeline is resolution-aware, so a downscaled render is a faithful
+ * miniature of the full-size one. */
+PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error);
 
 PjImage *pj_image_load_ppm(const char *path, PjError *error);
 bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error);

@@ -1,4 +1,4 @@
-# Polajuice 0.5.0
+# Polajuice 0.6.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a

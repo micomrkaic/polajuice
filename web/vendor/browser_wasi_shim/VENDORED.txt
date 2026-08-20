@@ -1,0 +1,2 @@
+@bjorn3/browser_wasi_shim 0.4.2 (dist build), MIT or Apache-2.0.
+Vendored so the page has zero runtime dependencies beyond this directory.

@@ -185,4 +185,44 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
     return ok;
 }
 
-const char *pj_version_string(void) { return "0.5.0"; }
+const char *pj_version_string(void) { return "0.6.0"; }
+
+PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error)
+{
+    if (max_dim == 0 || !image) return image;
+    size_t w = pj_image_width(image), h = pj_image_height(image);
+    size_t longest = w > h ? w : h;
+    if (longest <= max_dim) return image;
+
+    double scale = (double)max_dim / (double)longest;
+    size_t out_w = (size_t)(w * scale + 0.5);
+    size_t out_h = (size_t)(h * scale + 0.5);
+    if (out_w < 1) out_w = 1;
+    if (out_h < 1) out_h = 1;
+
+    PjImage *out = pj_image_new(out_w, out_h, error);
+    if (!out) {
+        pj_image_free(image);
+        return NULL;
+    }
+    const float *src = pj_image_pixels_const(image);
+    float *dst = pj_image_pixels(out);
+    for (size_t y = 0; y < out_h; ++y) {
+        size_t y0 = y * h / out_h, y1 = (y + 1) * h / out_h;
+        if (y1 <= y0) y1 = y0 + 1;
+        for (size_t x = 0; x < out_w; ++x) {
+            size_t x0 = x * w / out_w, x1 = (x + 1) * w / out_w;
+            if (x1 <= x0) x1 = x0 + 1;
+            double sum[3] = {0, 0, 0};
+            for (size_t sy = y0; sy < y1; ++sy)
+                for (size_t sx = x0; sx < x1; ++sx)
+                    for (size_t c = 0; c < 3; ++c)
+                        sum[c] += src[(sy * w + sx) * 3 + c];
+            double count = (double)((y1 - y0) * (x1 - x0));
+            for (size_t c = 0; c < 3; ++c)
+                dst[(y * out_w + x) * 3 + c] = (float)(sum[c] / count);
+        }
+    }
+    pj_image_free(image);
+    return out;
+}
