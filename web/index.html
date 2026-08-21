@@ -90,6 +90,16 @@
       <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
     </div>
     <div>
+      <label for="develop">Developing</label>
+      <select id="develop">
+        <option value="normal">normal</option>
+        <option value="push+1">push +1 stop</option>
+        <option value="push+2">push +2 stops</option>
+        <option value="pull-1">pull -1 stop</option>
+        <option value="cross">cross-process (E-6 in C-41)</option>
+      </select>
+    </div>
+    <div>
       <label for="age">Age <span id="ageval">fresh</span></label>
       <input id="age" type="range" min="0" max="1" step="0.05" value="0">
     </div>
@@ -114,7 +124,10 @@
         <p class="helpnote">The film is the color chemistry, applied as a
         3D LUT. "Canonical (auto)" picks each camera's period-correct
         stock; Age is a third axis — storage fog, faded contrast and a
-        magenta drift that works with any camera and film.</p>
+        magenta drift that works with any camera and film. Developing is
+        the chemistry: push for contrast and grain, pull to soften, or
+        cross-process slide film for shifted colors — disabled for
+        instant cameras, which develop inside the film unit.</p>
         <dl id="helpfilms"></dl>
       </div>
     </div>
@@ -160,12 +173,33 @@ async function boot() {
   for (const cam of cameraList) {
     const opt = new Option(`${cam.name} — ${cam.description}`, cam.name);
     opt.dataset.film = cam.film || "";
+    opt.dataset.instant = cam.instant ? "1" : "";
     cameraSel.add(opt);
   }
+  function syncDevelop() {
+    const instant = !!cameraSel.selectedOptions[0]?.dataset.instant;
+    $("develop").disabled = instant;
+    if (instant) $("develop").value = "normal";
+  }
+  cameraSel.addEventListener("change", syncDevelop);
+  syncDevelop();
+  let filmFamilies = [];
   try {
     const manifest = await (await fetch("films/films.json")).json();
-    films = manifest.map(f => typeof f === "string" ? { stem: f, blurb: "" } : f);
-    for (const f of films) $("film").add(new Option(f.stem, f.stem));
+    if (Array.isArray(manifest))
+      filmFamilies = [{ name: "Films", note: "", stocks:
+        manifest.map(f => typeof f === "string" ? { stem: f, blurb: "" } : f) }];
+    else
+      filmFamilies = manifest.families;
+    films = filmFamilies.flatMap(f => f.stocks);
+    for (const family of filmFamilies) {
+      const group = document.createElement("optgroup");
+      group.label = family.process ? `${family.name} (${family.process})`
+                                   : family.name;
+      for (const stock of family.stocks)
+        group.append(new Option(stock.stem, stock.stem));
+      $("film").append(group);
+    }
   } catch (e) {
     setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
   }
@@ -178,11 +212,19 @@ async function boot() {
     camHelp.append(dt, dd);
   }
   const filmHelp = $("helpfilms");
-  for (const f of films) {
-    const dt = document.createElement("dt"); dt.textContent = f.stem;
+  for (const family of filmFamilies) {
+    const dt = document.createElement("dt");
+    dt.textContent = family.process ? `${family.name} — ${family.process}`
+                                    : family.name;
     const dd = document.createElement("dd");
-    dd.textContent = f.blurb || "";
+    dd.textContent = family.note || "";
     filmHelp.append(dt, dd);
+    for (const stock of family.stocks) {
+      if (!stock.blurb) continue;
+      const sdd = document.createElement("dd");
+      sdd.innerHTML = `<span class="traits">${stock.stem}:</span> ${stock.blurb}`;
+      filmHelp.append(sdd);
+    }
   }
   try {
     const sm = await (await fetch("samples/samples.json")).json();
@@ -237,7 +279,8 @@ async function render(maxDim) {
       inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
       strength: parseFloat($("strength").value),
       seed: parseInt($("seed").value, 10) || 0,
-      age: parseFloat($("age").value), maxDim });
+      age: parseFloat($("age").value),
+      develop: $("develop").value, maxDim });
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
     $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");

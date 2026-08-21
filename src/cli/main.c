@@ -33,6 +33,9 @@ static void usage(FILE *stream)
         "  -o, --output PATH       output path; default INPUT_CAMERA.ext\n"
         "                          formats by extension: .ppm .png .jpg .jpeg\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
+        "      --develop MODE      development: normal (default), push+1,\n"
+        "                          push+2, pull-1, or cross (E-6 in C-41);\n"
+        "                          not applicable to instant cameras\n"
         "      --age NUMBER        storage aging from 0 (fresh) to 1\n"
         "                          (fog, faded contrast, magenta drift)\n"
         "      --seed INTEGER      deterministic grain seed\n"
@@ -262,6 +265,19 @@ static int apply(int argc, char **argv)
             film_request = argv[++i];
         else if (!strcmp(argv[i], "--no-film"))
             no_film = true;
+        else if (!strcmp(argv[i], "--develop") && i + 1 < argc) {
+            const char *dev = argv[++i];
+            if (!strcmp(dev, "normal")) { /* defaults */ }
+            else if (!strcmp(dev, "push+1")) options.push = 1.0f;
+            else if (!strcmp(dev, "push+2")) options.push = 2.0f;
+            else if (!strcmp(dev, "pull-1")) options.push = -1.0f;
+            else if (!strcmp(dev, "cross")) options.cross_process = true;
+            else {
+                fprintf(stderr, "invalid develop mode '%s' "
+                        "(normal, push+1, push+2, pull-1, cross)\n", dev);
+                return EXIT_FAILURE;
+            }
+        }
         else if (!strcmp(argv[i], "--age") && i + 1 < argc) {
             char *end = NULL;
             options.age = strtof(argv[++i], &end);
@@ -307,6 +323,11 @@ static int apply(int argc, char **argv)
         }
         output = derived;
     }
+
+    if ((options.push != 0.0f || options.cross_process) &&
+        pj_preset_is_instant(camera))
+        fprintf(stderr, "note: %s develops inside the film unit; "
+                "--develop is ignored for instant cameras\n", camera);
 
     /* Choose the film: explicit request > camera default > scalar engine. */
     char *film_path = NULL;

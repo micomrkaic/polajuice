@@ -1,4 +1,4 @@
-# Polajuice 0.9.0
+# Polajuice 1.0.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -126,6 +126,16 @@ the pairing table).
 - `autochrome` - Lumiere plates, 1907-1930s: pastel palette, soft plate
   optics and pointillist *colored* grain (per-channel noise, the engine's
   `grain_chroma` axis)
+
+Development is its own axis too: `--develop` takes `normal`, `push+1`,
+`push+2`, `pull-1` or `cross` (E-6 slide through C-41 chemistry). Push
+raises contrast and coarsens grain, pull relaxes both, and cross gives
+the shifted-color lomo signature; all apply after the color stage so
+they compose with any film LUT, and all are refused with a note for
+instant cameras, whose development happens inside the film unit. The
+web page groups the film library into historical families (Kodachrome,
+Ektachrome, the Portra generations, the Ilford speed ladder, the
+Polaroid chemistries and more) with process labels and notes.
 
 Aging is not a camera: `--age 0..1` (a slider on the web) is a third axis
 alongside camera and film - base fog with magenta drift, contrast decay

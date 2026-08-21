@@ -9,8 +9,8 @@
 extern "C" {
 #endif
 
-#define PJ_VERSION_MAJOR 0
-#define PJ_VERSION_MINOR 9
+#define PJ_VERSION_MAJOR 1
+#define PJ_VERSION_MINOR 0
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -26,6 +26,13 @@ typedef struct {
     float age;   /* 0..1 storage-degradation axis: base fog, contrast decay,
                     desaturation, warm-magenta drift. Orthogonal to camera
                     and film; applies after the color stage. */
+    float push;  /* development push/pull in stops, -1..+2: contrast and
+                    grain rise with push, soften with pull. Chemistry, so
+                    it applies after the color stage and survives LUTs.
+                    Ignored for instant cameras (no user development). */
+    bool cross_process;  /* E-6-in-C-41 style cross development: high
+                    contrast, green-yellow highlights, crossed curves.
+                    Also ignored for instant cameras. */
     const PjLut3D *color_lut;
 } PjRenderOptions;
 
@@ -66,6 +73,9 @@ const char *pj_preset_default_film(const char *name);
  * (framing, flash, lens, halation, grain, ...). Returns buffer, or NULL
  * for an unknown camera. */
 char *pj_preset_traits(const char *name, char *buffer, size_t size);
+/* True for integral/peel-apart instant cameras, whose development is
+ * inside the film unit: push/pull and cross-processing do not apply. */
+bool pj_preset_is_instant(const char *name);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,

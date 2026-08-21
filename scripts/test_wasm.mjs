@@ -13,6 +13,9 @@ if (!polaroid || polaroid.film !== "polaroid_px-680")
     throw new Error("canonical film wiring broken");
 if (!polaroid.traits || !polaroid.traits.includes("instant-print"))
     throw new Error("traits column missing: " + JSON.stringify(polaroid));
+if (!polaroid.instant) throw new Error("instant flag not parsed");
+if (cameras.find(c => c.name === "bw-35").instant)
+    throw new Error("bw-35 wrongly marked instant");
 console.log(`engine v${version}, ${cameras.length} cameras`);
 
 // error path must throw with the engine's message, not crash
@@ -39,6 +42,15 @@ if (process.argv[3]) {
     if (Buffer.compare(Buffer.from(aged), Buffer.from(out)) === 0)
         throw new Error("age had no effect");
     console.log("age axis ok");
+    const pushed = await engine.render({ inputBytes: input, ext: "png",
+        camera: "super8", strength: 1.0, seed: 7, develop: "push+2", maxDim: 0 });
+    if (Buffer.compare(Buffer.from(pushed), Buffer.from(out)) === 0)
+        throw new Error("push+2 had no effect");
+    const crossed = await engine.render({ inputBytes: input, ext: "png",
+        camera: "super8", strength: 1.0, seed: 7, develop: "cross", maxDim: 0 });
+    if (Buffer.compare(Buffer.from(crossed), Buffer.from(pushed)) === 0)
+        throw new Error("cross identical to push");
+    console.log("develop axis ok (push, cross)");
 }
 // a shipped sample must render through the engine (EXIF baked at build time,
 // so orientation is already correct in the file itself)

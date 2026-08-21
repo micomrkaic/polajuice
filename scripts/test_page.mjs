@@ -14,10 +14,10 @@ class Elem {
   constructor(id) { this.id = id; this.options = []; this.dataset = {};
     this.value = id === "film" ? "__auto__" : ""; this.textContent = "";
     this.className = ""; this.disabled = true; this.handlers = {}; }
-  add(opt) { this.options.push(opt); if (this.options.length === 1) this.value = opt.value;
-    Object.defineProperty(this, "selectedOptions",
-      { get: () => [this.options.find(o => o.value === this.value) || this.options[0]],
-        configurable: true }); }
+  add(opt) { this.options.push(opt); if (this.options.length === 1) this.value = opt.value; }
+  get selectedOptions() {
+    return [this.options.find(o => o.value === this.value) || this.options[0] || { dataset: {} }];
+  }
   addEventListener(ev, fn) { this.handlers[ev] = fn; }
   append(...nodes) { (this.children ??= []).push(...nodes); }
   click() {} classListToggle() {}
@@ -68,5 +68,8 @@ if (!elems["helpcameras"] || !(elems["helpcameras"].children?.length >= 26))
 if (!(elems["samplestrip"].children?.length >= 6))
   throw new Error("sample strip not populated: " + (elems["samplestrip"].children?.length ?? 0));
 console.log(`sample strip: ${elems["samplestrip"].children.length - 1} samples + credit`);
+if (!elems["develop"]) throw new Error("develop select absent");
+if (!elems["film"].children?.length && !elems["film"].options.length)
+  throw new Error("film select not populated");
 console.log(`help panel: ${elems["helpcameras"].children.length / 2} cameras described`);
 console.log("page handlers wired; render path covered by test_wasm.mjs");

@@ -248,6 +248,12 @@ char *pj_preset_traits(const char *name, char *buffer, size_t size)
     return buffer;
 }
 
+bool pj_preset_is_instant(const char *name)
+{
+    const PjPreset *preset = pj_find_preset(name);
+    return preset && preset->instant_frame;
+}
+
 const char *pj_preset_default_film(const char *name)
 {
     const PjPreset *preset = pj_find_preset(name);

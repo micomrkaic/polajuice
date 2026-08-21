@@ -161,3 +161,16 @@ technicolor-3strip: the beam-splitter camera and dye-transfer printing,
 1.375:1 Academy gate, high saturation with controlled skin tones and
 near-zero grain. All three are stylizations built from process
 descriptions, not colorimetric measurements.
+
+## Development axis (1.0.0)
+
+Push/pull processing changes development time to trade exposure for
+contrast and grain; the model raises display-referred contrast around the
+mid, lifts saturation slightly, and multiplies grain amplitude with push.
+Cross-processing (E-6 slide stock developed in C-41) is modeled as crossed
+per-channel curves - green gaining in highlights, blue sinking in shadows -
+with raised contrast and saturation, matching the commonly described lomo
+signature. Both are stylizations of the process, not sensitometric
+measurements, and both are refused for instant cameras, where development
+is sealed inside the film unit. The measured alternative also exists: the
+film catalog's Cross-processed family carries actual xpro CLUTs.

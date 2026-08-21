@@ -281,6 +281,43 @@ static void apply_builtin_color(PjImage *image, const PjPreset *p, float strengt
  * layer degrades fastest in expired C-41), and overall contrast decays.
  * Both are display-referred operations on the developed image.
  */
+/*
+ * Development: chemistry applied to the formed image, display-referred so
+ * it composes with the built-in grade and with LUTs alike. Push raises
+ * contrast around the mid and lifts saturation slightly; pull relaxes
+ * both. Cross-processing (slide stock through negative chemistry) is a
+ * fixed stylization: crossed per-channel curves with green-yellow
+ * highlights, cool crushed shadows, high contrast and saturation.
+ */
+static void apply_develop(PjImage *image, float push, bool cross)
+{
+    if (push == 0.0f && !cross) return;
+    if (push < -1.0f) push = -1.0f;
+    if (push > 2.0f) push = 2.0f;
+    float contrast = 1.0f + 0.16f * push + (cross ? 0.22f : 0.0f);
+    float sat = 1.0f + 0.06f * push + (cross ? 0.28f : 0.0f);
+    for (size_t i = 0; i < image->width * image->height; ++i) {
+        float display[3];
+        for (size_t c = 0; c < 3; ++c)
+            display[c] = linear_to_srgb(image->rgb[i * 3 + c]);
+        if (cross) {
+            /* crossed curves: green gains in highlights, blue sinks in
+             * shadows, red steepens through the mids */
+            float r = display[0], g = display[1], b = display[2];
+            display[0] = clamp01(r + 0.10f * r * (1.0f - r) * (r - 0.35f) * 4.0f);
+            display[1] = clamp01(powf(g, 0.88f));
+            display[2] = clamp01(powf(b, 1.18f) * 0.96f);
+        }
+        float luma = 0.2126f * display[0] + 0.7152f * display[1] +
+                     0.0722f * display[2];
+        for (size_t c = 0; c < 3; ++c) {
+            float value = luma + (display[c] - luma) * sat;
+            value = 0.45f + (value - 0.45f) * contrast;
+            image->rgb[i * 3 + c] = srgb_to_linear(clamp01(value));
+        }
+    }
+}
+
 /* amount 0..1: full storage-degradation look, so that any camera and any
  * film can be aged. Fog with magenta bias (the green-sensitive layer
  * degrades fastest), contrast decay, desaturation, and a slight warm
@@ -500,11 +537,19 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_builtin_color(image, preset, strength);
     }
     {
+        float push = options ? options->push : 0.0f;
+        bool cross = options ? options->cross_process : false;
+        if (preset->instant_frame) { push = 0.0f; cross = false; }
+        apply_develop(image, push, cross);
         float age = preset->fade * strength + (options ? options->age : 0.0f);
         apply_age(image, age);
+        /* pushed development coarsens grain; pulling calms it */
+        float grain_gain = 1.0f + 0.45f * fmaxf(0.0f, push)
+                                + 0.15f * fminf(0.0f, push);
+        apply_grain(image, preset->grain * strength * grain_gain,
+                    preset->grain_scale, preset->grain_midtone_bias,
+                    preset->grain_chroma, seed);
     }
-    apply_grain(image, preset->grain * strength, preset->grain_scale,
-                preset->grain_midtone_bias, preset->grain_chroma, seed);
 
     if (preset->instant_frame) {
         PjImage *framed = instant_frame(image, preset, error);

@@ -9,7 +9,7 @@
  *   polajuice.wasm --list-cameras
  *       prints "name<TAB>default_film<TAB>description" per camera
  *   polajuice.wasm --version
- *   polajuice.wasm render IN CAMERA FILM|- STRENGTH SEED AGE MAX_DIM OUT
+ *   polajuice.wasm render IN CAMERA FILM|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT
  *       FILM "-" selects the built-in scalar engine; MAX_DIM 0 renders
  *       at full resolution, otherwise the input is box-average
  *       downscaled in linear light first (preview mode).
@@ -26,26 +26,28 @@ static int list_cameras(void)
         const char *name = pj_preset_name(i);
         const char *film = pj_preset_default_film(name);
         char traits[512];
-        printf("%s\t%s\t%s\t%s\n", name, film ? film : "",
+        printf("%s\t%s\t%s\t%s\t%s\n", name, film ? film : "",
                pj_preset_description(name),
-               pj_preset_traits(name, traits, sizeof traits));
+               pj_preset_traits(name, traits, sizeof traits),
+               pj_preset_is_instant(name) ? "instant" : "film");
     }
     return 0;
 }
 
 static int render(int argc, char **argv)
 {
-    if (argc != 10) {
-        fprintf(stderr,
-                "args: render IN CAMERA FILM|- STRENGTH SEED AGE MAX_DIM OUT\n");
+    if (argc != 11) {
+        fprintf(stderr, "args: render IN CAMERA FILM|- STRENGTH SEED AGE "
+                        "DEVELOP MAX_DIM OUT\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
     float strength = strtof(argv[5], NULL);
     uint64_t seed = strtoull(argv[6], NULL, 0);
     float age = strtof(argv[7], NULL);
-    size_t max_dim = (size_t)strtoull(argv[8], NULL, 0);
-    const char *out_path = argv[9];
+    const char *dev = argv[8];
+    size_t max_dim = (size_t)strtoull(argv[9], NULL, 0);
+    const char *out_path = argv[10];
 
     PjError error = {{0}};
     PjLut3D *lut = NULL;
@@ -67,6 +69,10 @@ static int render(int argc, char **argv)
     }
     PjRenderOptions options = {.seed = seed, .strength = strength,
                                .age = age, .color_lut = lut};
+    if (!strcmp(dev, "push+1")) options.push = 1.0f;
+    else if (!strcmp(dev, "push+2")) options.push = 2.0f;
+    else if (!strcmp(dev, "pull-1")) options.push = -1.0f;
+    else if (!strcmp(dev, "cross")) options.cross_process = true;
     PjImage *result = pj_render(image, camera, &options, &error);
     pj_image_free(image);
     pj_lut3d_free(lut);
