@@ -1,4 +1,4 @@
-# Polajuice 1.2.0 — the juice package
+# Polajuice 1.3.0 — the juice package
 
 One engine, two front-ends: **polajuice** for stills, **superjuice** for
 movies. Both are thin drivers over the same core (`libpolajuice.a`) and
@@ -25,9 +25,21 @@ RAW remain future work (libvips and Little CMS territory).
 
 ## superjuice: movies
 
-superjuice reads YUV4MPEG2 on stdin and writes it on stdout; FFmpeg
-handles the world's codecs at both ends of a pipe, so the engine itself
-stays dependency-free:
+One command, movie in, vintage movie out:
+
+```sh
+./superjuice clip.mp4 -c super8 --age 0.3
+# -> clip_super8.mp4, audio passed through untouched
+```
+
+superjuice drives FFmpeg itself (decoding, H.264 encoding at `--crf 18`
+by default, audio passthrough); it needs `ffmpeg` on PATH and tells you
+so if it is missing. All the stills options apply: `-f` for the film,
+`--develop`, `--age`, `--strength`, `--seed`, `-o` for an explicit
+output path. For custom pipelines (different codecs, filters, no
+re-encode of your choosing), plumbing mode remains: with no input file,
+superjuice reads YUV4MPEG2 on stdin and writes it on stdout, and the
+engine itself stays dependency-free:
 
 ```sh
 ffmpeg -v error -i clip.mp4 -f yuv4mpegpipe -pix_fmt yuv420p - \

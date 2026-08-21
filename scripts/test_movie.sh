@@ -42,4 +42,16 @@ fi
 grep -q "still-print" "$TMP/refuse" || {
     echo "test_movie: refusal message missing"; exit 1; }
 
-echo "movie front-end tests passed ($frames frames, gate 320x235, deterministic)"
+# file mode: one command in, playable mp4 with audio passthrough out
+ffmpeg -v error -y -f lavfi -i "testsrc2=size=320x240:rate=12:duration=1" \
+    -f lavfi -i "sine=frequency=440:duration=1" \
+    -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$TMP/clip.mp4"
+( cd "$TMP" && "$OLDPWD/superjuice" clip.mp4 -c super8 --no-film --seed 7 \
+    2>/dev/null )
+[ -f "$TMP/clip_super8.mp4" ] || { echo "test_movie: file mode wrote nothing"; exit 1; }
+streams=$(ffprobe -v error -show_entries stream=codec_type -of csv=p=0 \
+    "$TMP/clip_super8.mp4" | sort | tr '\n' ' ')
+echo "$streams" | grep -q audio || { echo "test_movie: audio lost"; exit 1; }
+echo "$streams" | grep -q video || { echo "test_movie: video lost"; exit 1; }
+
+echo "movie front-end tests passed ($frames frames, gate 320x235, file mode with audio)"

@@ -70,12 +70,35 @@ static void rgb_to_ycbcr(float r, float g, float b,
     *cr = (unsigned char)(lcr < 0 ? 0 : lcr > 255 ? 255 : lcr);
 }
 
+/* Quote a path for /bin/sh: wrap in single quotes, escaping embedded ones. */
+static char *shell_quote(const char *path)
+{
+    size_t len = strlen(path), extra = 0;
+    for (size_t i = 0; i < len; ++i) if (path[i] == '\'') extra += 3;
+    char *quoted = malloc(len + extra + 3);
+    if (!quoted) return NULL;
+    char *out = quoted;
+    *out++ = '\'';
+    for (size_t i = 0; i < len; ++i) {
+        if (path[i] == '\'') { memcpy(out, "'\\''", 4); out += 4; }
+        else *out++ = path[i];
+    }
+    *out++ = '\'';
+    *out = '\0';
+    return quoted;
+}
+
 static void usage(FILE *stream)
 {
     fprintf(stream,
         "superjuice %s - motion front-end of the juice engine\n\n"
-        "Usage: ffmpeg ... -f yuv4mpegpipe - | superjuice -c CAMERA "
-        "[options] | ffmpeg -f yuv4mpegpipe -i - ...\n\n"
+        "Usage:\n"
+        "  superjuice INPUT.mp4 -c CAMERA [-o OUTPUT.mp4] [options]\n"
+        "      One command: decoding, rendering, encoding and audio\n"
+        "      passthrough (needs ffmpeg on PATH). Default output is\n"
+        "      INPUT_CAMERA.mp4 next to the input.\n\n"
+        "  ffmpeg ... -f yuv4mpegpipe - | superjuice -c CAMERA | ffmpeg ...\n"
+        "      Plumbing mode: y4m on stdin/stdout for custom pipelines.\n\n"
         "Options (as in polajuice):\n"
         "  -c, --camera NAME       camera archetype; instant cameras are\n"
         "                          still-print formats and are refused\n"
@@ -84,7 +107,9 @@ static void usage(FILE *stream)
         "      --develop MODE      normal, push+1, push+2, pull-1, cross\n"
         "      --age NUMBER        0..1\n"
         "      --strength NUMBER   0..1\n"
-        "      --seed INTEGER      base seed; grain decorrelates per frame\n\n"
+        "      --seed INTEGER      base seed; grain decorrelates per frame\n"
+        "  -o, --output PATH       output movie (file mode)\n"
+        "      --crf NUMBER        H.264 quality, lower is better (default 18)\n\n"
         "Cameras with motion character (gate weave, flicker): super8,\n"
         "autochrome, technicolor-3strip; every camera gets frame-\n"
         "decorrelated 'boiling' grain.\n",
@@ -133,6 +158,8 @@ static bool read_y4m_header(FILE *in, Y4mHeader *header)
 int main(int argc, char **argv)
 {
     const char *camera = NULL, *film_request = NULL;
+    const char *input = NULL, *output = NULL;
+    int crf = 18;
     bool no_film = false, any_film = false;
     PjRenderOptions options = {.seed = UINT64_C(0x504f4c414a554943),
                                .strength = 1.0f, .temporal = true};
@@ -164,7 +191,14 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
             usage(stdout);
             return EXIT_SUCCESS;
-        } else {
+        }
+        else if ((!strcmp(argv[i], "-o") || !strcmp(argv[i], "--output")) && i + 1 < argc)
+            output = argv[++i];
+        else if (!strcmp(argv[i], "--crf") && i + 1 < argc)
+            crf = atoi(argv[++i]);
+        else if (argv[i][0] != '-' && !input)
+            input = argv[i];
+        else {
             fprintf(stderr, "unknown option: %s\n", argv[i]);
             return EXIT_FAILURE;
         }
@@ -219,8 +253,58 @@ int main(int argc, char **argv)
         options.color_lut = lut;
     }
 
+    FILE *stream_in = stdin, *stream_out = stdout;
+    char out_path[4096] = "";
+    if (input) {
+        if (system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+            fprintf(stderr,
+                "superjuice: file mode needs ffmpeg on PATH.\n"
+                "  install it, or use plumbing mode:\n"
+                "  ffmpeg -i IN -f yuv4mpegpipe -pix_fmt yuv420p - | "
+                "superjuice -c %s | ffmpeg -f yuv4mpegpipe -i - OUT\n",
+                camera);
+            pj_lut3d_free(lut);
+            return EXIT_FAILURE;
+        }
+        if (output)
+            snprintf(out_path, sizeof out_path, "%s", output);
+        else {
+            const char *dot = strrchr(input, '.');
+            const char *slash = strrchr(input, '/');
+            if (!dot || (slash && dot < slash)) dot = input + strlen(input);
+            snprintf(out_path, sizeof out_path, "%.*s_%s.mp4",
+                     (int)(dot - input), input, camera);
+        }
+        char *quoted_in = shell_quote(input);
+        char *quoted_out = shell_quote(out_path);
+        char command[8192];
+        snprintf(command, sizeof command,
+                 "ffmpeg -v error -i %s -f yuv4mpegpipe -pix_fmt yuv420p -",
+                 quoted_in);
+        stream_in = popen(command, "r");
+        snprintf(command, sizeof command,
+                 "ffmpeg -v error -y -f yuv4mpegpipe -i - -i %s "
+                 "-map 0:v -map 1:a? -c:v libx264 -crf %d "
+                 /* gate crops can yield odd dimensions; yuv420p H.264
+                  * needs even, so trim at most one pixel per edge */
+                 "-vf 'crop=trunc(iw/2)*2:trunc(ih/2)*2' "
+                 "-pix_fmt yuv420p -c:a copy %s",
+                 quoted_in, crf, quoted_out);
+        stream_out = popen(command, "w");
+        free(quoted_in);
+        free(quoted_out);
+        if (!stream_in || !stream_out) {
+            fprintf(stderr, "superjuice: cannot start ffmpeg\n");
+            pj_lut3d_free(lut);
+            return EXIT_FAILURE;
+        }
+        fprintf(stderr, "superjuice: %s -> %s (%s%s%s)\n", input, out_path,
+                camera, options.age > 0 ? ", aged" : "",
+                options.cross_process ? ", cross-processed" : "");
+    }
+
     Y4mHeader header;
-    if (!read_y4m_header(stdin, &header)) {
+    if (!read_y4m_header(stream_in, &header)) {
         fprintf(stderr, "superjuice: stdin is not a YUV4MPEG2 stream "
                 "(pipe from: ffmpeg -i IN -f yuv4mpegpipe -pix_fmt yuv420p -)\n");
         pj_lut3d_free(lut);
@@ -240,11 +324,11 @@ int main(int argc, char **argv)
     int64_t frame = 0;
     size_t out_w = 0, out_h = 0;
     char line[256];
-    while (fgets(line, sizeof line, stdin)) {
+    while (fgets(line, sizeof line, stream_in)) {
         if (strncmp(line, "FRAME", 5)) break;
-        if (fread(y_plane, 1, w * h, stdin) != w * h ||
-            fread(cb_plane, 1, chroma_w * chroma_h, stdin) != chroma_w * chroma_h ||
-            fread(cr_plane, 1, chroma_w * chroma_h, stdin) != chroma_w * chroma_h) {
+        if (fread(y_plane, 1, w * h, stream_in) != w * h ||
+            fread(cb_plane, 1, chroma_w * chroma_h, stream_in) != chroma_w * chroma_h ||
+            fread(cr_plane, 1, chroma_w * chroma_h, stream_in) != chroma_w * chroma_h) {
             fprintf(stderr, "superjuice: truncated frame %lld\n",
                     (long long)frame);
             break;
@@ -277,14 +361,14 @@ int main(int argc, char **argv)
         if (frame == 0) {
             out_w = rw;
             out_h = rh;
-            printf("YUV4MPEG2 W%zu H%zu C444%s\n", out_w, out_h,
-                   header.params);
+            fprintf(stream_out, "YUV4MPEG2 W%zu H%zu C444%s\n",
+                    out_w, out_h, header.params);
         } else if (rw != out_w || rh != out_h) {
             fprintf(stderr, "superjuice: frame size changed mid-stream\n");
             pj_image_free(rendered);
             break;
         }
-        fputs("FRAME\n", stdout);
+        fputs("FRAME\n", stream_out);
         const float *rp = pj_image_pixels_const(rendered);
         /* C444 out: three full planes */
         static unsigned char *out_planes[3] = {NULL, NULL, NULL};
@@ -298,7 +382,7 @@ int main(int argc, char **argv)
                          &out_planes[2][i]);
         }
         for (int pl = 0; pl < 3; ++pl)
-            fwrite(out_planes[pl], 1, out_w * out_h, stdout);
+            fwrite(out_planes[pl], 1, out_w * out_h, stream_out);
         pj_image_free(rendered);
 
         ++frame;
@@ -309,5 +393,12 @@ int main(int argc, char **argv)
     fprintf(stderr, "superjuice: done, %lld frames\n", (long long)frame);
     free(y_plane); free(cb_plane); free(cr_plane);
     pj_lut3d_free(lut);
-    return frame > 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+    int encode_status = 0;
+    if (input) {
+        pclose(stream_in);
+        encode_status = pclose(stream_out);
+        if (frame > 0 && encode_status == 0)
+            fprintf(stderr, "superjuice: wrote %s\n", out_path);
+    }
+    return frame > 0 && encode_status == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
