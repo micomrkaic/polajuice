@@ -26,10 +26,23 @@ static int list_cameras(void)
         const char *name = pj_preset_name(i);
         const char *film = pj_preset_default_film(name);
         char traits[512];
-        printf("%s\t%s\t%s\t%s\t%s\n", name, film ? film : "",
+        char tokens[128];
+        tokens[0] = '\0';
+        {
+            static const char *all[] = {"slide", "negative", "bw",
+                                        "integral", "pack"};
+            size_t used = 0;
+            for (size_t t = 0; t < 5; ++t)
+                if (pj_preset_accepts_film(name, all[t])) {
+                    int n = snprintf(tokens + used, sizeof tokens - used,
+                                     "%s%s", used ? "," : "", all[t]);
+                    if (n > 0) used += (size_t)n;
+                }
+        }
+        printf("%s\t%s\t%s\t%s\t%s\t%s\n", name, film ? film : "",
                pj_preset_description(name),
                pj_preset_traits(name, traits, sizeof traits),
-               pj_preset_is_instant(name) ? "instant" : "film");
+               pj_preset_is_instant(name) ? "instant" : "film", tokens);
     }
     return 0;
 }

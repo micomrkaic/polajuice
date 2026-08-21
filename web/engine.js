@@ -49,9 +49,11 @@ export async function createEngine(wasmBytes) {
             const r = await run(["--list-cameras"], {});
             if (r.code !== 0) throw new Error(r.stderr || "camera listing failed");
             return r.stdout.trim().split("\n").map(line => {
-                const [name, film, description, traits, kind] = line.split("\t");
+                const [name, film, description, traits, kind, procs]
+                    = line.split("\t");
                 return { name, film: film || null, description,
-                         traits: traits || "", instant: kind === "instant" };
+                         traits: traits || "", instant: kind === "instant",
+                         processes: procs ? procs.split(",") : [] };
             });
         },
         /* inputBytes: Uint8Array; ext: "jpg"|"png"; cubeText: string|null;

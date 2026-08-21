@@ -1,6 +1,12 @@
 #ifndef POLAJUICE_INTERNAL_H
 #define POLAJUICE_INTERNAL_H
 
+#define PJ_FILM_SLIDE    1u   /* reversal: E-6 and K-14 */
+#define PJ_FILM_NEGATIVE 2u   /* C-41 color negative */
+#define PJ_FILM_BW       4u   /* black-and-white (incl. C-41 XP2) */
+#define PJ_FILM_INTEGRAL 8u   /* Polaroid integral packs */
+#define PJ_FILM_PACK     16u  /* peel-apart pack film */
+
 #include "polajuice.h"
 
 struct PjImage {
@@ -20,6 +26,8 @@ typedef struct {
     const char *name;
     const char *description;
     const char *default_film;   /* canonical .cube stem in data/luts, or NULL */
+    unsigned film_processes;    /* bitmask of PJ_FILM_* the camera accepts;
+                                   0 = sealed process, takes no film at all */
     float exposure_ev;
     float contrast;
     float black_lift;

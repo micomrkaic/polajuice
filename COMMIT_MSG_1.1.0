@@ -1,0 +1,22 @@
+1.1.0: camera/film compatibility model
+
+Cameras now declare which film processes they accept (slide, C-41
+negative, black-and-white, Polaroid integral, peel-apart pack), and
+autochrome and technicolor-3strip are classified as sealed processes
+that take no film at all - the plate or dye-transfer process is the
+medium. The CLI refuses incompatible pairings with an explanation
+(inferring a film's process from its library location, with stem
+overrides for instant stocks; out-of-library cubes are never blocked),
+and --any-film bypasses every check, because darkrooms allowed
+deliberate mismatches and the engine should not be more dogmatic than a
+lab. The famous mismatch has first-class support instead: slide in
+negative chemistry is what --develop cross emulates, alongside the
+measured Cross-processed CLUT family.
+
+The web rebuilds the film dropdown per camera to show only compatible
+families and disables it entirely for sealed processes; 'cameras',
+'describe' and the help panel print a films: line per camera. The
+README documents the full model and its escape hatches.
+
+Core: pj_preset_accepts_film() and pj_preset_film_processes() with a
+per-preset process bitmask; truth-table tests across all tiers.

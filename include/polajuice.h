@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 0
+#define PJ_VERSION_MINOR 1
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -76,6 +76,13 @@ char *pj_preset_traits(const char *name, char *buffer, size_t size);
 /* True for integral/peel-apart instant cameras, whose development is
  * inside the film unit: push/pull and cross-processing do not apply. */
 bool pj_preset_is_instant(const char *name);
+/* Film-process compatibility. Process tokens: "slide", "negative", "bw",
+ * "integral", "pack". A sealed-process camera (autochrome,
+ * technicolor-3strip) accepts none. pj_preset_film_processes writes a
+ * human-readable list ("" for sealed) and returns buffer, or NULL for an
+ * unknown camera. */
+bool pj_preset_accepts_film(const char *camera, const char *process);
+char *pj_preset_film_processes(const char *camera, char *buffer, size_t size);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,

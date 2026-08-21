@@ -82,8 +82,7 @@
     </div>
     <div>
       <label for="film">Film</label>
-      <select id="film"><option value="__auto__">canonical (auto)</option>
-        <option value="__none__">none — scalar engine</option></select>
+      <select id="film"></select>
     </div>
     <div>
       <label for="strength">Strength <span id="strengthval">1.00</span></label>
@@ -176,14 +175,53 @@ async function boot() {
     opt.dataset.instant = cam.instant ? "1" : "";
     cameraSel.add(opt);
   }
-  function syncDevelop() {
-    const instant = !!cameraSel.selectedOptions[0]?.dataset.instant;
-    $("develop").disabled = instant;
-    if (instant) $("develop").value = "normal";
+  function currentCamera() {
+    return cameraList.find(c => c.name === cameraSel.value) || cameraList[0];
   }
-  cameraSel.addEventListener("change", syncDevelop);
-  syncDevelop();
+  function rebuildFilmSelect() {
+    const cam = currentCamera();
+    const sel = $("film");
+    const previous = sel.value;
+    while (sel.options.length) sel.remove(0);
+    if (cam.processes.length === 0) {
+      sel.add(new Option("sealed process — no film", "__none__"));
+      sel.value = "__none__";
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sel.add(new Option("canonical (auto)", "__auto__"));
+    sel.add(new Option("none — scalar engine", "__none__"));
+    for (const family of filmFamilies) {
+      const token = familyToken(family);
+      if (token && !cam.processes.includes(token)) continue;
+      const group = document.createElement("optgroup");
+      group.label = family.process ? `${family.name} (${family.process})`
+                                   : family.name;
+      for (const stock of family.stocks)
+        group.append(new Option(stock.stem, stock.stem));
+      sel.append(group);
+    }
+    sel.value = [...sel.options].some(o => o.value === previous)
+              ? previous : "__auto__";
+  }
+  function syncCompat() {
+    const cam = currentCamera();
+    $("develop").disabled = cam.instant;
+    if (cam.instant) $("develop").value = "normal";
+    rebuildFilmSelect();
+  }
+  cameraSel.addEventListener("change", syncCompat);
   let filmFamilies = [];
+  function familyToken(family) {
+    const p = family.process || "";
+    if (p.includes("K-14") || p === "E-6" || p.includes("E-6 in C-41")) return "slide";
+    if (p === "C-41") return "negative";
+    if (p.includes("B+W") || p.includes("B and W")) return "bw";
+    if (p === "internal")
+      return /pack/i.test(family.name) ? "pack" : "integral";
+    return null;   // unknown: never filtered out
+  }
   try {
     const manifest = await (await fetch("films/films.json")).json();
     if (Array.isArray(manifest))
@@ -192,22 +230,19 @@ async function boot() {
     else
       filmFamilies = manifest.families;
     films = filmFamilies.flatMap(f => f.stocks);
-    for (const family of filmFamilies) {
-      const group = document.createElement("optgroup");
-      group.label = family.process ? `${family.name} (${family.process})`
-                                   : family.name;
-      for (const stock of family.stocks)
-        group.append(new Option(stock.stem, stock.stem));
-      $("film").append(group);
-    }
   } catch (e) {
     setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
   }
+  syncCompat();
+
   const camHelp = $("helpcameras");
   for (const cam of cameraList) {
     const dt = document.createElement("dt"); dt.textContent = cam.name;
     const dd = document.createElement("dd");
+    const filmsLine = cam.processes.length
+        ? `takes: ${cam.processes.join(", ")}` : "sealed process — takes no film";
     dd.innerHTML = `${cam.description}.<br><span class="traits">${cam.traits}</span>` +
+      `<br><span class="traits">${filmsLine}</span>` +
       (cam.film ? `<br><span class="traits">canonical film: ${cam.film}</span>` : "");
     camHelp.append(dt, dd);
   }

@@ -16,6 +16,12 @@ if (!polaroid.traits || !polaroid.traits.includes("instant-print"))
 if (!polaroid.instant) throw new Error("instant flag not parsed");
 if (cameras.find(c => c.name === "bw-35").instant)
     throw new Error("bw-35 wrongly marked instant");
+const auto2 = cameras.find(c => c.name === "autochrome");
+if (auto2.processes.length !== 0) throw new Error("autochrome should be sealed");
+if (!cameras.find(c => c.name === "super8").processes.includes("slide"))
+    throw new Error("super8 should take slide");
+if (!polaroid.processes.includes("integral"))
+    throw new Error("polaroid-600 should take integral");
 console.log(`engine v${version}, ${cameras.length} cameras`);
 
 // error path must throw with the engine's message, not crash

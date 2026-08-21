@@ -1,4 +1,4 @@
-# Polajuice 1.0.0
+# Polajuice 1.1.0
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -126,6 +126,55 @@ the pairing table).
 - `autochrome` - Lumiere plates, 1907-1930s: pastel palette, soft plate
   optics and pointillist *colored* grain (per-channel noise, the engine's
   `grain_chroma` axis)
+
+## Camera and film compatibility
+
+Not every camera takes every film, and Polajuice enforces the physics
+rather than letting nonsense pairings render silently. Three tiers:
+
+**Sealed processes take no film at all.** For `autochrome` (Lumiere
+plates) and `technicolor-3strip` (dye-transfer cinema), the process *is*
+the medium - "Provia in an Autochrome" describes nothing that could
+exist. The CLI refuses a `-f` for them with an explanation, and the web
+page disables the film selector.
+
+**Every other camera declares which film processes it accepts**, and only
+matching films are offered or allowed:
+
+| camera | takes |
+|---|---|
+| 35mm-negative, cinestill-night | color negative (C-41) |
+| 35mm-slide, super8 | slide (E-6/K-14) |
+| bw-35 | black-and-white |
+| disposable-flash | color negative, black-and-white |
+| midcentury-rangefinder, toy-camera-120 | slide, negative, black-and-white |
+| polaroid-600, polaroid-sx70 | Polaroid integral only |
+| polaroid-packfilm | peel-apart pack film only |
+| autochrome, technicolor-3strip | none (sealed) |
+
+The film's process is inferred from its place in the film library
+(colorslide is slide, negative_old/new are C-41, and so on, with
+stem-based overrides for instant stocks); a cube supplied by path from
+outside the library has an unknowable process and is never blocked. On
+the web, the film dropdown is rebuilt per camera to show only compatible
+families; `polajuice cameras`, `describe` and the help panel all print a
+"films:" line so nothing is left to guessing.
+
+**Deliberate mismatches remain available, because darkrooms allowed
+them.** `--any-film` bypasses every check - lomo culture is built on
+wrong film in wrong places, and the engine should not be more dogmatic
+than a lab. The one historically famous mismatch has first-class
+support instead: slide stock through negative chemistry is exactly what
+`--develop cross` emulates, and the film catalog's Cross-processed
+family carries measured CLUTs of the real thing. Anachronisms (Portra
+800 in the midcentury-rangefinder) pass freely: the film loads, and
+history's blushes are not the engine's business.
+
+One classification note for honesty's sake: `cinestill-night` is
+physically a film trick (Vision3 cine stock with its anti-halation layer
+removed) shot in an ordinary 35mm body; it lives in the camera list
+because halation is an optical rendering trait, and it accepts C-41
+negative films accordingly.
 
 Development is its own axis too: `--develop` takes `normal`, `push+1`,
 `push+2`, `pull-1` or `cross` (E-6 slide through C-41 chemistry). Push

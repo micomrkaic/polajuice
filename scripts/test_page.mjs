@@ -15,6 +15,7 @@ class Elem {
     this.value = id === "film" ? "__auto__" : ""; this.textContent = "";
     this.className = ""; this.disabled = true; this.handlers = {}; }
   add(opt) { this.options.push(opt); if (this.options.length === 1) this.value = opt.value; }
+  remove(i) { this.options.splice(i, 1); }
   get selectedOptions() {
     return [this.options.find(o => o.value === this.value) || this.options[0] || { dataset: {} }];
   }
@@ -69,7 +70,15 @@ if (!(elems["samplestrip"].children?.length >= 6))
   throw new Error("sample strip not populated: " + (elems["samplestrip"].children?.length ?? 0));
 console.log(`sample strip: ${elems["samplestrip"].children.length - 1} samples + credit`);
 if (!elems["develop"]) throw new Error("develop select absent");
-if (!elems["film"].children?.length && !elems["film"].options.length)
+if (!elems["film"].options.length && !elems["film"].children?.length)
   throw new Error("film select not populated");
+// compatibility: switching to a sealed camera must empty and disable film
+elems["camera"].value = "autochrome";
+elems["camera"].handlers["change"]();
+if (!elems["film"].disabled) throw new Error("sealed camera did not disable film");
+elems["camera"].value = "35mm-slide";
+elems["camera"].handlers["change"]();
+if (elems["film"].disabled) throw new Error("film select stuck disabled");
+console.log("compatibility filtering: sealed disables film, film camera re-enables");
 console.log(`help panel: ${elems["helpcameras"].children.length / 2} cameras described`);
 console.log("page handlers wired; render path covered by test_wasm.mjs");

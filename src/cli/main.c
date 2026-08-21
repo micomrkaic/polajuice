@@ -30,6 +30,7 @@ static void usage(FILE *stream)
         "  -f, --film NAME|FILE    film stock: a name searched in the film\n"
         "                          library, or a path to a .cube file\n"
         "      --no-film           force the built-in scalar color engine\n"
+        "      --any-film          bypass camera/film compatibility checks\n"
         "  -o, --output PATH       output path; default INPUT_CAMERA.ext\n"
         "                          formats by extension: .ppm .png .jpg .jpeg\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
@@ -56,9 +57,13 @@ static int list_cameras(void)
         const char *name = pj_preset_name(i);
         const char *film = pj_preset_default_film(name);
         char traits[512];
-        printf("%-21s %s\n%-21s   traits: %s\n%-21s   film: %s\n", name,
+        char processes[256];
+        pj_preset_film_processes(name, processes, sizeof processes);
+        printf("%-21s %s\n%-21s   traits: %s\n%-21s   films: %s\n"
+               "%-21s   film: %s\n", name,
                pj_preset_description(name), "",
                pj_preset_traits(name, traits, sizeof traits), "",
+               processes[0] ? processes : "none (sealed process)", "",
                film ? film : "(built-in scalar engine)");
     }
     return EXIT_SUCCESS;
@@ -150,6 +155,31 @@ static bool contains_nocase(const char *haystack, const char *needle)
     for (const char *p = haystack; *p; ++p)
         if (!strncasecmp(p, needle, nlen)) return true;
     return false;
+}
+
+/*
+ * Infer a film's process from its resolved library path (family directory)
+ * with stem-based overrides for instant stocks that live in other packs.
+ * Returns a token for pj_preset_accepts_film, or NULL when unknowable
+ * (e.g. a user-supplied cube outside the library), which is never blocked.
+ */
+static const char *film_process_of(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+    const char *stem = slash ? slash + 1 : path;
+    if (!strncmp(stem, "polaroid_px", 11) ||
+        !strncmp(stem, "polaroid_time_zero", 18))
+        return "integral";
+    if (!strncmp(stem, "polaroid_66", 11) || !strncmp(stem, "polaroid_69", 11) ||
+        !strncmp(stem, "fuji_fp", 7))
+        return "pack";
+    if (strstr(path, "instant_consumer")) return "integral";
+    if (strstr(path, "instant_pro")) return "pack";
+    if (strstr(path, "colorslide")) return "slide";
+    if (strstr(path, "/bw/")) return "bw";
+    if (strstr(path, "negative_old") || strstr(path, "negative_new"))
+        return "negative";
+    return NULL;
 }
 
 /*
@@ -251,6 +281,7 @@ static int apply(int argc, char **argv)
     const char *camera = NULL;
     const char *film_request = NULL;
     bool no_film = false;
+    bool any_film = false;
     PjRenderOptions options = {.seed = UINT64_C(0x504f4c414a554943),
                                .strength = 1.0f};
 
@@ -265,6 +296,8 @@ static int apply(int argc, char **argv)
             film_request = argv[++i];
         else if (!strcmp(argv[i], "--no-film"))
             no_film = true;
+        else if (!strcmp(argv[i], "--any-film"))
+            any_film = true;
         else if (!strcmp(argv[i], "--develop") && i + 1 < argc) {
             const char *dev = argv[++i];
             if (!strcmp(dev, "normal")) { /* defaults */ }
@@ -332,8 +365,29 @@ static int apply(int argc, char **argv)
     /* Choose the film: explicit request > camera default > scalar engine. */
     char *film_path = NULL;
     if (film_request) {
+        char processes[256];
+        if (pj_preset_film_processes(camera, processes, sizeof processes) &&
+            processes[0] == '\0' && !any_film) {
+            fprintf(stderr,
+                    "polajuice: %s is a sealed process and takes no film "
+                    "(the plate or dye-transfer process is the medium); "
+                    "use --any-film to override\n", camera);
+            return EXIT_FAILURE;
+        }
         film_path = resolve_film(film_request, false);
         if (!film_path) return EXIT_FAILURE;
+        const char *process = film_process_of(film_path);
+        if (process && !any_film &&
+            !pj_preset_accepts_film(camera, process)) {
+            fprintf(stderr,
+                    "polajuice: %s takes %s; '%s' is %s film.\n"
+                    "  (slide stock in negative chemistry is what "
+                    "--develop cross emulates; --any-film overrides)\n",
+                    camera, processes[0] ? processes : "no film",
+                    film_request, process);
+            free(film_path);
+            return EXIT_FAILURE;
+        }
     } else if (!no_film) {
         const char *canonical = pj_preset_default_film(camera);
         if (canonical) {
@@ -389,8 +443,12 @@ int main(int argc, char **argv)
         }
         char traits[512];
         const char *film = pj_preset_default_film(argv[2]);
-        printf("%s: %s\n  traits: %s\n  canonical film: %s\n", argv[2],
-               description, pj_preset_traits(argv[2], traits, sizeof traits),
+        char processes[256];
+        pj_preset_film_processes(argv[2], processes, sizeof processes);
+        printf("%s: %s\n  traits: %s\n  films: %s\n  canonical film: %s\n",
+               argv[2], description,
+               pj_preset_traits(argv[2], traits, sizeof traits),
+               processes[0] ? processes : "none (sealed process)",
                film ? film : "(built-in scalar engine)");
         return EXIT_SUCCESS;
     }

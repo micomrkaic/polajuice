@@ -103,6 +103,21 @@ int main(void)
     assert(!strcmp(pj_preset_default_film("polaroid-600"), "polaroid_px-680"));
     assert(pj_preset_default_film("no-such-camera") == NULL);
 
+    /* Film-process compatibility truth table. */
+    assert(pj_preset_accepts_film("super8", "slide"));
+    assert(!pj_preset_accepts_film("super8", "negative"));
+    assert(pj_preset_accepts_film("35mm-negative", "negative"));
+    assert(!pj_preset_accepts_film("35mm-negative", "slide"));
+    assert(pj_preset_accepts_film("polaroid-600", "integral"));
+    assert(!pj_preset_accepts_film("polaroid-600", "pack"));
+    assert(pj_preset_accepts_film("polaroid-packfilm", "pack"));
+    assert(!pj_preset_accepts_film("autochrome", "slide"));
+    assert(!pj_preset_accepts_film("technicolor-3strip", "negative"));
+    assert(pj_preset_accepts_film("midcentury-rangefinder", "bw"));
+    char procs[256];
+    assert(pj_preset_film_processes("autochrome", procs, sizeof procs));
+    assert(procs[0] == '\0');   /* sealed */
+
     /* Traits are generated from the preset's own parameters. */
     char traits[512];
     assert(pj_preset_traits("polaroid-600", traits, sizeof traits));

@@ -9,6 +9,7 @@
 static const PjPreset presets[] = {
     {
         .name = "35mm-negative",
+        .film_processes = PJ_FILM_NEGATIVE,
         .default_film = "kodak_portra_400",
         .description = "Clean 35mm color negative: fine grain, gentle shoulder",
         .exposure_ev = 0.00f, .contrast = 1.05f, .black_lift = 0.006f,
@@ -24,6 +25,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "polaroid-600",
+        .film_processes = PJ_FILM_INTEGRAL,
         .default_film = "polaroid_px-680",
         .description = "Soft, nearly grainless Color 600-style instant print",
         .exposure_ev = 0.05f, .contrast = 1.18f, .black_lift = 0.018f,
@@ -40,6 +42,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "super8",
+        .film_processes = PJ_FILM_SLIDE,
         .default_film = "kodak_ektachrome_100_vs",
         .description = "Super 8 reversal frame: 1.36:1 gate, coarse grain, halation",
         .crop_aspect = 1.362f,
@@ -56,6 +59,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "disposable-flash",
+        .film_processes = PJ_FILM_NEGATIVE | PJ_FILM_BW,
         .default_film = "fuji_superia_800",
         .description = "ISO 800 disposable: harsh near flash, dark falloff and soft lens",
         .exposure_ev = 0.02f, .contrast = 1.20f, .black_lift = 0.002f,
@@ -74,6 +78,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "35mm-slide",
+        .film_processes = PJ_FILM_SLIDE,
         .default_film = "fuji_provia_100f",
         .description = "35mm reversal slide: very fine grain, hard shoulder, rich color",
         .exposure_ev = -0.03f, .contrast = 1.15f, .black_lift = 0.001f,
@@ -89,6 +94,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "bw-35",
+        .film_processes = PJ_FILM_BW,
         .default_film = "ilford_hp_5_plus_400",
         .description = "35mm ISO 400 black-and-white: medium contrast, honest grain",
         .exposure_ev = 0.00f, .contrast = 1.06f, .black_lift = 0.006f,
@@ -101,6 +107,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "toy-camera-120",
+        .film_processes = PJ_FILM_SLIDE | PJ_FILM_NEGATIVE | PJ_FILM_BW,
         .default_film = "lomography_x-pro_slide_200",
         .description = "Square plastic-lens camera with vignette and edge softness",
         .exposure_ev = 0.02f, .contrast = 1.08f, .black_lift = 0.010f,
@@ -117,6 +124,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "cinestill-night",
+        .film_processes = PJ_FILM_NEGATIVE,
         .description = "Remjet-stripped cine stock: strong red halation, night neon",
         .exposure_ev = 0.00f, .contrast = 1.12f, .black_lift = 0.004f,
         .highlight_rolloff = 0.45f, .saturation = 1.05f,
@@ -131,6 +139,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "polaroid-sx70",
+        .film_processes = PJ_FILM_INTEGRAL,
         .description = "SX-70-era integral print: dreamier and warmer than 600",
         .default_film = "polaroid_px-70",
         .exposure_ev = 0.02f, .contrast = 1.10f, .black_lift = 0.020f,
@@ -147,6 +156,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "polaroid-packfilm",
+        .film_processes = PJ_FILM_PACK,
         .description = "Peel-apart pack film in a Land camera: crisp, thin even border",
         .default_film = "polaroid_669",
         .exposure_ev = 0.00f, .contrast = 1.14f, .black_lift = 0.010f,
@@ -165,6 +175,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "midcentury-rangefinder",
+        .film_processes = PJ_FILM_SLIDE | PJ_FILM_NEGATIVE | PJ_FILM_BW,
         .description = "Late-1940s folding 35mm: uncoated-lens flare, early Kodachrome era",
         .default_film = "kodak_kodachrome_64",
         .exposure_ev = -0.02f, .contrast = 0.96f, .black_lift = 0.030f,
@@ -180,6 +191,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "technicolor-3strip",
+        .film_processes = 0,
         .description = "Three-strip dye-transfer cinema: saturated, smooth, Academy gate",
         .exposure_ev = 0.03f, .contrast = 1.15f, .black_lift = 0.010f,
         .highlight_rolloff = 0.50f, .saturation = 1.30f,
@@ -195,6 +207,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "autochrome",
+        .film_processes = 0,
         .description = "Lumiere Autochrome plate: pastel pointillist colored grain",
         .exposure_ev = 0.00f, .contrast = 0.92f, .black_lift = 0.030f,
         .highlight_rolloff = 0.55f, .saturation = 0.72f,
@@ -245,6 +258,47 @@ char *pj_preset_traits(const char *name, char *buffer, size_t size)
     if (p->monochrome) ADD("black and white");
     if (p->fade > 0.05f) ADD("slightly aged by default");
 #undef ADD
+    return buffer;
+}
+
+
+static unsigned process_bit(const char *process)
+{
+    if (!process) return 0;
+    if (!strcmp(process, "slide")) return PJ_FILM_SLIDE;
+    if (!strcmp(process, "negative")) return PJ_FILM_NEGATIVE;
+    if (!strcmp(process, "bw")) return PJ_FILM_BW;
+    if (!strcmp(process, "integral")) return PJ_FILM_INTEGRAL;
+    if (!strcmp(process, "pack")) return PJ_FILM_PACK;
+    return 0;
+}
+
+bool pj_preset_accepts_film(const char *camera, const char *process)
+{
+    const PjPreset *preset = pj_find_preset(camera);
+    unsigned bit = process_bit(process);
+    return preset && bit && (preset->film_processes & bit);
+}
+
+char *pj_preset_film_processes(const char *camera, char *buffer, size_t size)
+{
+    const PjPreset *preset = pj_find_preset(camera);
+    if (!preset || !buffer || size == 0) return NULL;
+    buffer[0] = '\0';
+    size_t used = 0;
+#define ADDP(bit, text) do { \
+        if (preset->film_processes & (bit)) { \
+            int n = snprintf(buffer + used, size - used, "%s%s", \
+                             used ? ", " : "", (text)); \
+            if (n > 0 && (size_t)n < size - used) used += (size_t)n; \
+        } \
+    } while (0)
+    ADDP(PJ_FILM_SLIDE, "slide (E-6/K-14)");
+    ADDP(PJ_FILM_NEGATIVE, "color negative (C-41)");
+    ADDP(PJ_FILM_BW, "black-and-white");
+    ADDP(PJ_FILM_INTEGRAL, "Polaroid integral");
+    ADDP(PJ_FILM_PACK, "peel-apart pack film");
+#undef ADDP
     return buffer;
 }
 
