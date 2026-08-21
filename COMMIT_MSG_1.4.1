@@ -1,0 +1,15 @@
+1.4.1: fix page render regression, test the page by actually rendering
+
+1.4.0's engine-level enforcement introduced a scope bug: filmFamilies
+(and familyToken) lived inside boot() while render() is module-level,
+so any render with a film selected threw "filmFamilies is not defined"
+before reaching the engine. Both are hoisted to module scope, and a
+scope audit confirms no other boot-local name is referenced outside.
+
+The structural fix matters more than the one-liner: the page test
+previously verified handlers were wired but never clicked render. It
+now performs real renders through the page's own click handler - a
+sample loaded from disk, canonical film resolved, cube fetched, the
+process token computed, the wasm engine invoked - asserting the status
+line reports the render and the film, plus the sealed-camera scalar
+path. That test fails immediately against the 1.4.0 page.

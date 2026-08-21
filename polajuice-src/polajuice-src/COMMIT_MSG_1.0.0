@@ -1,0 +1,26 @@
+1.0.0: the developing release
+
+Two axes complete the camera / film / develop / age model.
+
+Development: --develop {normal, push+1, push+2, pull-1, cross} on the
+CLI and a Developing selector on the web. Push raises display-referred
+contrast and coarsens grain, pull relaxes both, cross-processing
+applies crossed per-channel curves (green-yellow highlights, cool
+crushed shadows, high contrast and saturation). All are chemistry, so
+they run after the color stage and compose with any film LUT - and all
+are refused, with a note, for instant cameras, whose development is
+sealed inside the film unit; the web disables the selector for them.
+
+Film catalog: the staged library grows from eleven stocks to the
+historically important families - Kodachrome 25/64/200 (K-14),
+Ektachrome and Elite (E-6), the Fuji slide line, three generations of
+Portra including the NC/VC/UC era, the Superia ladder, Kodak and
+Ilford and Agfa/Rollei black-and-white, the Polaroid integral and
+pack-film chemistries, and measured cross-processed stocks - grouped
+in the film selector with process labels, and documented family by
+family in the help panel.
+
+One point zero: nine days from an unanchored tone curve to a
+camera/film/develop/age model, thirteen cameras spanning 1907-2005,
+byte-identical native and WebAssembly rendering, and a one-command
+release pipeline.

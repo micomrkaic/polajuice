@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polajuice — photographic process emulator</title>
+<style>
+  :root { --ink:#1c1a17; --paper:#f4f1ea; --accent:#b3492c; --line:#d8d2c4; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font:16px/1.5 Georgia, 'Times New Roman', serif; }
+  header { padding:2rem 1.5rem 0.5rem; max-width:60rem; margin:0 auto; }
+  h1 { font-size:1.7rem; margin:0; letter-spacing:0.02em; }
+  h1 small { font-weight:normal; color:#7a7263; font-size:0.9rem; margin-left:0.6rem; }
+  main { max-width:60rem; margin:0 auto; padding:1rem 1.5rem 3rem; }
+  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));
+              gap:0.9rem; margin:1rem 0; padding:1rem;
+              border:1px solid var(--line); background:#fbf9f4; }
+  label { display:block; font-size:0.8rem; text-transform:uppercase;
+          letter-spacing:0.08em; color:#7a7263; margin-bottom:0.25rem; }
+  select, input[type=number] { width:100%; padding:0.4rem; font:inherit;
+          border:1px solid var(--line); background:white; }
+  input[type=range] { width:100%; }
+  #drop { border:2px dashed var(--line); padding:2.2rem 1rem; text-align:center;
+          cursor:pointer; color:#7a7263; transition:border-color .15s; }
+  #drop.armed { border-color:var(--accent); color:var(--accent); }
+  button { font:inherit; padding:0.55rem 1.4rem; border:1px solid var(--ink);
+           background:var(--ink); color:var(--paper); cursor:pointer; }
+  button.secondary { background:transparent; color:var(--ink); }
+  button:disabled { opacity:0.4; cursor:default; }
+  .row { display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap; margin:0.8rem 0; }
+  #status { color:#7a7263; font-style:italic; }
+  #status.error { color:var(--accent); }
+  .views { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1rem; }
+  @media (max-width:44rem) { .views { grid-template-columns:1fr; } }
+  figure { margin:0; }
+  figcaption { font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;
+               color:#7a7263; margin-bottom:0.3rem; }
+  img.view { width:100%; display:block; border:1px solid var(--line);
+             background:white; }
+  .samplestrip { display:flex; gap:0.5rem; margin:0.6rem 0 0; flex-wrap:wrap; }
+  .samplestrip figure { margin:0; cursor:pointer; text-align:center; }
+  .samplestrip img { height:4.5rem; display:block; border:1px solid var(--line); }
+  .samplestrip figcaption { font-size:0.65rem; color:#7a7263; max-width:6rem;
+    text-transform:none; letter-spacing:0; margin-top:0.15rem; }
+  .samplestrip .credit { align-self:flex-end; font-size:0.7rem; color:#a89f8d;
+    font-style:italic; }
+  details#help { border:1px solid var(--line); background:#fbf9f4;
+    padding:0.6rem 1rem; margin:0.4rem 0 0.8rem; }
+  details#help summary { cursor:pointer; color:#7a7263; font-style:italic; }
+  .helpgrid { display:grid; grid-template-columns:1fr 1fr; gap:1.4rem;
+    margin-top:0.8rem; }
+  @media (max-width:44rem) { .helpgrid { grid-template-columns:1fr; } }
+  .helpgrid h3 { margin:0 0 0.2rem; font-size:1rem; }
+  .helpnote { font-size:0.85rem; color:#7a7263; margin:0 0 0.6rem; }
+  .helpgrid dt { font-weight:bold; margin-top:0.5rem; }
+  .helpgrid dd { margin:0.1rem 0 0 0; font-size:0.9rem; color:#4a453b; }
+  .helpgrid dd .traits { color:#7a7263; font-style:italic; }
+  footer { max-width:60rem; margin:0 auto; padding:0 1.5rem 2rem;
+           font-size:0.85rem; color:#7a7263; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Polajuice <small id="version"></small></h1>
+  <p>A look is a <b>camera</b> (optics, grain, framing, process) plus a
+     <b>film</b> (color chemistry). Photos never leave your machine —
+     everything renders locally in WebAssembly.</p>
+</header>
+<main>
+  <div id="drop">drop a JPEG or PNG here, click to choose — or try a sample below
+    <input id="file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden>
+  </div>
+
+  <div id="samplestrip" class="samplestrip"></div>
+
+  <div class="controls">
+    <div>
+      <label for="camera">Camera</label>
+      <select id="camera"></select>
+    </div>
+    <div>
+      <label for="film">Film</label>
+      <select id="film"></select>
+    </div>
+    <div>
+      <label for="strength">Strength <span id="strengthval">1.00</span></label>
+      <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
+    </div>
+    <div>
+      <label for="develop">Developing</label>
+      <select id="develop">
+        <option value="normal">normal</option>
+        <option value="push+1">push +1 stop</option>
+        <option value="push+2">push +2 stops</option>
+        <option value="pull-1">pull -1 stop</option>
+        <option value="cross">cross-process (E-6 in C-41)</option>
+      </select>
+    </div>
+    <div>
+      <label for="age">Age <span id="ageval">fresh</span></label>
+      <input id="age" type="range" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div>
+      <label for="seed">Grain seed</label>
+      <input id="seed" type="number" value="42" step="1">
+    </div>
+  </div>
+
+  <details id="help">
+    <summary>What do these cameras and films do?</summary>
+    <div class="helpgrid">
+      <div>
+        <h3>Cameras</h3>
+        <p class="helpnote">The camera is the format and process: optics,
+        grain, flash, framing. Traits below are generated from the engine's
+        own parameters, so they always match what actually renders.</p>
+        <dl id="helpcameras"></dl>
+      </div>
+      <div>
+        <h3>Films</h3>
+        <p class="helpnote">The film is the color chemistry, applied as a
+        3D LUT. "Canonical (auto)" picks each camera's period-correct
+        stock; Age is a third axis — storage fog, faded contrast and a
+        magenta drift that works with any camera and film. Developing is
+        the chemistry: push for contrast and grain, pull to soften, or
+        cross-process slide film for shifted colors — disabled for
+        instant cameras, which develop inside the film unit.</p>
+        <dl id="helpfilms"></dl>
+      </div>
+    </div>
+  </details>
+
+  <div class="row">
+    <button id="render" disabled>Render preview</button>
+    <button id="download" class="secondary" disabled>Render full size &amp; download</button>
+    <span id="status">loading engine…</span>
+  </div>
+
+  <div class="views">
+    <figure><figcaption>original</figcaption><img id="before" class="view" alt=""></figure>
+    <figure><figcaption id="aftercap">rendered</figcaption><img id="after" class="view" alt=""></figure>
+  </div>
+</main>
+<footer>
+  Film stocks are G'MIC/Pat David color presets served from
+  <code>films/</code>; camera descriptions come from the engine itself.
+  Source: <a href="https://github.com/micomrkaic/polajuice">github.com/micomrkaic/polajuice</a>.
+</footer>
+
+<script type="module">
+"use strict";
+import { createEngine } from "./engine.js";
+const $ = id => document.getElementById(id);
+let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
+let films = [];
+const filmCache = new Map();
+
+function setStatus(text, isError) {
+  $("status").textContent = text;
+  $("status").className = isError ? "error" : "";
+}
+
+async function boot() {
+  const wasm = await (await fetch("polajuice.wasm")).arrayBuffer();
+  engine = await createEngine(new Uint8Array(wasm));
+  $("version").textContent = "v" + await engine.version();
+
+  const cameraSel = $("camera");
+  const cameraList = await engine.cameras();
+  for (const cam of cameraList) {
+    const opt = new Option(`${cam.name} — ${cam.description}`, cam.name);
+    opt.dataset.film = cam.film || "";
+    opt.dataset.instant = cam.instant ? "1" : "";
+    cameraSel.add(opt);
+  }
+  function currentCamera() {
+    return cameraList.find(c => c.name === cameraSel.value) || cameraList[0];
+  }
+  function rebuildFilmSelect() {
+    const cam = currentCamera();
+    const sel = $("film");
+    const previous = sel.value;
+    while (sel.options.length) sel.remove(0);
+    if (cam.processes.length === 0) {
+      sel.add(new Option("sealed process — no film", "__none__"));
+      sel.value = "__none__";
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sel.add(new Option("canonical (auto)", "__auto__"));
+    sel.add(new Option("none — scalar engine", "__none__"));
+    for (const family of filmFamilies) {
+      const token = familyToken(family);
+      if (token && !cam.processes.includes(token)) continue;
+      const group = document.createElement("optgroup");
+      group.label = family.process ? `${family.name} (${family.process})`
+                                   : family.name;
+      for (const stock of family.stocks)
+        group.append(new Option(stock.stem, stock.stem));
+      sel.append(group);
+    }
+    sel.value = [...sel.options].some(o => o.value === previous)
+              ? previous : "__auto__";
+  }
+  function syncCompat() {
+    const cam = currentCamera();
+    $("develop").disabled = cam.instant;
+    if (cam.instant) $("develop").value = "normal";
+    rebuildFilmSelect();
+  }
+  cameraSel.addEventListener("change", syncCompat);
+  let filmFamilies = [];
+  function familyToken(family) {
+    const p = family.process || "";
+    if (p.includes("K-14") || p === "E-6" || p.includes("E-6 in C-41")) return "slide";
+    if (p === "C-41") return "negative";
+    if (p.includes("B+W") || p.includes("B and W")) return "bw";
+    if (p === "internal")
+      return /pack/i.test(family.name) ? "pack" : "integral";
+    return null;   // unknown: never filtered out
+  }
+  try {
+    const manifest = await (await fetch("films/films.json")).json();
+    if (Array.isArray(manifest))
+      filmFamilies = [{ name: "Films", note: "", stocks:
+        manifest.map(f => typeof f === "string" ? { stem: f, blurb: "" } : f) }];
+    else
+      filmFamilies = manifest.families;
+    films = filmFamilies.flatMap(f => f.stocks);
+  } catch (e) {
+    setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
+  }
+  syncCompat();
+
+  const camHelp = $("helpcameras");
+  for (const cam of cameraList) {
+    const dt = document.createElement("dt"); dt.textContent = cam.name;
+    const dd = document.createElement("dd");
+    const filmsLine = cam.processes.length
+        ? `takes: ${cam.processes.join(", ")}` : "sealed process — takes no film";
+    dd.innerHTML = `${cam.description}.<br><span class="traits">${cam.traits}</span>` +
+      `<br><span class="traits">${filmsLine}</span>` +
+      (cam.film ? `<br><span class="traits">canonical film: ${cam.film}</span>` : "");
+    camHelp.append(dt, dd);
+  }
+  const filmHelp = $("helpfilms");
+  for (const family of filmFamilies) {
+    const dt = document.createElement("dt");
+    dt.textContent = family.process ? `${family.name} — ${family.process}`
+                                    : family.name;
+    const dd = document.createElement("dd");
+    dd.textContent = family.note || "";
+    filmHelp.append(dt, dd);
+    for (const stock of family.stocks) {
+      if (!stock.blurb) continue;
+      const sdd = document.createElement("dd");
+      sdd.innerHTML = `<span class="traits">${stock.stem}:</span> ${stock.blurb}`;
+      filmHelp.append(sdd);
+    }
+  }
+  try {
+    const sm = await (await fetch("samples/samples.json")).json();
+    const strip = $("samplestrip");
+    for (const sample of sm.samples) {
+      const fig = document.createElement("figure");
+      const img = document.createElement("img");
+      img.src = `samples/${sample.thumb}`;
+      img.alt = sample.caption;
+      img.loading = "lazy";
+      const cap = document.createElement("figcaption");
+      cap.textContent = sample.caption;
+      fig.append(img, cap);
+      fig.addEventListener("click", () => useSample(sample));
+      strip.append(fig);
+    }
+    const credit = document.createElement("span");
+    credit.className = "credit";
+    credit.textContent = sm.credit;
+    strip.append(credit);
+  } catch (e) { /* no samples staged; the drop zone is enough */ }
+
+  setStatus("ready — drop a photo, or click a sample");
+}
+
+async function loadFilmCube(stem) {
+  if (!filmCache.has(stem)) {
+    const res = await fetch(`films/${stem}.cube`);
+    if (!res.ok) throw new Error(`film '${stem}' not found under films/`);
+    filmCache.set(stem, await res.text());
+  }
+  return filmCache.get(stem);
+}
+
+function resolveFilmStem() {
+  const chosen = $("film").value;
+  if (chosen === "__none__") return null;
+  if (chosen !== "__auto__") return chosen;
+  const canonical = $("camera").selectedOptions[0].dataset.film;
+  return canonical && films.some(f => f.stem === canonical) ? canonical : null;
+}
+
+async function render(maxDim) {
+  if (!inputBytes || !engine) return null;
+  setStatus("rendering…");
+  await new Promise(r => setTimeout(r, 20));
+  try {
+    const stem = resolveFilmStem();
+    const cubeText = stem ? await loadFilmCube(stem) : null;
+    const t0 = performance.now();
+    const out = await engine.render({
+      inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
+      strength: parseFloat($("strength").value),
+      seed: parseInt($("seed").value, 10) || 0,
+      age: parseFloat($("age").value),
+      develop: $("develop").value, maxDim });
+    const secs = ((performance.now() - t0) / 1000).toFixed(1);
+    setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
+    $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
+    return new Blob([out], { type: "image/jpeg" });
+  } catch (e) {
+    setStatus(e.message, true);
+    return null;
+  }
+}
+
+function acceptBytes(bytes, name) {
+  inputName = name.replace(/\.[^.]+$/, "");
+  inputExt = /\.png$/i.test(name) ? "png" : "jpg";
+  inputBytes = bytes;
+  $("before").src = URL.createObjectURL(new Blob([inputBytes]));
+  $("render").disabled = $("download").disabled = false;
+  setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB)`);
+}
+
+function acceptFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => acceptBytes(new Uint8Array(reader.result), file.name);
+  reader.readAsArrayBuffer(file);
+}
+
+async function useSample(sample) {
+  setStatus(`fetching ${sample.file}…`);
+  const res = await fetch(`samples/${sample.file}`);
+  if (!res.ok) { setStatus(`sample not found: ${sample.file}`, true); return; }
+  acceptBytes(new Uint8Array(await res.arrayBuffer()), sample.file);
+  if (sample.suggest) {
+    $("camera").value = sample.suggest;
+    setStatus(`loaded ${sample.file} — try ${sample.suggest}`);
+  }
+}
+
+$("drop").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", e => e.target.files[0] && acceptFile(e.target.files[0]));
+["dragover","dragleave","drop"].forEach(ev =>
+  $("drop").addEventListener(ev, e => {
+    e.preventDefault();
+    $("drop").classList.toggle("armed", ev === "dragover");
+    if (ev === "drop" && e.dataTransfer.files[0]) acceptFile(e.dataTransfer.files[0]);
+  }));
+$("strength").addEventListener("input",
+  () => $("strengthval").textContent = parseFloat($("strength").value).toFixed(2));
+$("age").addEventListener("input", () => {
+  const v = parseFloat($("age").value);
+  $("ageval").textContent = v === 0 ? "fresh" : v.toFixed(2);
+});
+$("render").addEventListener("click", async () => {
+  const blob = await render(1400);
+  if (blob) $("after").src = URL.createObjectURL(blob);
+});
+$("download").addEventListener("click", async () => {
+  const blob = await render(0);
+  if (!blob) return;
+  $("after").src = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${inputName}_${$("camera").value}.jpg`;
+  link.click();
+});
+
+boot().catch(e => setStatus("engine failed to load: " + e.message, true));
+</script>
+</body>
+</html>

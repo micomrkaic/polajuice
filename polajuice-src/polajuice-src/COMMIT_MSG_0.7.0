@@ -1,0 +1,18 @@
+0.7.0: age becomes an axis, generated help for cameras and films
+
+Taxonomy fix: expired-film was a process masquerading as a camera. It is
+removed; in its place --age 0..1 (CLI) and an Age slider (web) apply the
+full storage-degradation look - base fog with magenta drift, contrast
+decay, desaturation, slight warm shift - after the color stage, so aging
+composes with any camera and any film LUT. Verified monotonic on real
+photos and byte-identical between native and wasm, including aged
+renders.
+
+Help: pj_preset_traits() generates a human-readable trait summary from
+each preset's own parameters (framing, flash, lens, vignette, halation,
+grain), so documentation cannot drift from behavior. 'polajuice
+describe' and 'polajuice cameras' print it; the web page gains a help
+pulldown listing every camera (description, traits, canonical film) and
+every staged film with a one-line character blurb carried in films.json
+(now an array of {stem, blurb} objects; the page accepts the old
+string-array form too).

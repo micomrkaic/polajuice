@@ -6,6 +6,19 @@ import { fileURLToPath } from "node:url";
 import { writeFile, unlink } from "node:fs/promises";
 
 const webDir = new URL("../web/", import.meta.url);
+import { mkdir, rm } from "node:fs/promises";
+const filmsDir = new URL("films/", webDir);
+await mkdir(filmsDir, { recursive: true });
+await writeFile(new URL("films.json", filmsDir), JSON.stringify({ families: [
+  { name: "Fuji slide", process: "E-6", note: "",
+    stocks: [{ stem: "fuji_provia_100f", blurb: "" }] },
+  { name: "Polaroid integral", process: "internal", note: "",
+    stocks: [{ stem: "polaroid_px-680", blurb: "" }] },
+]}));
+const identityCube = "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n";
+await writeFile(new URL("fuji_provia_100f.cube", filmsDir), identityCube);
+await writeFile(new URL("polaroid_px-680.cube", filmsDir), identityCube);
+process.on("exit", () => {});
 const html = await readFile(new URL("index.html", webDir), "utf8");
 const js = html.split('<script type="module">')[1].split("</script>")[0];
 
@@ -108,5 +121,32 @@ const offered = elems["film"].children
 if (/polaroid_px/.test(offered))
   throw new Error("SAMPLE-CLICK LEAK: integral stock offered on slide camera");
 console.log("sample-click compatibility resync verified");
+
+// A REAL render through the page's own click handler - the test that
+// guards the full path: sample bytes -> film resolution (canonical) ->
+// family/process lookup -> cube fetch -> engine render -> status line.
+elems["camera"].value = "polaroid-600";
+elems["camera"].handlers["change"]();
+elems["film"].value = "__auto__";
+await elems["render"].handlers["click"]();
+if (elems["status"].className === "error")
+  throw new Error("page render failed: " + elems["status"].textContent);
+if (!/rendered in/.test(elems["status"].textContent))
+  throw new Error("render did not complete: " + elems["status"].textContent);
+if (!/polaroid_px-680/.test(elems["status"].textContent))
+  throw new Error("canonical film not applied: " + elems["status"].textContent);
+if (!elems["after"].src) throw new Error("rendered image not shown");
+console.log(`page render through click handler ok: "${elems["status"].textContent}"`);
+
+// and the sealed path end-to-end: autochrome renders scalar, no film
+elems["camera"].value = "autochrome";
+elems["camera"].handlers["change"]();
+await elems["render"].handlers["click"]();
+if (elems["status"].className === "error")
+  throw new Error("sealed render failed: " + elems["status"].textContent);
+if (!/scalar engine/.test(elems["status"].textContent))
+  throw new Error("sealed camera should render scalar: " + elems["status"].textContent);
+console.log("sealed-camera render ok (scalar engine)");
 console.log(`help panel: ${elems["helpcameras"].children.length / 2} cameras described`);
-console.log("page handlers wired; render path covered by test_wasm.mjs");
+await rm(filmsDir, { recursive: true, force: true });
+console.log("page handlers wired and render path exercised in-page");

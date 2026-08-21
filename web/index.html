@@ -154,6 +154,16 @@
 import { createEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
 let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
+let filmFamilies = [];   // module scope: render() needs it, not just boot()
+function familyToken(family) {
+  const p = family.process || "";
+  if (p.includes("K-14") || p === "E-6" || p.includes("E-6 in C-41")) return "slide";
+  if (p === "C-41") return "negative";
+  if (p.includes("B+W") || p.includes("B and W")) return "bw";
+  if (p === "internal")
+    return /pack/i.test(family.name) ? "pack" : "integral";
+  return null;   // unknown: never filtered out
+}
 let films = [];
 const filmCache = new Map();
 
@@ -214,16 +224,6 @@ async function boot() {
     rebuildFilmSelect();
   }
   cameraSel.addEventListener("change", syncCompat);
-  let filmFamilies = [];
-  function familyToken(family) {
-    const p = family.process || "";
-    if (p.includes("K-14") || p === "E-6" || p.includes("E-6 in C-41")) return "slide";
-    if (p === "C-41") return "negative";
-    if (p.includes("B+W") || p.includes("B and W")) return "bw";
-    if (p === "internal")
-      return /pack/i.test(family.name) ? "pack" : "integral";
-    return null;   // unknown: never filtered out
-  }
   try {
     const manifest = await (await fetch("films/films.json")).json();
     if (Array.isArray(manifest))

@@ -1,0 +1,18 @@
+0.5.0: WebAssembly target - polajuice in the browser
+
+'make' still builds the native binary; 'make wasm' compiles the same
+core (pipeline, stb codecs, EXIF orientation parser) to WebAssembly via
+Emscripten, so browser and CLI render byte-identical pixels for the same
+input, camera, film, strength and seed.
+
+New: src/web/pj_web.c shim (camera enumeration, render over MEMFS paths,
+linear-light box-average preview downscale), web/index.html frontend
+(drag-and-drop, camera/film selectors mirroring the CLI's canonical-film
+behavior, strength/seed, preview at 1400px + full-size download,
+client-side only), scripts/build_web.sh, scripts/stage_web_films.sh
+(canonical cubes + films.json manifest), docs/WEB.md (build, local serve,
+GitHub Pages deployment), 'make serve'.
+
+The shim is plain C17 and is tested natively in make check
+(tests/test_web_shim.c): enumeration, film and scalar modes, preview
+downscale, and error paths.
