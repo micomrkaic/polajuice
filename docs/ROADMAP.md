@@ -53,3 +53,6 @@
 
 - Orange quartz date stamp overlay (small bitmap font, output stage);
   identity-defining for disposable-flash and 35mm-negative.
+
+- superjuice phase 2: procedural dust/hairs/scratches, 18 fps judder,
+  C11-thread frame parallelism, WebCodecs browser front-end.

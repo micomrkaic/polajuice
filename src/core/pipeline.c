@@ -186,6 +186,65 @@ static float film_curve(float x, float contrast, float lift, float rolloff)
  * Screen-like neutral fill flattens nearby tones and permits the hard, slightly
  * cool highlight response associated with a small on-camera xenon flash.
  */
+static float smooth_noise(uint64_t seed, float x, float y);
+
+/*
+ * Gate weave: the film jitters in the transport gate, so the whole frame
+ * translates by a subpixel amount that drifts smoothly over time. Two
+ * independent smooth-noise channels drive x and y; bilinear resampling
+ * with edge clamp performs the shift.
+ */
+static void apply_gate_weave(PjImage *image, float amplitude, float period,
+                             uint64_t seed, int64_t frame)
+{
+    if (amplitude <= 0.0f) return;
+    if (period < 1.0f) period = 1.0f;
+    float t = (float)frame / period;
+    float dx = amplitude * (float)image->height *
+               smooth_noise(seed ^ UINT64_C(0x57EAFE01), t, 0.25f);
+    float dy = amplitude * (float)image->height *
+               smooth_noise(seed ^ UINT64_C(0x57EAFE02), t, 0.75f);
+    size_t w = image->width, h = image->height;
+    float *shifted = malloc(w * h * 3 * sizeof *shifted);
+    if (!shifted) return;
+    for (size_t y = 0; y < h; ++y) {
+        float sy = (float)y - dy;
+        if (sy < 0.0f) sy = 0.0f;
+        if (sy > (float)(h - 1)) sy = (float)(h - 1);
+        size_t y0 = (size_t)sy, y1 = y0 + 1 < h ? y0 + 1 : y0;
+        float fy = sy - (float)y0;
+        for (size_t x = 0; x < w; ++x) {
+            float sx = (float)x - dx;
+            if (sx < 0.0f) sx = 0.0f;
+            if (sx > (float)(w - 1)) sx = (float)(w - 1);
+            size_t x0 = (size_t)sx, x1 = x0 + 1 < w ? x0 + 1 : x0;
+            float fx = sx - (float)x0;
+            for (size_t c = 0; c < 3; ++c) {
+                float a = mixf(image->rgb[(y0 * w + x0) * 3 + c],
+                               image->rgb[(y0 * w + x1) * 3 + c], fx);
+                float b = mixf(image->rgb[(y1 * w + x0) * 3 + c],
+                               image->rgb[(y1 * w + x1) * 3 + c], fx);
+                shifted[(y * w + x) * 3 + c] = mixf(a, b, fy);
+            }
+        }
+    }
+    memcpy(image->rgb, shifted, w * h * 3 * sizeof *shifted);
+    free(shifted);
+}
+
+/* Exposure flicker: slow per-frame EV jitter from uneven camera speed. */
+static void apply_flicker(PjImage *image, float amplitude_ev, uint64_t seed,
+                          int64_t frame)
+{
+    if (amplitude_ev <= 0.0f) return;
+    float ev = amplitude_ev *
+               smooth_noise(seed ^ UINT64_C(0xF11C4E01),
+                            (float)frame / 3.0f, 0.5f);
+    float gain = exp2f(ev);
+    for (size_t i = 0; i < image->width * image->height * 3; ++i)
+        image->rgb[i] *= gain;
+}
+
 static void apply_direct_flash(PjImage *image, const PjPreset *p, float strength)
 {
     if (p->flash_ev <= 0.0f || strength <= 0.0f) return;
@@ -524,6 +583,13 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         image = clone_image(input, error);
     if (!image) return NULL;
 
+    bool temporal = options && options->temporal;
+    int64_t frame = options ? options->frame : 0;
+    if (temporal) {
+        apply_gate_weave(image, preset->weave * strength,
+                         preset->weave_period, seed, frame);
+        apply_flicker(image, preset->flicker_ev * strength, seed, frame);
+    }
     apply_direct_flash(image, preset, strength);
     apply_softness(image, preset->softness * strength);
     apply_vignette(image, preset->vignette * strength);
@@ -546,9 +612,12 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         /* pushed development coarsens grain; pulling calms it */
         float grain_gain = 1.0f + 0.45f * fmaxf(0.0f, push)
                                 + 0.15f * fminf(0.0f, push);
+        uint64_t grain_seed = temporal
+            ? seed ^ ((uint64_t)frame * UINT64_C(0x9E3779B97F4A7C15))
+            : seed;
         apply_grain(image, preset->grain * strength * grain_gain,
                     preset->grain_scale, preset->grain_midtone_bias,
-                    preset->grain_chroma, seed);
+                    preset->grain_chroma, grain_seed);
     }
 
     if (preset->instant_frame) {

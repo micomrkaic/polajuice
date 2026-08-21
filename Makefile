@@ -1,6 +1,6 @@
 CC ?= cc
 AR ?= ar
-CPPFLAGS ?= -Iinclude -Ithird_party
+CPPFLAGS ?= -Iinclude -Isrc/cli -Ithird_party
 CFLAGS ?= -O2 -g
 CFLAGS += -std=c17 -Wall -Wextra -Wpedantic
 # Auto header dependencies (picked up by the built-in .c -> .o rule).
@@ -11,11 +11,11 @@ LDLIBS += -lm
 
 CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
-ALL_OBJ = $(CORE_OBJ) src/cli/main.o tests/test_core.o
+ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/cli/filmlib.o src/movie/superjuice.o tests/test_core.o
 
 .PHONY: all clean clean-wasm check check-wasm install fetch-luts fetch-polaroid-lut wasm serve
 
-all: polajuice libpolajuice.a
+all: polajuice superjuice libpolajuice.a
 
 # third-party code compiles in its own TU with warnings off; ours stay strict
 src/core/stb_impl.o: CFLAGS += -w
@@ -23,14 +23,18 @@ src/core/stb_impl.o: CFLAGS += -w
 libpolajuice.a: $(CORE_OBJ)
 	$(AR) rcs $@ $^
 
-polajuice: src/cli/main.o libpolajuice.a
-	$(CC) $(CFLAGS) -o $@ src/cli/main.o libpolajuice.a $(LDLIBS)
+polajuice: src/cli/main.o src/cli/filmlib.o libpolajuice.a
+	$(CC) $(CFLAGS) -o $@ src/cli/main.o src/cli/filmlib.o libpolajuice.a $(LDLIBS)
 
 tests/test_core: tests/test_core.o libpolajuice.a
 	$(CC) $(CFLAGS) -o $@ tests/test_core.o libpolajuice.a $(LDLIBS)
 
+superjuice: src/movie/superjuice.o src/cli/filmlib.o libpolajuice.a
+	$(CC) $(CFLAGS) -o $@ src/movie/superjuice.o src/cli/filmlib.o libpolajuice.a $(LDLIBS)
+
 check: tests/test_core
 	./tests/test_core
+	sh scripts/test_movie.sh
 
 # WebAssembly build via wasi-sdk (auto-downloaded to third_party/ on
 # first run; see docs/WEB.md). 'make' builds native; 'make wasm' the
@@ -67,6 +71,6 @@ install: all
 
 clean:
 	$(RM) $(ALL_OBJ) $(ALL_OBJ:.o=.d)
-	$(RM) polajuice libpolajuice.a tests/test_core
+	$(RM) polajuice superjuice libpolajuice.a tests/test_core
 
 -include $(ALL_OBJ:.o=.d)

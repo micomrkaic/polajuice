@@ -56,6 +56,9 @@ typedef struct {
     bool square_crop;
     bool instant_frame;
     float crop_aspect;   /* > 0: center-crop to this width/height ratio */
+    float weave;         /* gate weave amplitude as fraction of height */
+    float weave_period;  /* frames per weave cycle (smoothness) */
+    float flicker_ev;    /* exposure flicker amplitude in stops */
     /* instant-frame geometry in millimeters; zero fields fall back to the
      * integral 600-series print (image 78.94x76.80, card 88.47x107.52,
      * top border equal to the sides, remainder as the bottom chin) */

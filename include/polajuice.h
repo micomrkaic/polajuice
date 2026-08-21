@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 1
+#define PJ_VERSION_MINOR 2
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -33,6 +33,12 @@ typedef struct {
     bool cross_process;  /* E-6-in-C-41 style cross development: high
                     contrast, green-yellow highlights, crossed curves.
                     Also ignored for instant cameras. */
+    bool temporal;  /* movie mode: enables per-frame gate weave, exposure
+                    flicker, and frame-decorrelated grain for cameras that
+                    define them. Stills leave this false and render
+                    exactly as before. */
+    int64_t frame;  /* frame index when temporal; also usable from a
+                    stills front-end to render "frame N of a reel". */
     const PjLut3D *color_lut;
 } PjRenderOptions;
 

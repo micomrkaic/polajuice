@@ -42,6 +42,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "super8",
+        .weave = 0.0040f, .weave_period = 4.0f, .flicker_ev = 0.055f,
         .film_processes = PJ_FILM_SLIDE,
         .default_film = "kodak_ektachrome_100_vs",
         .description = "Super 8 reversal frame: 1.36:1 gate, coarse grain, halation",
@@ -191,6 +192,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "technicolor-3strip",
+        .weave = 0.0015f, .weave_period = 6.0f, .flicker_ev = 0.020f,
         .film_processes = 0,
         .description = "Three-strip dye-transfer cinema: saturated, smooth, Academy gate",
         .exposure_ev = 0.03f, .contrast = 1.15f, .black_lift = 0.010f,
@@ -207,6 +209,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "autochrome",
+        .weave = 0.0060f, .weave_period = 3.0f, .flicker_ev = 0.100f,
         .film_processes = 0,
         .description = "Lumiere Autochrome plate: pastel pointillist colored grain",
         .exposure_ev = 0.00f, .contrast = 0.92f, .black_lift = 0.030f,

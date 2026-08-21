@@ -1,4 +1,10 @@
-# Polajuice 1.1.0
+# Polajuice 1.2.0 — the juice package
+
+One engine, two front-ends: **polajuice** for stills, **superjuice** for
+movies. Both are thin drivers over the same core (`libpolajuice.a`) and
+the same four-axis model — camera, film, developing, age — so a look
+tuned on a photograph renders identically on every frame of a film, and
+`make` builds both binaries from one tree.
 
 Polajuice is a small, modern C library and command-line program for turning
 clean digital photographs into modeled photographic processes. It treats a
@@ -17,10 +23,39 @@ RAW remain future work (libvips and Little CMS territory).
 
 ## Build
 
+## superjuice: movies
+
+superjuice reads YUV4MPEG2 on stdin and writes it on stdout; FFmpeg
+handles the world's codecs at both ends of a pipe, so the engine itself
+stays dependency-free:
+
+```sh
+ffmpeg -v error -i clip.mp4 -f yuv4mpegpipe -pix_fmt yuv420p - \
+  | ./superjuice -c super8 --seed 7 \
+  | ffmpeg -v error -f yuv4mpegpipe -i - -i clip.mp4 \
+           -map 0:v -map 1:a? -c:v libx264 -crf 18 -c:a copy vintage.mp4
+```
+
+The temporal axis is what makes footage read as film rather than a
+filtered video: **frame-decorrelated grain** (real grain "boils" — every
+frame's crystals are new, which falls out of the engine's seeded grain
+as `seed ⊕ frame`), **gate weave** (the frame drifts subpixel in the
+transport gate), and **exposure flicker** (uneven camera speed). Weave
+and flicker are per-camera character — super8 carries the most,
+autochrome flickers like the hand-cranked process it was,
+technicolor-3strip runs steady as the studio machine it was — and every
+camera gets boiling grain. All options match polajuice (`-f`,
+`--develop`, `--age`, `--strength`, compatibility rules included);
+instant cameras are refused, since a Polaroid is a still print. Stills
+rendering is untouched: the temporal stages only run in movie mode, and
+polajuice output is bit-identical to 1.1.0. Rough throughput is around
+a second per 1080p frame — preview at proxy resolution, render final
+overnight, as film labs always did.
+
 Building requires only a C17 compiler and `libm`:
 
 ```sh
-make          # native binary
+make          # native binaries: polajuice and superjuice
 make check
 make wasm     # the same engine for the browser (Emscripten; see docs/WEB.md)
 ```

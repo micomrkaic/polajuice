@@ -103,6 +103,49 @@ int main(void)
     assert(!strcmp(pj_preset_default_film("polaroid-600"), "polaroid_px-680"));
     assert(pj_preset_default_film("no-such-camera") == NULL);
 
+    /* Temporal axis: frames of a reel differ (weave + grain), the same
+     * frame is deterministic, and stills (temporal=false) are unaffected
+     * by the frame field. */
+    PjImage *mcard = pj_image_new(65, 65, &error);
+    assert(mcard);
+    fill_uniform(mcard, 0.35f);
+    PjRenderOptions m0 = {.seed = 5, .strength = 1.0f,
+                          .temporal = true, .frame = 0};
+    PjRenderOptions m7 = {.seed = 5, .strength = 1.0f,
+                          .temporal = true, .frame = 7};
+    PjImage *f0 = pj_render(mcard, "super8", &m0, &error);
+    PjImage *f7 = pj_render(mcard, "super8", &m7, &error);
+    PjImage *f0b = pj_render(mcard, "super8", &m0, &error);
+    assert(f0 && f7 && f0b);
+    {
+        const float *a = pj_image_pixels_const(f0);
+        const float *b = pj_image_pixels_const(f7);
+        const float *c = pj_image_pixels_const(f0b);
+        size_t n = pj_image_width(f0) * pj_image_height(f0) * 3;
+        float diff = 0.0f;
+        bool identical = true;
+        for (size_t i = 0; i < n; ++i) {
+            diff += fabsf(a[i] - b[i]);
+            if (a[i] != c[i]) identical = false;
+        }
+        assert(diff / (float)n > 0.001f);   /* frames visibly differ */
+        assert(identical);                  /* same frame is deterministic */
+    }
+    pj_image_free(f0); pj_image_free(f7); pj_image_free(f0b);
+    PjRenderOptions still_a = {.seed = 5, .strength = 1.0f, .frame = 0};
+    PjRenderOptions still_b = {.seed = 5, .strength = 1.0f, .frame = 99};
+    PjImage *sa = pj_render(mcard, "super8", &still_a, &error);
+    PjImage *sb = pj_render(mcard, "super8", &still_b, &error);
+    assert(sa && sb);
+    {
+        const float *a = pj_image_pixels_const(sa);
+        const float *b = pj_image_pixels_const(sb);
+        size_t n = pj_image_width(sa) * pj_image_height(sa) * 3;
+        for (size_t i = 0; i < n; ++i) assert(a[i] == b[i]);
+    }
+    pj_image_free(sa); pj_image_free(sb);
+    pj_image_free(mcard);
+
     /* Film-process compatibility truth table. */
     assert(pj_preset_accepts_film("super8", "slide"));
     assert(!pj_preset_accepts_film("super8", "negative"));
