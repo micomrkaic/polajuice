@@ -182,7 +182,9 @@ async function boot() {
     const cam = currentCamera();
     const sel = $("film");
     const previous = sel.value;
-    while (sel.options.length) sel.remove(0);
+    /* remove every child - options AND optgroup shells; clearing only
+     * sel.options leaves the previous camera's group elements behind */
+    while (sel.firstChild) sel.removeChild(sel.firstChild);
     if (cam.processes.length === 0) {
       sel.add(new Option("sealed process — no film", "__none__"));
       sel.value = "__none__";
@@ -309,9 +311,13 @@ async function render(maxDim) {
   try {
     const stem = resolveFilmStem();
     const cubeText = stem ? await loadFilmCube(stem) : null;
+    const family = stem
+        ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
+    const filmProcess = family ? familyToken(family) : null;
     const t0 = performance.now();
     const out = await engine.render({
       inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
+      filmProcess,
       strength: parseFloat($("strength").value),
       seed: parseInt($("seed").value, 10) || 0,
       age: parseFloat($("age").value),
@@ -348,6 +354,11 @@ async function useSample(sample) {
   acceptBytes(new Uint8Array(await res.arrayBuffer()), sample.file);
   if (sample.suggest) {
     $("camera").value = sample.suggest;
+    /* setting .value programmatically fires no "change" event, so the
+     * compatibility rebuild (film dropdown, develop enable) must be
+     * triggered explicitly - the bug that once let a Polaroid stock ride
+     * along onto a slide camera via a sample click */
+    $("camera").dispatchEvent(new Event("change"));
     setStatus(`loaded ${sample.file} — try ${sample.suggest}`);
   }
 }

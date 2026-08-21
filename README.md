@@ -1,4 +1,4 @@
-# Polajuice 1.3.0 — the juice package
+# Polajuice 1.4.0 — the juice package
 
 One engine, two front-ends: **polajuice** for stills, **superjuice** for
 movies. Both are thin drivers over the same core (`libpolajuice.a`) and
@@ -204,7 +204,11 @@ The film's process is inferred from its place in the film library
 stem-based overrides for instant stocks); a cube supplied by path from
 outside the library has an unknowable process and is never blocked. On
 the web, the film dropdown is rebuilt per camera to show only compatible
-families; `polajuice cameras`, `describe` and the help panel all print a
+families - and enforcement is engine-deep, not just interface-deep: the
+WebAssembly engine performs the same compatibility check itself, so the
+artifact refuses nonsense pairings even when asked directly, exactly as
+the CLI binary does. The full camera x family matrix is frozen as a
+test that runs on every build; `polajuice cameras`, `describe` and the help panel all print a
 "films:" line so nothing is left to guessing.
 
 **Deliberate mismatches remain available, because darkrooms allowed

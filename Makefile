@@ -34,6 +34,7 @@ superjuice: src/movie/superjuice.o src/cli/filmlib.o libpolajuice.a
 
 check: tests/test_core
 	./tests/test_core
+	sh scripts/test_compat.sh
 	sh scripts/test_movie.sh
 
 # WebAssembly build via wasi-sdk (auto-downloaded to third_party/ on

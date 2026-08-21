@@ -57,6 +57,19 @@ if (process.argv[3]) {
     if (Buffer.compare(Buffer.from(crossed), Buffer.from(pushed)) === 0)
         throw new Error("cross identical to push");
     console.log("develop axis ok (push, cross)");
+    // engine-level compatibility: the wasm itself refuses nonsense pairings
+    let refused = false;
+    try {
+        await engine.render({ inputBytes: input, ext: "png",
+            camera: "35mm-slide", cubeText: "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n",
+            filmProcess: "integral", seed: 7, maxDim: 0 });
+    } catch (e) { refused = /takes slide/.test(e.message); }
+    if (!refused) throw new Error("engine accepted slide camera + integral film");
+    const unknownOk = await engine.render({ inputBytes: input, ext: "png",
+        camera: "35mm-slide", cubeText: "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n",
+        filmProcess: null, seed: 7, maxDim: 0 });
+    if (!unknownOk.length) throw new Error("unknown process wrongly blocked");
+    console.log("engine-level compatibility ok (refuses mismatch, allows unknown)");
 }
 // a shipped sample must render through the engine (EXIF baked at build time,
 // so orientation is already correct in the file itself)

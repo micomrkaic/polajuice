@@ -49,18 +49,39 @@ static int list_cameras(void)
 
 static int render(int argc, char **argv)
 {
-    if (argc != 11) {
-        fprintf(stderr, "args: render IN CAMERA FILM|- STRENGTH SEED AGE "
-                        "DEVELOP MAX_DIM OUT\n");
+    if (argc != 12) {
+        fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- STRENGTH "
+                        "SEED AGE DEVELOP MAX_DIM OUT\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
-    float strength = strtof(argv[5], NULL);
-    uint64_t seed = strtoull(argv[6], NULL, 0);
-    float age = strtof(argv[7], NULL);
-    const char *dev = argv[8];
-    size_t max_dim = (size_t)strtoull(argv[9], NULL, 0);
-    const char *out_path = argv[10];
+    const char *process = argv[5];
+    float strength = strtof(argv[6], NULL);
+    uint64_t seed = strtoull(argv[7], NULL, 0);
+    float age = strtof(argv[8], NULL);
+    const char *dev = argv[9];
+    size_t max_dim = (size_t)strtoull(argv[10], NULL, 0);
+    const char *out_path = argv[11];
+
+    /* Engine-level compatibility parity with the CLI: the browser UI
+     * filters too, but the artifact itself must refuse nonsense. An
+     * unknown process ("-") is never blocked, matching path-supplied
+     * cubes on the CLI. */
+    if (strcmp(film, "-")) {
+        char processes[256];
+        pj_preset_film_processes(camera, processes, sizeof processes);
+        if (processes[0] == '\0') {
+            fprintf(stderr, "%s is a sealed process and takes no film\n",
+                    camera);
+            return 1;
+        }
+        if (strcmp(process, "-") &&
+            !pj_preset_accepts_film(camera, process)) {
+            fprintf(stderr, "%s takes %s; this stock is %s film\n",
+                    camera, processes, process);
+            return 1;
+        }
+    }
 
     PjError error = {{0}};
     PjLut3D *lut = NULL;
