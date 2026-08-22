@@ -1,4 +1,4 @@
-# Polajuice 1.5.0 — the juice package
+# Polajuice 1.6.0 — the juice package
 
 One engine, two front-ends: **polajuice** for stills, **superjuice** for
 movies. Both are thin drivers over the same core (`libpolajuice.a`) and
@@ -188,7 +188,10 @@ A render decomposes the way a film workflow does:
 `--print NAME|FILE` chains a print emulsion after the film - the cinema
 negative->print model (Vision3 through Kodak 2383 territory); print
 stocks live in their own catalog category and their own selector on the
-web, never mixed into the film list. LUT sampling uses tetrahedral
+web, never mixed into the film list. Three clearly-labeled `synthetic_*`
+placeholder prints ship in `data/prints/` (generated stylizations, not
+measurements - the honest kind of battery included); measured 2383-class
+cubes supersede them the moment they land in the library. LUT sampling uses tetrahedral
 interpolation (the industry standard; better neutral-axis and hue
 behavior than trilinear at the same cost).
 

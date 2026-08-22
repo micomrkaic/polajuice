@@ -12,6 +12,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 LIB="${LUT_DIR:-data/luts}"
+PRINTS="${PRINT_DIR:-data/prints}"
 DEST="web/films"
 
 [ -d "$LIB" ] || {
@@ -30,7 +31,7 @@ Agfa and Rollei|B+W|Continental character: APX classics, Retro contrast, blue-bl
 Polaroid integral|internal|SX-70 through 600-era chemistry, plus expired Time-Zero|polaroid_px-70 polaroid_px-680 polaroid_px-680_warm polaroid_px-100uv+_warm polaroid_time_zero_expired
 Polaroid pack film|internal|Peel-apart era: Land-camera 66x and Fuji FP stocks|polaroid_665 polaroid_669 polaroid_690 fuji_fp-100c fuji_fp_100c fuji_fp-3000b
 Cross-processed|E-6 in C-41|Slide film through the wrong chemistry, as measured|fuji_superia_200_xpro lomography_x-pro_slide_200
-Print stocks|print|Cinema print emulsions, chained after the negative|kodak_2383 kodak_2393 fuji_3513'
+Print stocks|print|Chained after the film, negative-to-print style. Synthetic placeholders until measured cubes arrive|synthetic_cine_print synthetic_minilab synthetic_archival_neutral kodak_2383 kodak_2393 fuji_3513'
 
 blurb_for() {
     case "$1" in
@@ -38,6 +39,9 @@ blurb_for() {
         polaroid_px-70) echo "SX-70-era integral film: warmer, dreamier, lower contrast than 600" ;;
         polaroid_time_zero_expired) echo "Expired Time-Zero: shifted, unpredictable, beautifully broken" ;;
         polaroid_669) echo "Peel-apart pack film: punchy contrast, the Land-camera classic" ;;
+        synthetic_cine_print) echo "SYNTHETIC placeholder: projection-print look - teal shadows, rolled highlights, deep blacks" ;;
+        synthetic_minilab) echo "SYNTHETIC placeholder: one-hour-photo warmth and punch" ;;
+        synthetic_archival_neutral) echo "SYNTHETIC placeholder: near-neutral, demonstrates the chain itself" ;;
         kodak_kodachrome_64) echo "The archive look: restrained, deep reds, 1940s-70s slides" ;;
         kodak_portra_400) echo "The portrait workhorse: warm, forgiving skin tones, soft saturation" ;;
         kodak_ektachrome_100_vs) echo "Vivid-saturation slide film: punchy color, clean blues" ;;
@@ -60,9 +64,10 @@ echo "$CATALOG" | while IFS='|' read -r name process note stems; do
     [ -n "$name" ] || continue
     fam_json=""
     for stem in $stems; do
-        found=$(find "$LIB" -name "$stem.cube" -print -quit)
+        found=$(find "$LIB" "$PRINTS" -name "$stem.cube" -print -quit \
+                    2>/dev/null)
         if [ -z "$found" ]; then
-            echo "!! not in library, skipping: $stem" >&2
+            echo "   (optional, not present: $stem)" >&2
             continue
         fi
         cp "$found" "$DEST/$stem.cube"

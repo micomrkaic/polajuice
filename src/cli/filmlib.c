@@ -20,6 +20,15 @@ const char *film_library_root(void)
     return env && *env ? env : "data/luts";
 }
 
+/* Print stocks live beside the fetched film library: shipped synthetic
+ * placeholders (and any measured print cubes the user adds) in
+ * data/prints, overridable with POLAJUICE_PRINTS. */
+static const char *print_library_root(void)
+{
+    const char *env = getenv("POLAJUICE_PRINTS");
+    return env && *env ? env : "data/prints";
+}
+
 typedef struct {
     char **paths;
     size_t count;
@@ -105,6 +114,9 @@ const char *film_process_of(const char *path)
     if (!strncmp(stem, "polaroid_66", 11) || !strncmp(stem, "polaroid_69", 11) ||
         !strncmp(stem, "fuji_fp", 7))
         return "pack";
+    if (strstr(path, "/prints/") || strstr(path, "prints/synthetic_") ||
+        !strncmp(stem, "synthetic_", 10))
+        return "print";
     if (strstr(path, "instant_consumer")) return "integral";
     if (strstr(path, "instant_pro")) return "pack";
     if (strstr(path, "colorslide")) return "slide";
@@ -134,6 +146,7 @@ char *resolve_film(const char *request, bool quiet)
 
     FilmList library = {0};
     collect_cubes(film_library_root(), &library, 0);
+    collect_cubes(print_library_root(), &library, 0);
     if (library.count == 0) {
         if (!quiet)
             fprintf(stderr,
@@ -183,6 +196,7 @@ int list_films(const char *filter)
 {
     FilmList library = {0};
     collect_cubes(film_library_root(), &library, 0);
+    collect_cubes(print_library_root(), &library, 0);
     if (library.count == 0) {
         fprintf(stderr,
                 "no film library at '%s' "

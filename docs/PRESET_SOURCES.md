@@ -180,9 +180,12 @@ film catalog's Cross-processed family carries actual xpro CLUTs.
 Tetrahedral LUT interpolation replaces trilinear (standard practice;
 identical lattice data, better behavior between lattice points). The
 print axis chains a second .cube after the film transform, mirroring
-cinema negative->print workflows; no print stocks ship by default
-because the fetched packs contain none - supply measured print cubes
-(e.g. PictureFX 2383 emulations) by path or drop them into the library.
+cinema negative->print workflows; three synthetic print stocks ship as
+labeled placeholders (see data/prints/README.md and
+tools/make_print_cubes.py): parametric stylizations of projection-print,
+consumer-lab and archival-neutral behavior, generated rather than
+measured, so the chain is demonstrable out of the box. Measured print
+cubes (PictureFX 2383-class) supersede them when supplied.
 
 Age v2 models storage degradation as per-channel density decay toward
 base white, with rates per process family: slide loses cyan fastest

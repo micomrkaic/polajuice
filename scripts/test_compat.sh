@@ -16,6 +16,9 @@ cube "$LIB/negative_new/kodak_portra_400.cube"
 cube "$LIB/bw/ilford_hp_5_plus_400.cube"
 cube "$LIB/instant_consumer/polaroid_px-100uv+_warm.cube"
 cube "$LIB/instant_pro/polaroid_669.cube"
+mkdir -p "$LIB/../prints"
+cube "$LIB/../prints/synthetic_cine_print.cube"
+export POLAJUICE_PRINTS="$LIB/../prints"
 
 IN=$(mktemp --suffix=.ppm)
 OUT=$(mktemp --suffix=.jpg)
@@ -52,6 +55,12 @@ expect polaroid-packfilm 669 allow;      expect polaroid-packfilm px-100uv refus
 expect autochrome provia refuse;         expect autochrome portra_400 refuse
 expect autochrome hp_5 refuse
 expect technicolor-3strip provia refuse; expect technicolor-3strip portra_400 refuse
+# print stocks: never valid as camera film, always valid as --print
+expect 35mm-negative synthetic_cine_print refuse
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film \
+    --print synthetic_cine_print -o "$OUT" >/dev/null 2>&1 || {
+    echo "test_compat: --print resolution broken" >&2; exit 1; }
+
 # escape hatch must stay open
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-slide -f px-100uv \
     --any-film -o "$OUT" >/dev/null 2>&1 || {
