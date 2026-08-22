@@ -22,6 +22,12 @@ SRC=$(pwd)
     echo "run this from the root of the release tree" >&2; exit 1; }
 [ -d "$REPO/.git" ] || { echo "$REPO is not a git repository" >&2; exit 1; }
 
+PAGE_V=$(grep -o 'PAGE_VERSION = "[^"]*"' "$SRC/web/index.html" | cut -d'"' -f2)
+TREE_V=$(cat "$SRC/VERSION")
+[ "$PAGE_V" = "$TREE_V" ] || {
+    echo "page version ($PAGE_V) != tree version ($TREE_V); fix index.html" >&2
+    exit 1; }
+
 [ -f "$SRC/web/polajuice.wasm" ] || {
     echo "no web/polajuice.wasm in this tree; refuse to release without the engine" >&2
     echo "(release tarballs ship it prebuilt; scripts/build_web.sh rebuilds it)" >&2

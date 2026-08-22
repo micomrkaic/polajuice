@@ -1,0 +1,16 @@
+1.6.1: page/engine version sentinel, real-DOM test harness
+
+A half-cached deployment (browser serving the previous index.html while
+re-fetching the new wasm and manifest) made the Print selector invisible
+while the version label - which reports the engine - claimed the new
+release. The page now carries its own PAGE_VERSION; on mismatch with
+the engine it says so in the status line and tells the user to
+hard-refresh, turning silent staleness into a labeled state. The
+release script refuses to ship if PAGE_VERSION disagrees with VERSION.
+
+scripts/test_page_dom.mjs runs the real page under jsdom - genuine
+selects, optgroups and style semantics, where hand-rolled DOM stubs
+have now been wrong three times - asserting boot, the print-selector
+visibility contract in both directions, and film-dropdown leakage. It
+skips cleanly when jsdom is not installed and runs in make check-wasm
+otherwise.

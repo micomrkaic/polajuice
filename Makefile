@@ -44,7 +44,7 @@ wasm:
 	sh scripts/build_web.sh
 
 check-wasm:
-	cd scripts && node test_wasm.mjs && node test_page.mjs
+	cd scripts && node test_wasm.mjs && node test_page.mjs && node test_page_dom.mjs
 
 # 'clean' deliberately keeps web/polajuice.wasm: release tarballs ship it
 # prebuilt and release.sh runs 'make clean' before verifying it.
