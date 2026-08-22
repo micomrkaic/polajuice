@@ -146,6 +146,107 @@ int main(void)
     pj_image_free(sa); pj_image_free(sb);
     pj_image_free(mcard);
 
+    PjLut3D *identity = make_identity_lut(&error);
+    assert(identity);
+
+    /* Tetrahedral interpolation: identity LUT must be exact at lattice
+     * points and along the neutral axis (where tetrahedral shines). */
+    {
+        float probe[3] = {0.3f, 0.3f, 0.3f};
+        pj_lut3d_apply(identity, probe);
+        assert(fabsf(probe[0] - 0.3f) < 1e-5f);
+        assert(fabsf(probe[1] - 0.3f) < 1e-5f);
+        assert(fabsf(probe[2] - 0.3f) < 1e-5f);
+        float asym[3] = {0.7f, 0.2f, 0.5f};
+        pj_lut3d_apply(identity, asym);
+        assert(fabsf(asym[0] - 0.7f) < 1e-5f &&
+               fabsf(asym[1] - 0.2f) < 1e-5f &&
+               fabsf(asym[2] - 0.5f) < 1e-5f);
+    }
+
+    /* Age v2: per-process dye fade. Aged slide drifts red-magenta (cyan
+     * dye dies), aged B&W stays neutral (silver does not fade), and both
+     * lift the base. */
+    {
+        PjImage *gray = pj_image_new(33, 33, &error);
+        assert(gray);
+        fill_uniform(gray, 0.4f);
+        /* compare aged against fresh through the identical pipeline so
+         * camera tints cannot confound the fade direction */
+        PjRenderOptions fresh = {.seed = 3, .strength = 1.0f,
+            .color_lut = identity, .film_process = "slide"};
+        PjRenderOptions slide_aged = fresh;
+        slide_aged.age = 0.8f;
+        PjImage *f0 = pj_render(gray, "35mm-slide", &fresh, &error);
+        PjImage *sl = pj_render(gray, "35mm-slide", &slide_aged, &error);
+        assert(f0 && sl);
+        float dmean[3] = {0, 0, 0};
+        const float *pf = pj_image_pixels_const(f0);
+        const float *px = pj_image_pixels_const(sl);
+        size_t n = pj_image_width(sl) * pj_image_height(sl);
+        for (size_t i = 0; i < n; ++i)
+            for (size_t c = 0; c < 3; ++c)
+                dmean[c] += px[i * 3 + c] - pf[i * 3 + c];
+        for (size_t c = 0; c < 3; ++c) dmean[c] /= (float)n;
+        /* cyan dye death: red must gain more than green and blue */
+        assert(dmean[0] > dmean[1] + 0.005f);
+        assert(dmean[0] > dmean[2] + 0.005f);
+        pj_image_free(f0);
+        pj_image_free(sl);
+
+        PjRenderOptions bw_aged = {.seed = 3, .strength = 1.0f,
+            .age = 0.8f, .film_process = "bw"};
+        PjImage *bwout = pj_render(gray, "bw-35", &bw_aged, &error);
+        assert(bwout);
+        px = pj_image_pixels_const(bwout);
+        float spread = 0.0f;
+        for (size_t i = 0; i < n; ++i) {
+            float hi = px[i*3], lo = px[i*3];
+            for (size_t c = 1; c < 3; ++c) {
+                if (px[i*3+c] > hi) hi = px[i*3+c];
+                if (px[i*3+c] < lo) lo = px[i*3+c];
+            }
+            spread += hi - lo;
+        }
+        assert(spread / (float)n < 0.02f);   /* essentially neutral */
+        pj_image_free(bwout);
+        pj_image_free(gray);
+    }
+
+    /* Print LUT chains after the film LUT: a channel-swapping print cube
+     * must change the result of an identity-film render. */
+    {
+        FILE *pf = fopen("/tmp/pj_test_print.cube", "w");
+        assert(pf);
+        /* swap red and green: lattice ordered r-fastest */
+        fputs("LUT_3D_SIZE 2\n0 0 0\n0 1 0\n1 0 0\n1 1 0\n"
+              "0 0 1\n0 1 1\n1 0 1\n1 1 1\n", pf);
+        fclose(pf);
+        PjLut3D *print = pj_lut3d_load_cube("/tmp/pj_test_print.cube", &error);
+        assert(print);
+        PjImage *card3 = pj_image_new(17, 17, &error);
+        assert(card3);
+        float *cpx = pj_image_pixels(card3);
+        for (size_t i = 0; i < 17 * 17; ++i) {
+            cpx[i * 3] = 0.6f; cpx[i * 3 + 1] = 0.2f; cpx[i * 3 + 2] = 0.2f;
+        }
+        PjRenderOptions plain = {.seed = 1, .strength = 1.0f,
+                                 .color_lut = identity};
+        PjRenderOptions printed = {.seed = 1, .strength = 1.0f,
+                                   .color_lut = identity, .print_lut = print};
+        PjImage *a2 = pj_render(card3, "35mm-negative", &plain, &error);
+        PjImage *b2 = pj_render(card3, "35mm-negative", &printed, &error);
+        assert(a2 && b2);
+        const float *pa = pj_image_pixels_const(a2);
+        const float *pb = pj_image_pixels_const(b2);
+        /* the reddish card must come out green-dominant through the swap */
+        assert(pa[3 * (8 * 17 + 8)] > pa[3 * (8 * 17 + 8) + 1]);
+        assert(pb[3 * (8 * 17 + 8) + 1] > pb[3 * (8 * 17 + 8)]);
+        pj_image_free(a2); pj_image_free(b2); pj_image_free(card3);
+        pj_lut3d_free(print);
+        remove("/tmp/pj_test_print.cube");
+    }
+
     /* Film-process compatibility truth table. */
     assert(pj_preset_accepts_film("super8", "slide"));
     assert(!pj_preset_accepts_film("super8", "negative"));
@@ -157,6 +258,10 @@ int main(void)
     assert(!pj_preset_accepts_film("autochrome", "slide"));
     assert(!pj_preset_accepts_film("technicolor-3strip", "negative"));
     assert(pj_preset_accepts_film("midcentury-rangefinder", "bw"));
+    assert(!strcmp(pj_preset_primary_process("35mm-slide"), "slide"));
+    assert(!strcmp(pj_preset_primary_process("polaroid-600"), "integral"));
+    assert(pj_preset_primary_process("midcentury-rangefinder") == NULL);
+    assert(pj_preset_primary_process("autochrome") == NULL);
     char procs[256];
     assert(pj_preset_film_processes("autochrome", procs, sizeof procs));
     assert(procs[0] == '\0');   /* sealed */
@@ -232,7 +337,6 @@ int main(void)
     size_t bytes = pj_image_width(first) * pj_image_height(first) * 3 * sizeof(float);
     assert(memcmp(pj_image_pixels_const(first), pj_image_pixels_const(second), bytes) == 0);
 
-    PjLut3D *identity = make_identity_lut(&error);
     assert(identity && pj_lut3d_size(identity) == 2);
     float sample[3] = {0.20f, 0.40f, 0.80f};
     pj_lut3d_apply(identity, sample);

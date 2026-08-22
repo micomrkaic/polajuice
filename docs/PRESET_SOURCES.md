@@ -174,3 +174,26 @@ signature. Both are stylizations of the process, not sensitometric
 measurements, and both are refused for instant cameras, where development
 is sealed inside the film unit. The measured alternative also exists: the
 film catalog's Cross-processed family carries actual xpro CLUTs.
+
+## The darkroom release (1.5.0)
+
+Tetrahedral LUT interpolation replaces trilinear (standard practice;
+identical lattice data, better behavior between lattice points). The
+print axis chains a second .cube after the film transform, mirroring
+cinema negative->print workflows; no print stocks ship by default
+because the fetched packs contain none - supply measured print cubes
+(e.g. PictureFX 2383 emulations) by path or drop them into the library.
+
+Age v2 models storage degradation as per-channel density decay toward
+base white, with rates per process family: slide loses cyan fastest
+(red-magenta drift), scanned C-41 goes cool, instant prints amber,
+black-and-white silver holds density and only fogs with a faint warm
+stain. These are stylizations of widely described fade behavior, not
+densitometric measurements of specific stocks.
+
+A vocabulary note adopted from the difference between film
+characterization and film-inspired grading: the G'MIC/RawTherapee cube
+collections used here derive from measured film references; the scalar
+engines (autochrome, technicolor-3strip, and every camera's no-film
+fallback) are process-informed stylizations. Each look's entry above
+says which it is.

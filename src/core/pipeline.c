@@ -348,6 +348,49 @@ static void apply_builtin_color(PjImage *image, const PjPreset *p, float strengt
  * fixed stylization: crossed per-channel curves with green-yellow
  * highlights, cool crushed shadows, high contrast and saturation.
  */
+/*
+ * Age v2: storage degradation as differential dye fade. Each process
+ * family loses its dyes at different rates, so the drift *emerges* from
+ * per-channel decay instead of being painted on:
+ *   slide (E-6 kin): cyan dye dies fastest -> reds gain, magenta drift
+ *   negative (C-41): cyan and yellow fade through the mask -> cool-cyan cast
+ *   bw: silver does not fade - fog and a faint warm stain only
+ *   integral/pack: crush and yellow-brown ambering of the print
+ *   unknown: the conservative generic profile
+ * Rates are stylizations of commonly described fade behavior, not
+ * densitometry (see PRESET_SOURCES).
+ */
+typedef struct {
+    float fade[3];        /* per-channel density loss at age 1 */
+    float fog;            /* base fog amount */
+    float fog_color[3];
+    float contrast_loss;
+    float desat;
+} AgeProfile;
+
+static AgeProfile age_profile(const char *process)
+{
+    /* fade[c] is the rate channel c RISES toward base white as its
+     * complementary dye loses density */
+    if (process && !strcmp(process, "slide"))       /* cyan dies: R and some
+                                                       B rise -> magenta */
+        return (AgeProfile){{0.16f, 0.03f, 0.08f}, 0.14f,
+                            {0.60f, 0.52f, 0.56f}, 0.16f, 0.14f};
+    if (process && !strcmp(process, "negative"))    /* scanned positive goes
+                                                       cool-cyan */
+        return (AgeProfile){{0.03f, 0.06f, 0.13f}, 0.20f,
+                            {0.55f, 0.55f, 0.58f}, 0.22f, 0.24f};
+    if (process && !strcmp(process, "bw"))          /* silver holds; fog and
+                                                       faint warm stain */
+        return (AgeProfile){{0.00f, 0.00f, 0.00f}, 0.16f,
+                            {0.58f, 0.555f, 0.52f}, 0.18f, 0.0f};
+    if (process && (!strcmp(process, "integral") || !strcmp(process, "pack")))
+        return (AgeProfile){{0.14f, 0.10f, 0.03f}, 0.22f,   /* ambering */
+                            {0.62f, 0.56f, 0.46f}, 0.24f, 0.20f};
+    return (AgeProfile){{0.10f, 0.04f, 0.08f}, 0.18f,       /* generic */
+                        {0.58f, 0.53f, 0.57f}, 0.20f, 0.22f};
+}
+
 static void apply_develop(PjImage *image, float push, bool cross)
 {
     if (push == 0.0f && !cross) return;
@@ -377,20 +420,18 @@ static void apply_develop(PjImage *image, float push, bool cross)
     }
 }
 
-/* amount 0..1: full storage-degradation look, so that any camera and any
- * film can be aged. Fog with magenta bias (the green-sensitive layer
- * degrades fastest), contrast decay, desaturation, and a slight warm
- * drift, all display-referred after the color stage. */
-static void apply_age(PjImage *image, float amount)
+/* amount 0..1: age via the per-process dye-fade profile. */
+static void apply_age(PjImage *image, float amount, const char *process)
 {
     if (amount <= 0.0f) return;
     if (amount > 1.0f) amount = 1.0f;
-    const float fog_color[3] = {0.58f, 0.53f, 0.57f};
-    float fog = 0.18f * amount;
-    float contrast = 1.0f - 0.20f * amount;
-    float desat = 0.22f * amount;
-    const float warm[3] = {1.0f + 0.020f * amount, 1.0f,
-                           1.0f - 0.025f * amount};
+    AgeProfile prof = age_profile(process);
+    float fog = prof.fog * amount;
+    float contrast = 1.0f - prof.contrast_loss * amount;
+    float desat = prof.desat * amount;
+    float keep[3];
+    for (size_t c = 0; c < 3; ++c)
+        keep[c] = 1.0f - prof.fade[c] * amount;
     for (size_t i = 0; i < image->width * image->height; ++i) {
         float display[3];
         for (size_t c = 0; c < 3; ++c)
@@ -398,9 +439,11 @@ static void apply_age(PjImage *image, float amount)
         float luma = 0.2126f * display[0] + 0.7152f * display[1] +
                      0.0722f * display[2];
         for (size_t c = 0; c < 3; ++c) {
-            float value = display[c] + (luma - display[c]) * desat;
-            value *= warm[c];
-            value = value * (1.0f - fog) + fog_color[c] * fog;
+            /* fading a dye layer lets light through: density decays
+             * toward the paper/base white, so value rises toward 1 */
+            float value = 1.0f - (1.0f - display[c]) * keep[c];
+            value = value + (luma - value) * desat;
+            value = value * (1.0f - fog) + prof.fog_color[c] * fog;
             value = 0.5f + (value - 0.5f) * contrast;
             image->rgb[i * 3 + c] = srgb_to_linear(clamp01(value));
         }
@@ -602,13 +645,16 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_builtin_tone(image, preset, strength);
         apply_builtin_color(image, preset, strength);
     }
+    /* optional print/scan stock, chained after the film transform */
+    if (options && options->print_lut)
+        apply_color_lut(image, options->print_lut, strength);
     {
         float push = options ? options->push : 0.0f;
         bool cross = options ? options->cross_process : false;
         if (preset->instant_frame) { push = 0.0f; cross = false; }
         apply_develop(image, push, cross);
         float age = preset->fade * strength + (options ? options->age : 0.0f);
-        apply_age(image, age);
+        apply_age(image, age, options ? options->film_process : NULL);
         /* pushed development coarsens grain; pulling calms it */
         float grain_gain = 1.0f + 0.45f * fmaxf(0.0f, push)
                                 + 0.15f * fminf(0.0f, push);

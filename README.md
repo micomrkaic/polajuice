@@ -1,4 +1,4 @@
-# Polajuice 1.4.0 — the juice package
+# Polajuice 1.5.0 — the juice package
 
 One engine, two front-ends: **polajuice** for stills, **superjuice** for
 movies. Both are thin drivers over the same core (`libpolajuice.a`) and
@@ -173,6 +173,35 @@ the pairing table).
 - `autochrome` - Lumiere plates, 1907-1930s: pastel palette, soft plate
   optics and pointillist *colored* grain (per-channel noise, the engine's
   `grain_chroma` axis)
+
+## Architecture: the darkroom model
+
+A render decomposes the way a film workflow does:
+
+    image -> F (film color transform, a measured .cube LUT)
+          -> P (optional print/scan stock, a second chained LUT)
+          -> develop (push/pull/cross chemistry)
+          -> A (age: per-process differential dye fade)
+          -> S (spatial effects: grain, halation, softness, vignette,
+                flash, frames - always the camera's, never baked into cubes)
+
+`--print NAME|FILE` chains a print emulsion after the film - the cinema
+negative->print model (Vision3 through Kodak 2383 territory); print
+stocks live in their own catalog category and their own selector on the
+web, never mixed into the film list. LUT sampling uses tetrahedral
+interpolation (the industry standard; better neutral-axis and hue
+behavior than trilinear at the same cost).
+
+Aging is per-process differential dye fade rather than a uniform wash:
+slide films drift red-magenta as the cyan dye dies first, C-41 scans go
+cool, instant prints amber, and black-and-white silver does not fade at
+all - it only fogs, with a faint warm stain. The film's process (or the
+camera's, when it implies exactly one) selects the profile, so the same
+age slider tells a different, chemically plausible story on every
+stock. Rates are stylizations of commonly described fade behavior, not
+densitometry; sourcing honesty per look is tracked in
+docs/PRESET_SOURCES.md, including which cubes are measured-from-film
+versus inspired-by.
 
 ## Camera and film compatibility
 

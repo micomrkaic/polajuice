@@ -29,7 +29,8 @@ Ilford black-and-white|B+W|Pan F to Delta 3200: the full speed ladder, plus C-41
 Agfa and Rollei|B+W|Continental character: APX classics, Retro contrast, blue-blind Ortho|agfa_apx_25 agfa_apx_100 rollei_retro_80s rollei_ortho_25
 Polaroid integral|internal|SX-70 through 600-era chemistry, plus expired Time-Zero|polaroid_px-70 polaroid_px-680 polaroid_px-680_warm polaroid_px-100uv+_warm polaroid_time_zero_expired
 Polaroid pack film|internal|Peel-apart era: Land-camera 66x and Fuji FP stocks|polaroid_665 polaroid_669 polaroid_690 fuji_fp-100c fuji_fp_100c fuji_fp-3000b
-Cross-processed|E-6 in C-41|Slide film through the wrong chemistry, as measured|fuji_superia_200_xpro lomography_x-pro_slide_200'
+Cross-processed|E-6 in C-41|Slide film through the wrong chemistry, as measured|fuji_superia_200_xpro lomography_x-pro_slide_200
+Print stocks|print|Cinema print emulsions, chained after the negative|kodak_2383 kodak_2393 fuji_3513'
 
 blurb_for() {
     case "$1" in

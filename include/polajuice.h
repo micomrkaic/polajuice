@@ -10,8 +10,8 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 4
-#define PJ_VERSION_PATCH 1
+#define PJ_VERSION_MINOR 5
+#define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
 typedef struct PjLut3D PjLut3D;
@@ -40,6 +40,12 @@ typedef struct {
     int64_t frame;  /* frame index when temporal; also usable from a
                     stills front-end to render "frame N of a reel". */
     const PjLut3D *color_lut;
+    const PjLut3D *print_lut;   /* optional print/scan stock transform,
+                    chained after the film transform - the cinema
+                    negative->print model (e.g. Vision3 through 2383). */
+    const char *film_process;   /* film process token ("slide", "negative",
+                    "bw", "integral", "pack") or NULL when unknown. Age
+                    uses it: dye layers fade differently per process. */
 } PjRenderOptions;
 
 PjImage *pj_image_new(size_t width, size_t height, PjError *error);
@@ -89,6 +95,10 @@ bool pj_preset_is_instant(const char *name);
  * unknown camera. */
 bool pj_preset_accepts_film(const char *camera, const char *process);
 char *pj_preset_film_processes(const char *camera, char *buffer, size_t size);
+/* The camera's sole process token when it accepts exactly one (e.g.
+ * 35mm-slide -> "slide", polaroid-600 -> "integral"), else NULL. Used to
+ * default the age profile when no film supplies a process. */
+const char *pj_preset_primary_process(const char *camera);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,

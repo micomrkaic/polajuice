@@ -14,10 +14,14 @@ await writeFile(new URL("films.json", filmsDir), JSON.stringify({ families: [
     stocks: [{ stem: "fuji_provia_100f", blurb: "" }] },
   { name: "Polaroid integral", process: "internal", note: "",
     stocks: [{ stem: "polaroid_px-680", blurb: "" }] },
+  { name: "Print stocks", process: "print", note: "",
+    stocks: [{ stem: "test_print_swap", blurb: "" }] },
 ]}));
 const identityCube = "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n";
 await writeFile(new URL("fuji_provia_100f.cube", filmsDir), identityCube);
 await writeFile(new URL("polaroid_px-680.cube", filmsDir), identityCube);
+await writeFile(new URL("test_print_swap.cube", filmsDir),
+  "LUT_3D_SIZE 2\n0 0 0\n0 1 0\n1 0 0\n1 1 0\n0 0 1\n0 1 1\n1 0 1\n1 1 1\n");
 process.on("exit", () => {});
 const html = await readFile(new URL("index.html", webDir), "utf8");
 const js = html.split('<script type="module">')[1].split("</script>")[0];
@@ -27,7 +31,8 @@ class Elem {
   constructor(id) { this.id = id; this.options = []; this.children = [];
     this.dataset = {};
     this.value = id === "film" ? "__auto__" : ""; this.textContent = "";
-    this.className = ""; this.disabled = true; this.handlers = {}; }
+    this.className = ""; this.disabled = true; this.handlers = {};
+    this.style = {}; }
   get firstChild() { return this.children[0] ?? null; }
   removeChild(node) {
     this.children = this.children.filter(c => c !== node);
@@ -147,6 +152,24 @@ if (elems["status"].className === "error")
 if (!/scalar engine/.test(elems["status"].textContent))
   throw new Error("sealed camera should render scalar: " + elems["status"].textContent);
 console.log("sealed-camera render ok (scalar engine)");
+
+// print stocks: offered in the print selector only, never as films;
+// rendering with one selected must go through
+const filmOffered = elems["film"].children
+    .flatMap(n => n.children?.length ? n.children : [n])
+    .map(o => o.value ?? "").join(" ");
+if (/test_print_swap/.test(filmOffered))
+  throw new Error("print stock leaked into the film dropdown");
+if (!elems["print"].options.some(o => o.value === "test_print_swap"))
+  throw new Error("print selector not populated");
+elems["camera"].value = "35mm-negative";
+elems["camera"].handlers["change"]();
+elems["film"].value = "__none__";
+elems["print"].value = "test_print_swap";
+await elems["render"].handlers["click"]();
+if (elems["status"].className === "error")
+  throw new Error("print render failed: " + elems["status"].textContent);
+console.log("print axis in-page ok (selector separate, render passes)");
 console.log(`help panel: ${elems["helpcameras"].children.length / 2} cameras described`);
 await rm(filmsDir, { recursive: true, force: true });
 console.log("page handlers wired and render path exercised in-page");

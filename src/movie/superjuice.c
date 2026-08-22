@@ -158,6 +158,7 @@ static bool read_y4m_header(FILE *in, Y4mHeader *header)
 int main(int argc, char **argv)
 {
     const char *camera = NULL, *film_request = NULL;
+    const char *print_request = NULL;
     const char *input = NULL, *output = NULL;
     int crf = 18;
     bool no_film = false, any_film = false;
@@ -171,6 +172,8 @@ int main(int argc, char **argv)
             film_request = argv[++i];
         else if (!strcmp(argv[i], "--no-film")) no_film = true;
         else if (!strcmp(argv[i], "--any-film")) any_film = true;
+        else if (!strcmp(argv[i], "--print") && i + 1 < argc)
+            print_request = argv[++i];
         else if (!strcmp(argv[i], "--develop") && i + 1 < argc) {
             const char *dev = argv[++i];
             if (!strcmp(dev, "push+1")) options.push = 1.0f;
@@ -247,10 +250,24 @@ int main(int argc, char **argv)
     PjError error = {{0}};
     PjLut3D *lut = NULL;
     if (film_path) {
+        options.film_process = film_process_of(film_path);
         lut = pj_lut3d_load_cube(film_path, &error);
         free(film_path);
         if (!lut) { fprintf(stderr, "superjuice: %s\n", error.message); return EXIT_FAILURE; }
         options.color_lut = lut;
+    }
+    PjLut3D *print_lut = NULL;
+    if (print_request) {
+        char *print_path = resolve_film(print_request, false);
+        if (!print_path) { pj_lut3d_free(lut); return EXIT_FAILURE; }
+        print_lut = pj_lut3d_load_cube(print_path, &error);
+        free(print_path);
+        if (!print_lut) {
+            fprintf(stderr, "superjuice: %s\n", error.message);
+            pj_lut3d_free(lut);
+            return EXIT_FAILURE;
+        }
+        options.print_lut = print_lut;
     }
 
     FILE *stream_in = stdin, *stream_out = stdout;
@@ -302,6 +319,9 @@ int main(int argc, char **argv)
                 camera, options.age > 0 ? ", aged" : "",
                 options.cross_process ? ", cross-processed" : "");
     }
+
+    if (!options.film_process)
+        options.film_process = pj_preset_primary_process(camera);
 
     Y4mHeader header;
     if (!read_y4m_header(stream_in, &header)) {
@@ -393,6 +413,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "superjuice: done, %lld frames\n", (long long)frame);
     free(y_plane); free(cb_plane); free(cr_plane);
     pj_lut3d_free(lut);
+    pj_lut3d_free(print_lut);
     int encode_status = 0;
     if (input) {
         pclose(stream_in);

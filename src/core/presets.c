@@ -276,6 +276,20 @@ static unsigned process_bit(const char *process)
     return 0;
 }
 
+const char *pj_preset_primary_process(const char *camera)
+{
+    const PjPreset *preset = pj_find_preset(camera);
+    if (!preset) return NULL;
+    switch (preset->film_processes) {
+    case PJ_FILM_SLIDE: return "slide";
+    case PJ_FILM_NEGATIVE: return "negative";
+    case PJ_FILM_BW: return "bw";
+    case PJ_FILM_INTEGRAL: return "integral";
+    case PJ_FILM_PACK: return "pack";
+    default: return NULL;   /* sealed or multi-process */
+    }
+}
+
 bool pj_preset_accepts_film(const char *camera, const char *process)
 {
     const PjPreset *preset = pj_find_preset(camera);

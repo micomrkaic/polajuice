@@ -1,0 +1,26 @@
+1.5.0: the darkroom release
+
+Three upgrades from film-characterization practice:
+
+Tetrahedral LUT interpolation replaces trilinear - the industry
+standard, better neutral-axis and hue behavior between lattice points
+at the same cost.
+
+Age v2: storage degradation becomes per-process differential dye fade.
+fade[] rates decay each channel's density toward base white, so the
+drift emerges from the chemistry instead of being painted on: slide
+goes red-magenta (cyan dies first), scanned C-41 cools, instant prints
+amber, black-and-white only fogs with a faint warm stain. The film's
+process selects the profile; with --no-film, cameras that imply
+exactly one process (35mm-slide, polaroid-600, ...) supply it via the
+new pj_preset_primary_process().
+
+Print axis: --print chains a second .cube after the film transform -
+the cinema negative->print model. Its own catalog category and web
+selector, never mixed into films; engine, both CLIs, wasm and the page
+all carry it, with tests at every layer (chained-transform effect in
+core and engine, selector separation and in-page render on the page).
+
+README gains the architecture section: F -> P -> develop -> A -> S,
+with the measured-versus-inspired sourcing vocabulary in
+PRESET_SOURCES.

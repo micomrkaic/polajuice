@@ -32,6 +32,8 @@ static void usage(FILE *stream)
         "                          library, or a path to a .cube file\n"
         "      --no-film           force the built-in scalar color engine\n"
         "      --any-film          bypass camera/film compatibility checks\n"
+        "      --print NAME|FILE   print/scan stock .cube chained after the\n"
+        "                          film (cinema negative->print model)\n"
         "  -o, --output PATH       output path; default INPUT_CAMERA.ext\n"
         "                          formats by extension: .ppm .png .jpg .jpeg\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
@@ -89,6 +91,7 @@ static int apply(int argc, char **argv)
     const char *output = NULL;
     const char *camera = NULL;
     const char *film_request = NULL;
+    const char *print_request = NULL;
     bool no_film = false;
     bool any_film = false;
     PjRenderOptions options = {.seed = UINT64_C(0x504f4c414a554943),
@@ -107,6 +110,8 @@ static int apply(int argc, char **argv)
             no_film = true;
         else if (!strcmp(argv[i], "--any-film"))
             any_film = true;
+        else if (!strcmp(argv[i], "--print") && i + 1 < argc)
+            print_request = argv[++i];
         else if (!strcmp(argv[i], "--develop") && i + 1 < argc) {
             const char *dev = argv[++i];
             if (!strcmp(dev, "normal")) { /* defaults */ }
@@ -213,19 +218,34 @@ static int apply(int argc, char **argv)
     PjError error = {{0}};
     PjLut3D *lut = NULL;
     if (film_path) {
+        options.film_process = film_process_of(film_path);
         lut = pj_lut3d_load_cube(film_path, &error);
         free(film_path);
         if (!lut) return fail(&error);
         options.color_lut = lut;
     }
+    PjLut3D *print_lut = NULL;
+    if (print_request) {
+        char *print_path = resolve_film(print_request, false);
+        if (!print_path) { pj_lut3d_free(lut); return EXIT_FAILURE; }
+        print_lut = pj_lut3d_load_cube(print_path, &error);
+        free(print_path);
+        if (!print_lut) { pj_lut3d_free(lut); return fail(&error); }
+        options.print_lut = print_lut;
+    }
+    if (!options.film_process)
+        options.film_process = pj_preset_primary_process(camera);
+
     PjImage *source = pj_image_load(input, &error);
     if (!source) {
         pj_lut3d_free(lut);
+        pj_lut3d_free(print_lut);
         return fail(&error);
     }
     PjImage *result = pj_render(source, camera, &options, &error);
     pj_image_free(source);
     pj_lut3d_free(lut);
+    pj_lut3d_free(print_lut);
     if (!result) return fail(&error);
     bool saved = pj_image_save(result, output, &error);
     pj_image_free(result);

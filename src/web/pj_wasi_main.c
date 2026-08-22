@@ -49,19 +49,20 @@ static int list_cameras(void)
 
 static int render(int argc, char **argv)
 {
-    if (argc != 12) {
-        fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- STRENGTH "
-                        "SEED AGE DEVELOP MAX_DIM OUT\n");
+    if (argc != 13) {
+        fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- PRINT|- "
+                        "STRENGTH SEED AGE DEVELOP MAX_DIM OUT\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
     const char *process = argv[5];
-    float strength = strtof(argv[6], NULL);
-    uint64_t seed = strtoull(argv[7], NULL, 0);
-    float age = strtof(argv[8], NULL);
-    const char *dev = argv[9];
-    size_t max_dim = (size_t)strtoull(argv[10], NULL, 0);
-    const char *out_path = argv[11];
+    const char *print_path = argv[6];
+    float strength = strtof(argv[7], NULL);
+    uint64_t seed = strtoull(argv[8], NULL, 0);
+    float age = strtof(argv[9], NULL);
+    const char *dev = argv[10];
+    size_t max_dim = (size_t)strtoull(argv[11], NULL, 0);
+    const char *out_path = argv[12];
 
     /* Engine-level compatibility parity with the CLI: the browser UI
      * filters too, but the artifact itself must refuse nonsense. An
@@ -101,8 +102,22 @@ static int render(int argc, char **argv)
         fprintf(stderr, "%s\n", error.message);
         return 1;
     }
+    PjLut3D *print_lut = NULL;
+    if (strcmp(print_path, "-")) {
+        print_lut = pj_lut3d_load_cube(print_path, &error);
+        if (!print_lut) {
+            fprintf(stderr, "%s\n", error.message);
+            pj_lut3d_free(lut);
+            return 1;
+        }
+    }
     PjRenderOptions options = {.seed = seed, .strength = strength,
-                               .age = age, .color_lut = lut};
+                               .age = age, .color_lut = lut,
+                               .print_lut = print_lut,
+                               .film_process =
+                                   strcmp(process, "-")
+                                       ? process
+                                       : pj_preset_primary_process(camera)};
     if (!strcmp(dev, "push+1")) options.push = 1.0f;
     else if (!strcmp(dev, "push+2")) options.push = 2.0f;
     else if (!strcmp(dev, "pull-1")) options.push = -1.0f;
@@ -110,6 +125,7 @@ static int render(int argc, char **argv)
     PjImage *result = pj_render(image, camera, &options, &error);
     pj_image_free(image);
     pj_lut3d_free(lut);
+    pj_lut3d_free(print_lut);
     if (!result) { fprintf(stderr, "%s\n", error.message); return 1; }
     bool saved = pj_image_save(result, out_path, &error);
     pj_image_free(result);

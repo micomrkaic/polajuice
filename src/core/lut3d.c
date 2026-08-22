@@ -137,7 +137,7 @@ void pj_lut3d_free(PjLut3D *lut)
 
 size_t pj_lut3d_size(const PjLut3D *lut) { return lut ? lut->size : 0; }
 
-static float lerp(float a, float b, float t) { return a + (b - a) * t; }
+
 
 static const float *entry(const PjLut3D *lut, size_t r, size_t g, size_t b)
 {
@@ -160,23 +160,48 @@ void pj_lut3d_apply(const PjLut3D *lut, float rgb[3])
         fraction[c] = position - (float)lo[c];
     }
 
-    float out[3];
-    for (size_t c = 0; c < 3; ++c) {
-        float c000 = entry(lut, lo[0], lo[1], lo[2])[c];
-        float c100 = entry(lut, hi[0], lo[1], lo[2])[c];
-        float c010 = entry(lut, lo[0], hi[1], lo[2])[c];
-        float c110 = entry(lut, hi[0], hi[1], lo[2])[c];
-        float c001 = entry(lut, lo[0], lo[1], hi[2])[c];
-        float c101 = entry(lut, hi[0], lo[1], hi[2])[c];
-        float c011 = entry(lut, lo[0], hi[1], hi[2])[c];
-        float c111 = entry(lut, hi[0], hi[1], hi[2])[c];
-        float x00 = lerp(c000, c100, fraction[0]);
-        float x10 = lerp(c010, c110, fraction[0]);
-        float x01 = lerp(c001, c101, fraction[0]);
-        float x11 = lerp(c011, c111, fraction[0]);
-        float y0 = lerp(x00, x10, fraction[1]);
-        float y1 = lerp(x01, x11, fraction[1]);
-        out[c] = lerp(y0, y1, fraction[2]);
+    /* Tetrahedral interpolation (the industry standard over trilinear):
+     * the unit cube splits into six tetrahedra by the ordering of the
+     * fractional coordinates; the sample is a barycentric blend of the
+     * four vertices of the containing tetrahedron. Neutral axis and hue
+     * behavior between lattice points are noticeably better than the
+     * trilinear equivalent, at the same cost. */
+    float fr = fraction[0], fg = fraction[1], fb = fraction[2];
+    const float *v000 = entry(lut, lo[0], lo[1], lo[2]);
+    const float *v111 = entry(lut, hi[0], hi[1], hi[2]);
+    const float *va, *vb;
+    float wa, wb, w0, w1;
+    if (fr >= fg) {
+        if (fg >= fb) {        /* r >= g >= b */
+            va = entry(lut, hi[0], lo[1], lo[2]);
+            vb = entry(lut, hi[0], hi[1], lo[2]);
+            w0 = 1.0f - fr; wa = fr - fg; wb = fg - fb; w1 = fb;
+        } else if (fr >= fb) { /* r >= b > g */
+            va = entry(lut, hi[0], lo[1], lo[2]);
+            vb = entry(lut, hi[0], lo[1], hi[2]);
+            w0 = 1.0f - fr; wa = fr - fb; wb = fb - fg; w1 = fg;
+        } else {               /* b > r >= g */
+            va = entry(lut, lo[0], lo[1], hi[2]);
+            vb = entry(lut, hi[0], lo[1], hi[2]);
+            w0 = 1.0f - fb; wa = fb - fr; wb = fr - fg; w1 = fg;
+        }
+    } else {
+        if (fb >= fg) {        /* b >= g > r */
+            va = entry(lut, lo[0], lo[1], hi[2]);
+            vb = entry(lut, lo[0], hi[1], hi[2]);
+            w0 = 1.0f - fb; wa = fb - fg; wb = fg - fr; w1 = fr;
+        } else if (fb >= fr) { /* g > b >= r */
+            va = entry(lut, lo[0], hi[1], lo[2]);
+            vb = entry(lut, lo[0], hi[1], hi[2]);
+            w0 = 1.0f - fg; wa = fg - fb; wb = fb - fr; w1 = fr;
+        } else {               /* g >= r > b */
+            va = entry(lut, lo[0], hi[1], lo[2]);
+            vb = entry(lut, hi[0], hi[1], lo[2]);
+            w0 = 1.0f - fg; wa = fg - fr; wb = fr - fb; w1 = fb;
+        }
     }
+    float out[3];
+    for (size_t c = 0; c < 3; ++c)
+        out[c] = w0 * v000[c] + wa * va[c] + wb * vb[c] + w1 * v111[c];
     memcpy(rgb, out, sizeof out);
 }

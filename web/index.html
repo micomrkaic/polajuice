@@ -88,6 +88,10 @@
       <label for="strength">Strength <span id="strengthval">1.00</span></label>
       <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
     </div>
+    <div id="printcontrol" style="display:none">
+      <label for="print">Print stock</label>
+      <select id="print"><option value="__none__">none — direct</option></select>
+    </div>
     <div>
       <label for="develop">Developing</label>
       <select id="develop">
@@ -205,6 +209,7 @@ async function boot() {
     sel.add(new Option("canonical (auto)", "__auto__"));
     sel.add(new Option("none — scalar engine", "__none__"));
     for (const family of filmFamilies) {
+      if (family.process === "print") continue;   /* print is its own axis */
       const token = familyToken(family);
       if (token && !cam.processes.includes(token)) continue;
       const group = document.createElement("optgroup");
@@ -234,6 +239,13 @@ async function boot() {
     films = filmFamilies.flatMap(f => f.stocks);
   } catch (e) {
     setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
+  }
+  const printFamilies = filmFamilies.filter(f => f.process === "print");
+  if (printFamilies.length) {
+    $("printcontrol").style.display = "";
+    for (const family of printFamilies)
+      for (const stock of family.stocks)
+        $("print").add(new Option(stock.stem, stock.stem));
   }
   syncCompat();
 
@@ -314,10 +326,13 @@ async function render(maxDim) {
     const family = stem
         ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
     const filmProcess = family ? familyToken(family) : null;
+    const printStem = $("print") && $("print").value !== "__none__"
+        ? $("print").value : null;
+    const printCubeText = printStem ? await loadFilmCube(printStem) : null;
     const t0 = performance.now();
     const out = await engine.render({
       inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
-      filmProcess,
+      filmProcess, printCubeText,
       strength: parseFloat($("strength").value),
       seed: parseInt($("seed").value, 10) || 0,
       age: parseFloat($("age").value),

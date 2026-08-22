@@ -70,6 +70,15 @@ if (process.argv[3]) {
         filmProcess: null, seed: 7, maxDim: 0 });
     if (!unknownOk.length) throw new Error("unknown process wrongly blocked");
     console.log("engine-level compatibility ok (refuses mismatch, allows unknown)");
+    const swapCube = "LUT_3D_SIZE 2\n0 0 0\n0 1 0\n1 0 0\n1 1 0\n0 0 1\n0 1 1\n1 0 1\n1 1 1\n";
+    const printed = await engine.render({ inputBytes: input, ext: "png",
+        camera: "35mm-negative", cubeText: null, printCubeText: swapCube,
+        seed: 7, maxDim: 0 });
+    const unprinted = await engine.render({ inputBytes: input, ext: "png",
+        camera: "35mm-negative", cubeText: null, seed: 7, maxDim: 0 });
+    if (Buffer.compare(Buffer.from(printed), Buffer.from(unprinted)) === 0)
+        throw new Error("print LUT had no effect");
+    console.log("print axis ok (chained transform changes output)");
 }
 // a shipped sample must render through the engine (EXIF baked at build time,
 // so orientation is already correct in the file itself)
