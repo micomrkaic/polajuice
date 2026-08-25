@@ -170,9 +170,32 @@ char *resolve_film(const char *request, bool quiet)
             film_list_add(&matches, library.paths[i]);
     }
 
+    /* Tie-break before declaring ambiguity: if exactly one candidate
+     * ends with the request at an underscore boundary, the user typed a
+     * complete stock name that other stems merely contain (the
+     * kodachrome_64 vs kodachrome_64_generic case). */
+    char *suffix_hit = NULL;
+    if (!exact && matches.count > 1) {
+        size_t req_len = strlen(request);
+        size_t hits = 0;
+        for (size_t i = 0; i < matches.count; ++i) {
+            film_stem(matches.paths[i], stem, sizeof stem);
+            size_t stem_len = strlen(stem);
+            if (stem_len >= req_len &&
+                !strcasecmp(stem + stem_len - req_len, request) &&
+                (stem_len == req_len || stem[stem_len - req_len - 1] == '_')) {
+                suffix_hit = matches.paths[i];
+                ++hits;
+            }
+        }
+        if (hits != 1) suffix_hit = NULL;
+    }
+
     char *result = NULL;
     if (exact)
         result = exact;
+    else if (suffix_hit)
+        result = strdup(suffix_hit);
     else if (matches.count == 1)
         result = strdup(matches.paths[0]);
     else if (!quiet && matches.count == 0) {

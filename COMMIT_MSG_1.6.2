@@ -1,0 +1,8 @@
+1.6.2: resolver suffix tie-break
+
+'kodachrome_64' was refused as ambiguous because kodachrome_64_generic
+contains it - punishing the user for typing a complete stock name.
+Substring ties now break toward the single candidate that ends with the
+request at an underscore boundary; genuinely ambiguous requests
+(e.g. 'kodachrome') still list candidates and refuse. Matrix test
+covers both.

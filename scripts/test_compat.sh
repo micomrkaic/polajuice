@@ -12,6 +12,8 @@ mkdir -p "$LIB/colorslide" "$LIB/negative_new" "$LIB/bw" \
          "$LIB/instant_consumer" "$LIB/instant_pro"
 cube() { printf 'TITLE "t"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n' > "$1"; }
 cube "$LIB/colorslide/fuji_provia_100f.cube"
+cube "$LIB/colorslide/kodak_kodachrome_64.cube"
+cube "$LIB/colorslide/kodak_kodachrome_64_generic.cube"
 cube "$LIB/negative_new/kodak_portra_400.cube"
 cube "$LIB/bw/ilford_hp_5_plus_400.cube"
 cube "$LIB/instant_consumer/polaroid_px-100uv+_warm.cube"
@@ -60,6 +62,10 @@ expect 35mm-negative synthetic_cine_print refuse
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film \
     --print synthetic_cine_print -o "$OUT" >/dev/null 2>&1 || {
     echo "test_compat: --print resolution broken" >&2; exit 1; }
+
+# name resolution: a complete stock name wins over stems that contain it
+expect 35mm-slide kodachrome_64 allow      # suffix tie-break, not ambiguous
+expect 35mm-slide kodachrome refuse        # genuinely ambiguous still refuses
 
 # escape hatch must stay open
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-slide -f px-100uv \
