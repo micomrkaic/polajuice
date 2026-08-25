@@ -1,0 +1,12 @@
+1.7.0: super8ify - the one-command reel, with sound
+
+scripts/super8ify.sh: phone clip in, 1970s reel out. Video through
+superjuice (18 fps, 720p proxy, Kodachrome 64, age 0.25 by default),
+audio through audiotard's tape chain (wow 14 cents, flutter 10, hiss,
+tube drive, projector-speaker bandwidth) when installed - the first
+official bridge between the two repos. Everything is an environment
+knob; SILENT=yes gives the period-correct silent reel, and inputs
+without audio degrade gracefully. The script finds its sibling
+superjuice binary repo-relative first, then PATH.
+
+README introduces the audiotard companionship.

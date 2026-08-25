@@ -64,6 +64,25 @@ polajuice output is bit-identical to 1.1.0. Rough throughput is around
 a second per 1080p frame — preview at proxy resolution, render final
 overnight, as film labs always did.
 
+### One command to 1962: scripts/super8ify.sh
+
+```sh
+scripts/super8ify.sh IMG_5048.MOV
+# -> IMG_5048_super8.mp4: 18 fps, 720p, Kodachrome 64, aged, with
+#    magnetic-stripe sound if audiotard is installed
+```
+
+The script drives the whole reel: video through superjuice (frame rate,
+proxy scale, gate, grain, weave), sound through
+[audiotard](https://github.com/micomrkaic/audiotard) - the same
+dependency-free C17 philosophy applied to audio: tape wow and flutter,
+hiss, a small tube amp, projector-speaker bandwidth. Every choice is an
+environment knob (CAMERA, FILM, AGE, SEED, FPS, HEIGHT, WOW, FLUTTER,
+SILENT=yes for period-correct silence); without audiotard, set
+SILENT=yes or let a soundless input produce a silent reel naturally.
+Super 8 was silent for most people anyway - the stripe is the luxury
+option, then as now.
+
 Building requires only a C17 compiler and `libm`:
 
 ```sh
