@@ -25,6 +25,19 @@ RAW remain future work (libvips and Little CMS territory).
 
 ## superjuice: movies
 
+A taxonomy note on movie cameras, because honesty is house policy.
+Three tiers: **motion-native** (super8, technicolor-3strip - movie
+formats, full stop), **motion-plausible** (the 35mm family - 35mm is
+the cinema gauge, and cinestill-night is literally motion-picture
+stock), and **motion-counterfactual** (toy-camera-120, disposable-flash,
+midcentury-rangefinder, autochrome - cameras that never advanced a
+frame in history). superjuice refuses only the instants, where the
+output medium itself cannot do motion: a Polaroid is constitutionally a
+single frame. Counterfactuals roll freely with a one-line disclosure -
+"never shot motion; treating it as an imaginary movie camera" - because
+they violate history, not physics, and imagining the movie camera
+Lumiere never built from his own Autochrome plates is half the fun.
+
 One command, movie in, vintage movie out:
 
 ```sh

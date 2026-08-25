@@ -216,6 +216,22 @@ int main(int argc, char **argv)
                 "cameras do not shoot movies\n", camera);
         return EXIT_FAILURE;
     }
+    /* Motion taxonomy, disclosed rather than enforced: some cameras never
+     * advanced a frame in history. Physics is refused (instants above);
+     * history merely gets a footnote - these are counterfactual movie
+     * cameras, imagined with their stills optics. */
+    {
+        static const char *counterfactual[] = {
+            "toy-camera-120", "disposable-flash", "midcentury-rangefinder",
+            "autochrome", NULL };
+        for (size_t i = 0; counterfactual[i]; ++i)
+            if (!strcmp(camera, counterfactual[i])) {
+                fprintf(stderr, "note: %s never shot motion; treating it "
+                        "as an imaginary movie camera with its optics\n",
+                        camera);
+                break;
+            }
+    }
 
     char *film_path = NULL;
     if (film_request) {

@@ -42,6 +42,16 @@ fi
 grep -q "still-print" "$TMP/refuse" || {
     echo "test_movie: refusal message missing"; exit 1; }
 
+# counterfactual cameras roll with a disclosure note; motion-native stay quiet
+./superjuice -c toy-camera-120 --no-film --seed 2 \
+    < "$TMP/in.y4m" > /dev/null 2>"$TMP/note"
+grep -q "never shot motion" "$TMP/note" || {
+    echo "test_movie: counterfactual note missing"; exit 1; }
+./superjuice -c super8 --no-film --seed 2 \
+    < "$TMP/in.y4m" > /dev/null 2>"$TMP/quiet"
+grep -q "never shot motion" "$TMP/quiet" && {
+    echo "test_movie: super8 wrongly flagged counterfactual"; exit 1; }
+
 # file mode: one command in, playable mp4 with audio passthrough out
 ffmpeg -v error -y -f lavfi -i "testsrc2=size=320x240:rate=12:duration=1" \
     -f lavfi -i "sine=frequency=440:duration=1" \
