@@ -1,0 +1,14 @@
+#!/bin/sh
+# pjdeploy - one-word polajuice release. Install once: cp to ~/bin.
+# Finds the newest polajuice-*.tar.gz in ~/Downloads (or takes one as
+# $1), extracts it in the house directory, and hands off to that
+# tarball's own release.sh, which derives tag and message itself.
+set -eu
+HOUSE=${POLAJUICE_HOUSE:-$HOME/work/c_progs/polajuice}
+TARBALL=${1:-$(ls -t "$HOME/Downloads"/polajuice-*.tar.gz 2>/dev/null | head -1)}
+[ -n "$TARBALL" ] && [ -f "$TARBALL" ] || {
+    echo "pjdeploy: no polajuice tarball found in ~/Downloads" >&2; exit 1; }
+echo "== deploying $(basename "$TARBALL")"
+cd "$HOUSE"
+tar xzf "$TARBALL"
+exec sh polajuice-src/scripts/release.sh

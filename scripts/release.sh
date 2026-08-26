@@ -8,18 +8,29 @@
 #   - builds and runs the test suite from the repo state before committing
 #   - never uses rm -rf, never force-pushes
 #
-# Usage: sh scripts/release.sh /path/to/repo vX.Y.Z [commit-message-file]
-# Run from the root of the extracted release tree.
+# Usage: sh scripts/release.sh [/path/to/repo] [vX.Y.Z] [message-file]
+# Run from the root of the extracted release tree (or invoke by path -
+# the script locates its own tree). Every argument is derivable and
+# optional: the repo defaults to the sibling directory named polajuice,
+# the tag to v$(cat VERSION), the message file to COMMIT_MSG_$VERSION.
+# The zero-argument ritual:
+#     cd ~/work/c_progs/polajuice
+#     tar xzf ~/Downloads/polajuice-X.Y.Z.tar.gz
+#     sh polajuice-src/scripts/release.sh
 
 set -eu
 
-REPO="${1:?usage: release.sh /path/to/repo vX.Y.Z [message-file]}"
-TAG="${2:?usage: release.sh /path/to/repo vX.Y.Z [message-file]}"
-MSGFILE="${3:-}"
-
-SRC=$(pwd)
+SRC=$(cd "$(dirname "$0")/.." && pwd)
 [ -f "$SRC/include/polajuice.h" ] || {
-    echo "run this from the root of the release tree" >&2; exit 1; }
+    echo "cannot locate the release tree from $0" >&2; exit 1; }
+cd "$SRC"
+
+TREE_VERSION=$(cat "$SRC/VERSION")
+REPO="${1:-$(dirname "$SRC")/polajuice}"
+TAG="${2:-v$TREE_VERSION}"
+MSGFILE="${3:-COMMIT_MSG_$TREE_VERSION}"
+[ -f "$SRC/$MSGFILE" ] || MSGFILE=""
+echo "== releasing $TAG to $REPO${MSGFILE:+ (message: $MSGFILE)}"
 [ -d "$REPO/.git" ] || { echo "$REPO is not a git repository" >&2; exit 1; }
 
 # tripwires for the double-extraction failure class: a nested staging

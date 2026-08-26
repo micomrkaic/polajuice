@@ -1,0 +1,15 @@
+1.11.0: the zero-argument release
+
+Every release argument was derivable, so now it derives: release.sh
+defaults the repo to the sibling directory named polajuice, the tag to
+v$(cat VERSION), and the message file to COMMIT_MSG_$VERSION. It also
+locates its own tree, so it can be invoked by path from the parent
+directory. The ritual shrinks to: untar, sh
+polajuice-src/scripts/release.sh. Explicit arguments still override
+everything (the e2e harness uses them), and every existing preflight
+guard is unchanged.
+
+scripts/pjdeploy is the optional one-time-install wrapper (copy to
+~/bin) that collapses the ritual to a single word: it finds the newest
+polajuice tarball in ~/Downloads, extracts it in the house directory,
+and hands off to that tarball's own release.sh.
