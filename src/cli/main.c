@@ -184,7 +184,7 @@ static int apply(int argc, char **argv)
             processes[0] == '\0' && !any_film) {
             fprintf(stderr,
                     "polajuice: %s is a sealed process and takes no film "
-                    "(the plate or dye-transfer process is the medium); "
+                    "(the plate, cassette or dye-transfer process is the medium); "
                     "use --any-film to override\n", camera);
             return EXIT_FAILURE;
         }

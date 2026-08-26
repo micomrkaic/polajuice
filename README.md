@@ -31,9 +31,14 @@ formats, full stop), **motion-plausible** (the 35mm family - 35mm is
 the cinema gauge, and cinestill-night is literally motion-picture
 stock), and **motion-counterfactual** (toy-camera-120, disposable-flash,
 midcentury-rangefinder, autochrome - cameras that never advanced a
-frame in history). superjuice refuses only the instants, where the
-output medium itself cannot do motion: a Polaroid is constitutionally a
-single frame. Counterfactuals roll freely with a one-line disclosure -
+frame in history). superjuice refuses only the instant still cameras, where the output
+medium cannot do motion: a Polaroid print is constitutionally a single
+frame. History supplies exactly one exception, and it is in the camera
+list: **polavision**, Polaroid's 1977 instant movie system - additive-
+color phototape in a sealed cassette, self-developed in ninety seconds,
+projected dim through its own player, off the market by 1979. Dim,
+muted, softly flickering, with Autochrome-descended colored grain: Land's
+magnificent folly, and the one true instant movie camera. Counterfactuals roll freely with a one-line disclosure -
 "never shot motion; treating it as an imaginary movie camera" - because
 they violate history, not physics, and imagining the movie camera
 Lumiere never built from his own Autochrome plates is half the fun.

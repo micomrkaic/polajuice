@@ -54,7 +54,7 @@ static PjLut3D *make_identity_lut(PjError *error)
 int main(void)
 {
     PjError error = {{0}};
-    assert(pj_preset_count() >= 13);
+    assert(pj_preset_count() >= 14);
     assert(pj_preset_description("35mm-negative") != NULL);
     assert(pj_preset_description("does-not-exist") == NULL);
 

@@ -200,3 +200,17 @@ collections used here derive from measured film references; the scalar
 engines (autochrome, technicolor-3strip, and every camera's no-film
 fallback) are process-informed stylizations. Each look's entry above
 says which it is.
+
+## polavision (1.8.0)
+
+Polavision (1977-79) used additive color: a microscopic linear RGB
+filter screen over black-and-white emulsion, Autochrome's principle at
+movie speed, in a sealed self-developing cassette. The additive screen
+transmitted little light, so the projected image was dim, muted and
+low-contrast, with visible colored grain structure. The preset is a
+process-informed stylization of period descriptions and surviving
+transfers: reduced exposure and saturation, lifted blacks, strong
+chroma grain, Super-8-gauge gate, and motion character (weave, player
+flicker) tuned to the home-movie register. No measured characterization
+of Polavision phototape is known to exist; this is the inspired-by tier
+and says so.

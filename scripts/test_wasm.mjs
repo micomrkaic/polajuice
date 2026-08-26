@@ -7,7 +7,7 @@ import { createEngine } from "../web/engine.js";
 const engine = await createEngine(await readFile(new URL("../web/polajuice.wasm", import.meta.url)));
 const version = await engine.version();
 const cameras = await engine.cameras();
-if (cameras.length < 13) throw new Error("camera enumeration short: " + cameras.length);
+if (cameras.length < 14) throw new Error("camera enumeration short: " + cameras.length);
 const polaroid = cameras.find(c => c.name === "polaroid-600");
 if (!polaroid || polaroid.film !== "polaroid_px-680")
     throw new Error("canonical film wiring broken");

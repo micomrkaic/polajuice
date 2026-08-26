@@ -224,6 +224,31 @@ static const PjPreset presets[] = {
         .shadow_tint = {0.004f,0.003f,-0.002f},
         .highlight_tint = {0.014f,0.010f,-0.006f},
         .crop_aspect = 1.333f
+    },
+    {
+        .name = "polavision",
+        /* Polaroid's 1977 instant movie system: additive-color phototape
+         * in a sealed cassette, self-developed in 90 seconds, projected
+         * dim through its own viewer. A magnificent flop (1977-79) and
+         * history's answer to "instant cameras do not shoot movies."
+         * Additive linear filter screen = low transmission: dim, muted,
+         * low contrast, strong colored grain - Autochrome's grandchild.
+         * Motion-native: camera weave and player flicker built in. */
+        .weave = 0.0045f, .weave_period = 4.0f, .flicker_ev = 0.070f,
+        .film_processes = 0,   /* sealed cassette: the film IS the system */
+        .description = "Polavision instant movie: dim additive color, Land's folly",
+        .exposure_ev = -0.25f, .contrast = 0.88f, .black_lift = 0.045f,
+        .highlight_rolloff = 0.62f, .saturation = 0.62f,
+        .temperature = 0.008f, .tint = 0.004f, .vignette = 0.20f,
+        .softness = 0.50f, .halation = 0.030f, .halation_radius = 4,
+        .grain = 0.062f, .grain_scale = 1.8f, .grain_midtone_bias = 0.50f,
+        .grain_chroma = 1.0f,
+        .fade = 0.10f,
+        .matrix = {1.014f,-0.006f,-0.008f, -0.008f,1.010f,-0.002f, -0.006f,-0.010f,1.012f},
+        .channel_gamma = {0.99f,1.00f,1.02f},
+        .shadow_tint = {0.004f,0.004f,0.000f},
+        .highlight_tint = {0.010f,0.008f,-0.004f},
+        .crop_aspect = 1.310f   /* Super-8-gauge gate, its physical base */
     }
 };
 

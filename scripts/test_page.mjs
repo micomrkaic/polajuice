@@ -85,7 +85,7 @@ await unlink(probe);
 
 const status = elems["status"].textContent;
 if (elems["status"].className === "error") throw new Error("boot errored: " + status);
-if (elems["camera"].options.length < 13) throw new Error("camera dropdown not populated");
+if (elems["camera"].options.length < 14) throw new Error("camera dropdown not populated");
 console.log(`page boot ok: "${status}", ${elems["camera"].options.length} cameras, version ${elems["version"].textContent}`);
 
 // Rendering itself is covered by test_wasm.mjs through the same engine.js;

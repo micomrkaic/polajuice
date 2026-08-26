@@ -57,6 +57,7 @@ expect polaroid-packfilm 669 allow;      expect polaroid-packfilm px-100uv refus
 expect autochrome provia refuse;         expect autochrome portra_400 refuse
 expect autochrome hp_5 refuse
 expect technicolor-3strip provia refuse; expect technicolor-3strip portra_400 refuse
+expect polavision provia refuse;         expect polavision px-100uv refuse
 # print stocks: never valid as camera film, always valid as --print
 expect 35mm-negative synthetic_cine_print refuse
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film \
@@ -72,4 +73,4 @@ POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-slide -f px-100uv \
     --any-film -o "$OUT" >/dev/null 2>&1 || {
     echo "test_compat: --any-film override broken" >&2; exit 1; }
 rm -f "$IN" "$OUT"
-echo "compatibility matrix tests passed (31 cells + override)"
+echo "compatibility matrix tests passed (35 cells + override)"
