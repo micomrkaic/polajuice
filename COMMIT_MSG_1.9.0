@@ -1,0 +1,14 @@
+1.9.0: super8ify grows up - sound modes and the audiotard knob rack
+
+The script has become the front door, so the sound gets first-class
+controls. SOUND selects the mode: stripe (audiotard tape mangle, the
+default), clean (original audio untouched - stream-copied when the
+container allows, re-encoded otherwise), or silent (period-correct;
+SILENT=yes remains as a compatible alias). Inputs without audio fall
+through to silent gracefully.
+
+The stripe chain's knobs are all environment variables now: WOW,
+FLUTTER, HISS, DRIVE, SHAPE, BAND=lo:hi for the projector-speaker
+window, and AT_EXTRA for verbatim extra audiotard arguments -
+AT_EXTRA="--vinyl" for deliberately wrong-era sound. Unknown SOUND
+values are refused at the door with the valid set named.
