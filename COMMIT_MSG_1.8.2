@@ -1,0 +1,9 @@
+1.8.2: super8ify defers film choice to the engine
+
+The script defaulted FILM to kodak_kodachrome_64 for every camera - an
+opinion appropriate to super8 and fatal to sealed processes (and wrong
+chemistry for bw-35). Unset FILM now omits -f entirely, letting
+superjuice apply each camera's canonical film: Ektachrome for super8,
+Portra for 35mm-negative, scalar engine for the sealed. FILM=none still
+forces scalar; explicit FILM= still wins. The banner says "canonical"
+when deferring. Kodachrome remains one assignment away.

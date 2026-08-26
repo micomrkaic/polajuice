@@ -8,7 +8,10 @@
 #
 # Tunables (environment variables, defaults in brackets):
 #   CAMERA   [super8]               polajuice camera
-#   FILM     [kodak_kodachrome_64]  film stock; "none" = scalar engine
+#   FILM     [camera's canonical]  film stock; unset lets superjuice pick
+#                                  the camera's own default (sealed cameras
+#                                  take none); "none" forces scalar engine;
+#                                  FILM=kodak_kodachrome_64 says 1962
 #   AGE      [0.25]                 0 fresh .. 1 attic
 #   SEED     [7]                    grain seed
 #   FPS      [18]                   Super 8 ran at 18
@@ -27,7 +30,7 @@ IN=$1
 [ -f "$IN" ] || { echo "super8ify: no such file: $IN" >&2; exit 1; }
 
 CAMERA=${CAMERA:-super8}
-FILM=${FILM:-kodak_kodachrome_64}
+FILM=${FILM:-}
 
 base=$(basename "$IN")
 stem=${base%.*}
@@ -66,17 +69,17 @@ SJ_DIR=$(dirname "$SUPERJUICE")
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-echo "== reel: $IN -> $OUT ($CAMERA / $FILM, age $AGE, ${FPS} fps)"
+echo "== reel: $IN -> $OUT ($CAMERA / ${FILM:-canonical}, age $AGE, ${FPS} fps)"
 
 # ---- picture ----------------------------------------------------------
 ffmpeg -v error -i "$IN" -vf "fps=$FPS,scale=-2:$HEIGHT" \
        -f yuv4mpegpipe -pix_fmt yuv420p - \
   | ( cd "$SJ_DIR" && \
-      if [ "$FILM" = "none" ]; then \
-          ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED"; \
-      else \
-          ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED"; \
-      fi ) \
+      case "$FILM" in \
+      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" ;; \
+      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" ;; \
+      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" ;; \
+      esac ) \
   | ffmpeg -v error -y -f yuv4mpegpipe -i - \
        -vf 'crop=trunc(iw/2)*2:trunc(ih/2)*2' \
        -c:v libx264 -crf 18 -pix_fmt yuv420p "$WORK/reel.mp4"
