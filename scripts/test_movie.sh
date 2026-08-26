@@ -42,6 +42,12 @@ fi
 grep -q "still-print" "$TMP/refuse" || {
     echo "test_movie: refusal message missing"; exit 1; }
 
+# motion scale changes the reel
+./superjuice -c super8 --no-film --seed 7 --motion-scale 3 \
+    < "$TMP/in.y4m" > "$TMP/out_m3.y4m" 2>/dev/null
+cmp -s "$TMP/out.y4m" "$TMP/out_m3.y4m" && {
+    echo "test_movie: motion-scale had no effect"; exit 1; }
+
 # counterfactual cameras roll with a disclosure note; motion-native stay quiet
 ./superjuice -c toy-camera-120 --no-film --seed 2 \
     < "$TMP/in.y4m" > /dev/null 2>"$TMP/note"

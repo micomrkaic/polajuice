@@ -629,9 +629,12 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     bool temporal = options && options->temporal;
     int64_t frame = options ? options->frame : 0;
     if (temporal) {
-        apply_gate_weave(image, preset->weave * strength,
+        float motion = options && options->motion_scale > 0.0f
+                     ? options->motion_scale : 1.0f;
+        apply_gate_weave(image, preset->weave * strength * motion,
                          preset->weave_period, seed, frame);
-        apply_flicker(image, preset->flicker_ev * strength, seed, frame);
+        apply_flicker(image, preset->flicker_ev * strength * motion,
+                      seed, frame);
     }
     apply_direct_flash(image, preset, strength);
     apply_softness(image, preset->softness * strength);

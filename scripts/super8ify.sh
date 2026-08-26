@@ -16,6 +16,8 @@
 #   SEED     [7]                    grain seed
 #   FPS      [18]                   Super 8 ran at 18
 #   HEIGHT   [720]                  proxy height; real Super 8 resolved less
+#   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
+#                                   2 = worn projector, 0 = tripod-locked
 #   SOUND    [stripe]              stripe = audiotard tape mangle;
 #                                   clean = original audio untouched;
 #                                   silent = no audio (period-correct)
@@ -54,6 +56,7 @@ AGE=${AGE:-0.25}
 SEED=${SEED:-7}
 FPS=${FPS:-18}
 HEIGHT=${HEIGHT:-720}
+MOTION=${MOTION:-1}
 SOUND=${SOUND:-stripe}
 WOW=${WOW:-14}
 FLUTTER=${FLUTTER:-10}
@@ -98,9 +101,9 @@ ffmpeg -v error -i "$IN" -vf "fps=$FPS,scale=-2:$HEIGHT" \
        -f yuv4mpegpipe -pix_fmt yuv420p - \
   | ( cd "$SJ_DIR" && \
       case "$FILM" in \
-      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" ;; \
-      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" ;; \
-      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" ;; \
+      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ;; \
+      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ;; \
+      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ;; \
       esac ) \
   | ffmpeg -v error -y -f yuv4mpegpipe -i - \
        -vf 'crop=trunc(iw/2)*2:trunc(ih/2)*2' \

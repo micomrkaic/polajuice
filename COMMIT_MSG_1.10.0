@@ -1,0 +1,12 @@
+1.10.0: weave calibrated against reality, motion-scale knob
+
+Field report: on real, steady 720p footage the gate weave was
+practically unobservable - the noise driver rarely reaches nominal
+amplitude, and encoding smooths the remainder. Weave and flicker
+defaults roughly double (super8 0.0040->0.0085, autochrome
+0.0060->0.0110, polavision 0.0045->0.0080, technicolor stays
+watchmaker-steady at 0.0028), and calibration moves to the terminal:
+pj_render gains motion_scale, superjuice --motion-scale, and super8ify
+MOTION= - scaling weave and flicker together, grain untouched, 0 for
+tripod-locked, 2 for a worn projector. Core and movie suites assert
+the scale changes the render.

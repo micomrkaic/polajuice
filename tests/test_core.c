@@ -131,6 +131,21 @@ int main(void)
         assert(diff / (float)n > 0.001f);   /* frames visibly differ */
         assert(identical);                  /* same frame is deterministic */
     }
+    /* motion_scale must change the temporal render (weave amplitude) */
+    PjRenderOptions m3 = m0;
+    m3.motion_scale = 3.0f;
+    PjImage *f0s = pj_render(mcard, "super8", &m3, &error);
+    assert(f0s);
+    {
+        const float *a = pj_image_pixels_const(f0);
+        const float *b = pj_image_pixels_const(f0s);
+        size_t n = pj_image_width(f0) * pj_image_height(f0) * 3;
+        bool differs = false;
+        for (size_t i = 0; i < n; ++i)
+            if (a[i] != b[i]) { differs = true; break; }
+        assert(differs);
+    }
+    pj_image_free(f0s);
     pj_image_free(f0); pj_image_free(f7); pj_image_free(f0b);
     PjRenderOptions still_a = {.seed = 5, .strength = 1.0f, .frame = 0};
     PjRenderOptions still_b = {.seed = 5, .strength = 1.0f, .frame = 99};

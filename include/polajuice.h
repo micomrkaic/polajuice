@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 9
+#define PJ_VERSION_MINOR 10
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -39,6 +39,9 @@ typedef struct {
                     exactly as before. */
     int64_t frame;  /* frame index when temporal; also usable from a
                     stills front-end to render "frame N of a reel". */
+    float motion_scale;  /* scales gate weave and flicker amplitudes;
+                    0 uses the default of 1.0. Grain is unaffected.
+                    The calibration knob for matching real transports. */
     const PjLut3D *color_lut;
     const PjLut3D *print_lut;   /* optional print/scan stock transform,
                     chained after the film transform - the cinema
