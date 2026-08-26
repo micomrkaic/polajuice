@@ -42,7 +42,7 @@ static const PjPreset presets[] = {
     },
     {
         .name = "super8",
-        .weave = 0.0085f, .weave_period = 4.0f, .flicker_ev = 0.070f,
+        .weave = 0.0170f, .weave_period = 4.0f, .flicker_ev = 0.140f,
         .film_processes = PJ_FILM_SLIDE,
         .default_film = "kodak_ektachrome_100_vs",
         .description = "Super 8 reversal frame: 1.36:1 gate, coarse grain, halation",
@@ -234,7 +234,7 @@ static const PjPreset presets[] = {
          * Additive linear filter screen = low transmission: dim, muted,
          * low contrast, strong colored grain - Autochrome's grandchild.
          * Motion-native: camera weave and player flicker built in. */
-        .weave = 0.0080f, .weave_period = 4.0f, .flicker_ev = 0.085f,
+        .weave = 0.0160f, .weave_period = 4.0f, .flicker_ev = 0.170f,
         .film_processes = 0,   /* sealed cassette: the film IS the system */
         .description = "Polavision instant movie: dim additive color, Land's folly",
         .exposure_ev = -0.25f, .contrast = 0.88f, .black_lift = 0.045f,
