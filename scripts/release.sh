@@ -22,6 +22,20 @@ SRC=$(pwd)
     echo "run this from the root of the release tree" >&2; exit 1; }
 [ -d "$REPO/.git" ] || { echo "$REPO is not a git repository" >&2; exit 1; }
 
+# tripwires for the double-extraction failure class: a nested staging
+# tree in the source means the tarball was untarred from inside
+# polajuice-src (it would be imported and committed wholesale); one
+# already inside the repo means a past mis-extraction needs cleaning.
+[ -d "$SRC/polajuice-src" ] && {
+    echo "source tree contains a nested polajuice-src/ - the tarball was" >&2
+    echo "extracted from the wrong directory. Untar from the parent" >&2
+    echo "directory (the one CONTAINING polajuice-src), then retry." >&2
+    exit 1; }
+[ -d "$REPO/polajuice-src" ] && {
+    echo "the repo contains a stray polajuice-src/ tree - remove it" >&2
+    echo "(and commit the removal if tracked) before releasing." >&2
+    exit 1; }
+
 PAGE_V=$(grep -o 'PAGE_VERSION = "[^"]*"' "$SRC/web/index.html" | cut -d'"' -f2)
 TREE_V=$(cat "$SRC/VERSION")
 [ "$PAGE_V" = "$TREE_V" ] || {

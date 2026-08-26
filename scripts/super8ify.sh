@@ -26,12 +26,18 @@ set -eu
 IN=$1
 [ -f "$IN" ] || { echo "super8ify: no such file: $IN" >&2; exit 1; }
 
-base=$(basename "$IN")
-stem=${base%.*}
-OUT=${2:-"${stem}_super8.mp4"}
-
 CAMERA=${CAMERA:-super8}
 FILM=${FILM:-kodak_kodachrome_64}
+
+base=$(basename "$IN")
+stem=${base%.*}
+OUT=${2:-"${stem}_${CAMERA}.mp4"}
+case "$OUT" in *=*)
+    echo "super8ify: output name '$OUT' contains '=' - did you mean to put" >&2
+    echo "  VAR=value assignments BEFORE the command? e.g.:" >&2
+    echo "  CAMERA=polavision FILM=none $0 $IN" >&2
+    exit 2 ;;
+esac
 AGE=${AGE:-0.25}
 SEED=${SEED:-7}
 FPS=${FPS:-18}

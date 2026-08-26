@@ -1,0 +1,7 @@
+1.8.1: super8ify names reels after their camera
+
+The output default was hardcoded to _super8.mp4 regardless of CAMERA; a
+polavision reel now lands as INPUT_polavision.mp4. Also guards against
+the misplaced-environment-variable mistake: an output name containing
+'=' (the fingerprint of CAMERA=... typed after the command) is refused
+with the corrected invocation shown.

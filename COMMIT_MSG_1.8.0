@@ -13,3 +13,8 @@ The sealed-process message now mentions cassettes; the frozen matrix
 grows to 35 cells; camera-count assertions rise to 14; PRESET_SOURCES
 records the inspired-by honesty (no measured Polavision
 characterization is known to exist).
+
+Release tripwires: refuse a nested polajuice-src/ in the staging tree
+(the double-extraction that once swept a whole nested tree into the
+repo and committed it) and a stray one inside the repo, each with the
+remedy in the message.
