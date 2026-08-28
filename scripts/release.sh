@@ -26,6 +26,32 @@ SRC=$(cd "$(dirname "$0")/.." && pwd)
 cd "$SRC"
 
 TREE_VERSION=$(cat "$SRC/VERSION")
+
+# --restage: redeploy gh-pages from the CURRENT repo state (fresh film
+# staging included) without importing, committing, tagging or touching
+# main. For when the film library changed but the source did not -
+# e.g. after fetch_luts.sh --rawtherapee converts a new collection.
+if [ "${1:-}" = "--restage" ]; then
+    REPO="${2:-$(dirname "$SRC")/polajuice}"
+    [ -d "$REPO/.git" ] || { echo "$REPO is not a git repository" >&2; exit 1; }
+    cd "$REPO"
+    echo "== restaging films and redeploying gh-pages (no release)"
+    sh scripts/stage_web_films.sh
+    sh scripts/deploy_pages.sh 2>/dev/null || {
+        # inline deploy, mirroring the release path
+        STAGING_BRANCH=gh-pages-staging
+        git worktree remove --force /tmp/pj-pages 2>/dev/null || true
+        git branch -D "$STAGING_BRANCH" 2>/dev/null || true
+        git worktree add -q /tmp/pj-pages -b "$STAGING_BRANCH"
+        cp -R "$REPO/web/." /tmp/pj-pages/
+        ( cd /tmp/pj-pages && git add -A &&           git commit -qm "pages restage: film catalog update" &&           git push -q -f origin "$STAGING_BRANCH:gh-pages" )
+        git worktree remove --force /tmp/pj-pages
+        git branch -D "$STAGING_BRANCH" 2>/dev/null || true
+    }
+    echo "== done: gh-pages restaged from current repo (main untouched)"
+    exit 0
+fi
+
 REPO="${1:-$(dirname "$SRC")/polajuice}"
 TAG="${2:-v$TREE_VERSION}"
 MSGFILE="${3:-COMMIT_MSG_$TREE_VERSION}"

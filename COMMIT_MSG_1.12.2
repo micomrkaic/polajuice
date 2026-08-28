@@ -1,0 +1,9 @@
+1.12.2: release.sh --restage - deploy film changes without a release
+
+The self-completing catalog stages at release time only, but the film
+library changes independently of source (fetch_luts.sh --rawtherapee
+being the canonical case), and re-releasing an existing version is
+rightly refused. release.sh --restage redeploys gh-pages from the
+current repo state - fresh staging included - touching neither main
+nor tags. The two-step "convert the collection, put it on the page"
+becomes: fetch --rawtherapee, release.sh --restage.
