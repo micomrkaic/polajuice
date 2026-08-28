@@ -5,7 +5,7 @@
 # tarball's own release.sh, which derives tag and message itself.
 set -eu
 HOUSE=${POLAJUICE_HOUSE:-$HOME/work/c_progs/polajuice}
-TARBALL=${1:-$(ls -t "$HOME/Downloads"/polajuice-*.tar.gz 2>/dev/null | head -1)}
+TARBALL=${1:-$(ls "$HOME/Downloads"/polajuice-*.tar.gz 2>/dev/null | sort -V | tail -1)}
 [ -n "$TARBALL" ] && [ -f "$TARBALL" ] || {
     echo "pjdeploy: no polajuice tarball found in ~/Downloads" >&2; exit 1; }
 echo "== deploying $(basename "$TARBALL")"

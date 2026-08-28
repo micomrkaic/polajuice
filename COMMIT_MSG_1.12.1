@@ -1,0 +1,15 @@
+1.12.1: level-12 HaldCLUTs convert; pjdeploy picks by version
+
+First contact with the real RawTherapee collection: it ships level-12
+HaldCLUTs (lattice 144), which the converter refused against the
+engine's 128 cap. Raising the cap was wrong (a 144^3 cube is ~60MB of
+text per stock); the converter now resamples large lattices onto 64
+points trilinearly - endpoints exact, interior error second-order.
+The first fix attempt (integer stride) was rejected by its own test:
+143 intervals factor as 11x13, so striding cannot preserve the top
+node, shrinking full scale by 1.4%. The resample audits at 0.44/255
+worst node deviation (pure 8-bit quantization) against a synthesized
+level-12 identity, and renders within JPEG noise of a native identity.
+
+pjdeploy now selects the tarball by version sort rather than file
+date, so a re-downloaded old tarball can never shadow a new release.
