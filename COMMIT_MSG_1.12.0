@@ -1,0 +1,17 @@
+1.12.0: completing the canon - neopan staged, connoisseur tier self-completing
+
+Fuji Neopan 1600, the push-process street legend, was in the fetched
+packs all along but never staged: now in a Fuji black-and-white family,
+with a filmlib stem override classifying it (and Acros) as B+W despite
+shelving in the color-negative pack - bw-35 takes it, 35mm-negative
+refuses, both frozen in the matrix (37 cells).
+
+The connoisseur stocks - Ektar, Acros, Scala, SFX/HIE/Rollei infrared,
+redscale, Natura - live in the RawTherapee collection behind
+fetch_luts.sh --rawtherapee. Rather than guess their stems, the catalog
+becomes self-completing: families may declare GLOB: patterns, staged
+with dedup whenever matching cubes exist, so fetching the collection
+populates Kodak color negative (Ektar), Fuji black-and-white (Acros),
+Infrared, and Redscale automatically on the next release. Kodak Portra
+family renamed Kodak color negative to make room. Verified against a
+simulated future library; README documents the one-command unlock.

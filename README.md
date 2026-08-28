@@ -306,6 +306,25 @@ web page groups the film library into historical families (Kodachrome,
 Ektachrome, the Portra generations, the Ilford speed ladder, the
 Polaroid chemistries and more) with process labels and notes.
 
+### The connoisseur tier
+
+The staged catalog covers the icons from the standard fetch; the deep
+cuts - Ektar, Acros, Scala, the infrareds (SFX, HIE, Rollei IR),
+redscale, Natura - live in the RawTherapee Film Simulation Collection,
+a 402 MB archive of largely measured-from-film HaldCLUTs. One command
+unlocks them:
+
+```sh
+sh scripts/fetch_luts.sh --rawtherapee   # needs python3 + Pillow
+```
+
+The catalog is self-completing: those families are declared as glob
+patterns, so whatever the collection's exact stems turn out to be, the
+next release stages them into their proper process families - Ektar
+beside the Portras, Acros beside Neopan 1600 (which ships in the
+standard packs and is staged as of this release), the infrareds in
+their own family. Nothing to edit; fetch, release, they appear.
+
 Aging is not a camera: `--age 0..1` (a slider on the web) is a third axis
 alongside camera and film - base fog with magenta drift, contrast decay
 and desaturation that composes with any camera and any film, applied

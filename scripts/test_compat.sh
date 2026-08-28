@@ -8,8 +8,8 @@ cd "$(dirname "$0")/.."
 
 LIB=$(mktemp -d)
 trap 'rm -rf "$LIB"' EXIT
-mkdir -p "$LIB/colorslide" "$LIB/negative_new" "$LIB/bw" \
-         "$LIB/instant_consumer" "$LIB/instant_pro"
+mkdir -p "$LIB/colorslide" "$LIB/negative_new" "$LIB/negative_old" \
+         "$LIB/bw" "$LIB/instant_consumer" "$LIB/instant_pro"
 cube() { printf 'TITLE "t"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n' > "$1"; }
 cube "$LIB/colorslide/fuji_provia_100f.cube"
 cube "$LIB/colorslide/kodak_kodachrome_64.cube"
@@ -18,6 +18,7 @@ cube "$LIB/negative_new/kodak_portra_400.cube"
 cube "$LIB/bw/ilford_hp_5_plus_400.cube"
 cube "$LIB/instant_consumer/polaroid_px-100uv+_warm.cube"
 cube "$LIB/instant_pro/polaroid_669.cube"
+cube "$LIB/negative_old/fuji_neopan_1600.cube"
 mkdir -p "$LIB/../prints"
 cube "$LIB/../prints/synthetic_cine_print.cube"
 export POLAJUICE_PRINTS="$LIB/../prints"
@@ -58,6 +59,10 @@ expect autochrome provia refuse;         expect autochrome portra_400 refuse
 expect autochrome hp_5 refuse
 expect technicolor-3strip provia refuse; expect technicolor-3strip portra_400 refuse
 expect polavision provia refuse;         expect polavision px-100uv refuse
+# neopan is B+W despite its shelf: bw camera takes it, negative camera refuses
+expect bw-35 neopan_1600 allow
+expect 35mm-negative neopan_1600 refuse
+
 # print stocks: never valid as camera film, always valid as --print
 expect 35mm-negative synthetic_cine_print refuse
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film \
@@ -73,4 +78,4 @@ POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-slide -f px-100uv \
     --any-film -o "$OUT" >/dev/null 2>&1 || {
     echo "test_compat: --any-film override broken" >&2; exit 1; }
 rm -f "$IN" "$OUT"
-echo "compatibility matrix tests passed (35 cells + override)"
+echo "compatibility matrix tests passed (37 cells + override)"

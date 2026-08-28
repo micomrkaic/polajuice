@@ -117,6 +117,8 @@ const char *film_process_of(const char *path)
     if (strstr(path, "/prints/") || strstr(path, "prints/synthetic_") ||
         !strncmp(stem, "synthetic_", 10))
         return "print";
+    if (!strncmp(stem, "fuji_neopan", 11) || !strncmp(stem, "fuji_acros", 10))
+        return "bw";   /* B+W stocks shelved in the color-negative pack */
     if (strstr(path, "instant_consumer")) return "integral";
     if (strstr(path, "instant_pro")) return "pack";
     if (strstr(path, "colorslide")) return "slide";
