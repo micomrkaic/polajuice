@@ -11,7 +11,7 @@ extern "C" {
 
 #define PJ_VERSION_MAJOR 1
 #define PJ_VERSION_MINOR 12
-#define PJ_VERSION_PATCH 2
+#define PJ_VERSION_PATCH 3
 
 typedef struct PjImage PjImage;
 typedef struct PjLut3D PjLut3D;

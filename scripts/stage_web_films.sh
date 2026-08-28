@@ -72,14 +72,15 @@ echo "$CATALOG" | while IFS='|' read -r name process note stems; do
         case "$stem" in
         GLOB:*)
             pattern=${stem#GLOB:}
-            matches=$(find "$LIB" "$PRINTS" -name "$pattern.cube" \
-                          2>/dev/null | sort) ;;
+            find "$LIB" "$PRINTS" -name "$pattern.cube" 2>/dev/null \
+                | sort > "$STATE.matches" ;;
         *)
-            matches=$(find "$LIB" "$PRINTS" -name "$stem.cube" -print -quit \
-                          2>/dev/null)
-            [ -z "$matches" ] && echo "   (optional, not present: $stem)" >&2 ;;
+            find "$LIB" "$PRINTS" -name "$stem.cube" -print -quit \
+                2>/dev/null > "$STATE.matches"
+            [ -s "$STATE.matches" ] || echo "   (optional, not present: $stem)" >&2 ;;
         esac
-        for found in $matches; do
+        while read -r found; do
+            [ -n "$found" ] || continue
             actual=$(basename "$found" .cube)
             grep -qx "$actual" "$STATE.seen" && continue   # dedup
             echo "$actual" >> "$STATE.seen"
@@ -87,7 +88,7 @@ echo "$CATALOG" | while IFS='|' read -r name process note stems; do
             printf '%d' "$(( $(cat "$STATE.total") + 1 ))" > "$STATE.total"
             entry=$(printf '{"stem":"%s","blurb":"%s"}' "$actual" "$(blurb_for "$actual")")
             fam_json="$fam_json${fam_json:+,}$entry"
-        done
+        done < "$STATE.matches"
     done
     [ -n "$fam_json" ] || continue
     prev=$(cat "$STATE.families")
@@ -98,7 +99,7 @@ done
 
 families=$(cat "$STATE.families")
 total=$(cat "$STATE.total")
-rm -f "$STATE.families" "$STATE.total" "$STATE.seen"
+rm -f "$STATE.families" "$STATE.total" "$STATE.seen" "$STATE.matches"
 
 if [ "$#" -gt 0 ]; then
     extra=""

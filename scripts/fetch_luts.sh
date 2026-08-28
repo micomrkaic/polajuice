@@ -86,12 +86,19 @@ if [ "$RT" -eq 1 ]; then
     if [ -f "$zip" ]; then
         unzip -oq "$zip" -d "$dir" || failures=$((failures + 1))
         echo "== rawtherapee: converting HaldCLUT PNGs to .cube"
+        # cubes land FLAT in $dir with house-style stems: lowercase,
+        # spaces -> underscores, parentheses dropped - so catalog globs
+        # match, shell loops never split, and the CLI resolves them.
         find "$dir" -name '*.png' | while read -r png; do
-            cube="${png%.png}.cube"
+            stem=$(basename "$png" .png | tr 'A-Z ' 'a-z_' | tr -d "()'" )
+            cube="$dir/$stem.cube"
             [ -f "$cube" ] && [ "$FORCE" -eq 0 ] && continue
             python3 "$(dirname "$0")/../tools/haldclut2cube.py" "$png" "$cube" \
                 || echo "!! conversion failed: $png" >&2
         done
+        stray=$(find "$dir" -mindepth 2 -name '*.cube' | wc -l)
+        [ "$stray" -gt 0 ] && echo "== note: $stray old nested .cube files remain from a previous run;" \
+            "remove with: find $dir -mindepth 2 -name '*.cube' -delete" >&2
     fi
 fi
 

@@ -1,0 +1,13 @@
+1.12.3: RawTherapee cubes get house-style stems
+
+Second contact with the real collection: conversions preserved the
+archive's original filenames - "Kodak Ektar 100.cube", capitals and
+spaces, nested per vendor - so the case-sensitive catalog globs matched
+nothing and 294 converted stocks sat invisible. The conversion loop now
+writes cubes flat into data/luts/rawtherapee/ with sanitized stems
+(lowercase, spaces to underscores, parentheses dropped): globs match,
+the CLI resolves them, and the staging loop is additionally hardened to
+iterate matches via read rather than word-splitting, so no filename can
+ever break it. A note flags leftover nested cubes from prior runs with
+the one-line cleanup. Verified end to end against the collection's
+actual naming ("Kodak TRI-X 400 5 ++" and kin).
