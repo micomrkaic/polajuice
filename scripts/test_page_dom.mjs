@@ -34,6 +34,8 @@ const doc = window.document;
 const fail = (m) => { console.error("test_page_dom:", m); process.exit(1); };
 if (/error/.test(doc.getElementById("status").className))
   fail("boot errored: " + doc.getElementById("status").textContent);
+if (!doc.getElementById("cubefile"))
+    throw new Error("custom .cube input missing");
 if (doc.getElementById("camera").options.length < 14)
   fail("camera dropdown short");
 // print selector contract when print stocks are staged

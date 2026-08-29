@@ -92,4 +92,15 @@ try {
     if (e.code === "ENOENT") console.log("(no samples staged; skipping sample render)");
     else throw e;
 }
+{
+  // arbitrary cube text with a grainy stem must render (the custom-cube path)
+  const identity = 'LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n';
+  const src = await readFile(new URL("../web/samples/sleeping-cat.jpg",
+                                     import.meta.url));
+  const out = await engine.render({ inputBytes: src, ext: "jpg",
+      camera: "bw-35", cubeText: identity, filmProcess: "bw",
+      filmStem: "ilford_delta_3200", seed: 5 });
+  if (!out || out.length < 500)
+      throw new Error("custom cube render failed");
+}
 console.log("wasm engine tests passed");

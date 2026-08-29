@@ -43,6 +43,8 @@
   .samplestrip img { height:4.5rem; display:block; border:1px solid var(--line); }
   .samplestrip figcaption { font-size:0.65rem; color:#7a7263; max-width:6rem;
     text-transform:none; letter-spacing:0; margin-top:0.15rem; }
+  .cubeload { font-size:0.78rem; opacity:0.75; margin-left:0.5rem; }
+  .cubeload input { font-size:0.75rem; max-width:13rem; }
   .samplestrip .credit { align-self:flex-end; font-size:0.7rem; color:#a89f8d;
     font-style:italic; }
   details#help { border:1px solid var(--line); background:#fbf9f4;
@@ -83,6 +85,9 @@
     <div>
       <label for="film">Film</label>
       <select id="film"></select>
+      <label class="cubeload" title="Render with any .cube from your own library (data/luts on your machine) - the full warehouse, not just this shelf">
+        or load .cube: <input type="file" id="cubefile" accept=".cube">
+      </label>
     </div>
     <div>
       <label for="strength">Strength <span id="strengthval">1.00</span></label>
@@ -158,7 +163,7 @@
 import { createEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
 let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
-const PAGE_VERSION = "1.13.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.14.0";   // kept in step by scripts/release checks
 let filmFamilies = [];   // module scope: render() needs it, not just boot()
 function familyToken(family) {
   const p = family.process || "";
@@ -304,7 +309,30 @@ async function boot() {
     strip.append(credit);
   } catch (e) { /* no samples staged; the drop zone is enough */ }
 
+  wireCustomCube();
   setStatus("ready — drop a photo, or click a sample");
+}
+
+let customCube = null;   /* {stem, text} from the user's own library */
+
+function wireCustomCube() {
+  const input = $("cubefile");
+  if (!input) return;
+  input.addEventListener("change", async () => {
+    const f = input.files && input.files[0];
+    if (!f) { customCube = null; return; }
+    customCube = { stem: f.name.replace(/\.cube$/i, ""),
+                   text: await f.text() };
+    setStatus(`custom film loaded: ${customCube.stem}`);
+    scheduleRender();
+  });
+  $("film").addEventListener("change", () => {
+    if (customCube) {
+      customCube = null;
+      input.value = "";
+      setStatus("custom film cleared - using the catalog again");
+    }
+  });
 }
 
 async function loadFilmCube(stem) {
@@ -329,9 +357,10 @@ async function render(maxDim) {
   setStatus("rendering…");
   await new Promise(r => setTimeout(r, 20));
   try {
-    const stem = resolveFilmStem();
-    const cubeText = stem ? await loadFilmCube(stem) : null;
-    const family = stem
+    const stem = customCube ? customCube.stem : resolveFilmStem();
+    const cubeText = customCube ? customCube.text
+                                : (stem ? await loadFilmCube(stem) : null);
+    const family = (!customCube && stem)
         ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
     const filmProcess = family ? familyToken(family) : null;
     const printStem = $("print") && $("print").value !== "__none__"
