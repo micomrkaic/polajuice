@@ -313,6 +313,43 @@ int main(void)
         pj_image_free(flat);
     }
 
+    /* Contrast filters: red darkens a blue sky through bw far more than
+     * yellow; "none" and NULL agree; unknown names are rejected by the
+     * front-end helper. */
+    {
+        PjImage *sky = pj_image_new(48, 48, &error);
+        assert(sky);
+        float *px = pj_image_pixels(sky);
+        for (size_t i = 0; i < 48 * 48; ++i) {
+            px[i * 3 + 0] = 0.20f; px[i * 3 + 1] = 0.35f; px[i * 3 + 2] = 0.85f;
+        }
+        double mean[3];
+        const char *racks[3] = {NULL, "yellow", "red"};
+        for (int k = 0; k < 3; ++k) {
+            PjRenderOptions fo = {.seed = 4, .strength = 1.0f,
+                                  .color_lut = identity,
+                                  .film_process = "bw",
+                                  .contrast_filter = racks[k]};
+            PjImage *out = pj_render(sky, "bw-35", &fo, &error);
+            assert(out);
+            const float *q = pj_image_pixels_const(out);
+            size_t n = pj_image_width(out) * pj_image_height(out);
+            double m = 0;
+            for (size_t i = 0; i < n; ++i)
+                m += 0.2126 * q[i * 3] + 0.7152 * q[i * 3 + 1]
+                   + 0.0722 * q[i * 3 + 2];
+            mean[k] = m / (double)n;
+            pj_image_free(out);
+        }
+        assert(mean[1] < mean[0]);      /* yellow darkens blue sky */
+        assert(mean[2] < mean[1]);      /* red darkens it far more */
+        assert(pj_contrast_filter_known("orange"));
+        assert(pj_contrast_filter_known(NULL));
+        assert(pj_contrast_filter_known("none"));
+        assert(!pj_contrast_filter_known("sepia"));
+        pj_image_free(sky);
+    }
+
     /* Film-process compatibility truth table. */
     assert(pj_preset_accepts_film("super8", "slide"));
     assert(!pj_preset_accepts_film("super8", "negative"));

@@ -185,7 +185,7 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
     return ok;
 }
 
-const char *pj_version_string(void) { return "1.14.0"; }
+const char *pj_version_string(void) { return "1.15.0"; }
 
 PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error)
 {

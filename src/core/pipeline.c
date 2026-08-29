@@ -367,6 +367,48 @@ static void apply_builtin_tone(PjImage *image, const PjPreset *p, float strength
     }
 }
 
+/*
+ * Lens contrast filter: per-channel transmittance of the classic Wratten
+ * set applied to scene light before the film integrates it, with
+ * exposure renormalized to keep photometric luminance roughly constant
+ * (the filter factor, as a metering camera would compensate). First-
+ * order spectral truth on three-channel input.
+ */
+static bool contrast_filter_of(const char *name, float t[3])
+{
+    if (!name || !strcmp(name, "none")) return false;
+    if (!strcmp(name, "yellow")) { t[0]=1.00f; t[1]=0.95f; t[2]=0.35f; return true; }
+    if (!strcmp(name, "orange")) { t[0]=1.00f; t[1]=0.62f; t[2]=0.16f; return true; }
+    if (!strcmp(name, "red"))    { t[0]=1.00f; t[1]=0.20f; t[2]=0.04f; return true; }
+    if (!strcmp(name, "green"))  { t[0]=0.25f; t[1]=1.00f; t[2]=0.20f; return true; }
+    if (!strcmp(name, "blue"))   { t[0]=0.10f; t[1]=0.30f; t[2]=1.00f; return true; }
+    return false;
+}
+
+bool pj_contrast_filter_known(const char *name)
+{
+    float t[3];
+    return !name || !strcmp(name, "none") || contrast_filter_of(name, t);
+}
+
+static void apply_contrast_filter(PjImage *image, const char *name,
+                                  float strength)
+{
+    float t[3];
+    if (!contrast_filter_of(name, t)) return;
+    float luma = 0.2126f * t[0] + 0.7152f * t[1] + 0.0722f * t[2];
+    if (luma < 1e-4f) luma = 1e-4f;
+    float gain[3] = { t[0] / luma, t[1] / luma, t[2] / luma };
+    if (strength < 1.0f)
+        for (int c = 0; c < 3; ++c)
+            gain[c] = 1.0f + (gain[c] - 1.0f) * strength;
+    float *px = pj_image_pixels(image);
+    size_t n = pj_image_width(image) * pj_image_height(image);
+    for (size_t i = 0; i < n; ++i)
+        for (int c = 0; c < 3; ++c)
+            px[i * 3 + c] *= gain[c];
+}
+
 static void apply_builtin_color(PjImage *image, const PjPreset *p, float strength)
 {
     for (size_t i = 0; i < image->width * image->height; ++i) {
@@ -704,6 +746,9 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_flicker(image, preset->flicker_ev * strength * motion,
                       seed, frame);
     }
+    apply_contrast_filter(image,
+                          options ? options->contrast_filter : NULL,
+                          strength);
     apply_direct_flash(image, preset, strength);
     apply_softness(image, preset->softness * strength);
     apply_vignette(image, preset->vignette * strength);

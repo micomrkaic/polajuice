@@ -139,6 +139,14 @@ static int apply(int argc, char **argv)
             char *end = NULL;
             options.strength = strtof(argv[++i], &end);
             if (!end || *end) { fprintf(stderr, "invalid strength\n"); return EXIT_FAILURE; }
+        } else if (!strcmp(argv[i], "--filter") && i + 1 < argc) {
+            options.contrast_filter = argv[++i];
+            if (!pj_contrast_filter_known(options.contrast_filter)) {
+                fprintf(stderr, "polajuice: unknown filter '%s'; the rack "
+                        "holds: yellow, orange, red, green, blue, none\n",
+                        options.contrast_filter);
+                return EXIT_FAILURE;
+            }
         } else if (!strcmp(argv[i], "--seed") && i + 1 < argc) {
             char *end = NULL;
             errno = 0;

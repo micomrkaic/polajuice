@@ -42,6 +42,17 @@ fi
 grep -q "still-print" "$TMP/refuse" || {
     echo "test_movie: refusal message missing"; exit 1; }
 
+# a red filter changes the reel; an unknown filter is refused
+./superjuice -c super8 --no-film --seed 7 --filter red \
+    < "$TMP/in.y4m" > "$TMP/out_red.y4m" 2>/dev/null
+cmp -s "$TMP/out.y4m" "$TMP/out_red.y4m" && {
+    echo "test_movie: red filter had no effect"; exit 1; }
+./superjuice -c super8 --no-film --filter sepia \
+    < "$TMP/in.y4m" > /dev/null 2>"$TMP/badfilter" && {
+    echo "test_movie: unknown filter accepted"; exit 1; }
+grep -q "unknown filter" "$TMP/badfilter" || {
+    echo "test_movie: unknown-filter message missing"; exit 1; }
+
 # motion scale changes the reel
 ./superjuice -c super8 --no-film --seed 7 --motion-scale 3 \
     < "$TMP/in.y4m" > "$TMP/out_m3.y4m" 2>/dev/null

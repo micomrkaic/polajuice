@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 14
+#define PJ_VERSION_MINOR 15
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -49,6 +49,14 @@ typedef struct {
     const char *film_process;   /* film process token ("slide", "negative",
                     "bw", "integral", "pack") or NULL when unknown. Age
                     uses it: dye layers fade differently per process. */
+    const char *contrast_filter; /* lens contrast filter name applied to the
+                    light BEFORE the film: "yellow" (#8), "orange" (#15),
+                    "red" (#25), "green" (#58), "blue" (#47), or NULL/
+                    "none". Exposure is renormalized (the filter factor a
+                    metering camera would apply), so the drama is in the
+                    tonal relationships: orange+bw darkens skies, red is
+                    violent about it, green lightens foliage. On color
+                    stock it is the strong period cast it always was. */
     const char *film_stem;      /* film stock stem (e.g. "ilford_delta_3200")
                     or NULL. Grain derives speed and granularity from it:
                     amount scales ~sqrt(ISO) against the camera's canonical
@@ -108,6 +116,7 @@ char *pj_preset_film_processes(const char *camera, char *buffer, size_t size);
  * 35mm-slide -> "slide", polaroid-600 -> "integral"), else NULL. Used to
  * default the age profile when no film supplies a process. */
 const char *pj_preset_primary_process(const char *camera);
+bool pj_contrast_filter_known(const char *name);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,

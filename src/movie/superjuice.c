@@ -110,6 +110,8 @@ static void usage(FILE *stream)
         "      --seed INTEGER      base seed; grain decorrelates per frame\n"
         "      --motion-scale N    scale gate weave and flicker (default 1;\n"
         "                          0.5 steadier, 2 a worn projector)\n"
+        "      --filter NAME       lens contrast filter: yellow, orange,\n"
+        "                          red, green, blue - orange+bw = drama\n"
         "  -o, --output PATH       output movie (file mode)\n"
         "      --crf NUMBER        H.264 quality, lower is better (default 18)\n\n"
         "Cameras with motion character (gate weave, flicker): super8,\n"
@@ -195,6 +197,15 @@ int main(int argc, char **argv)
             options.seed = strtoull(argv[++i], NULL, 0);
         else if (!strcmp(argv[i], "--motion-scale") && i + 1 < argc)
             options.motion_scale = strtof(argv[++i], NULL);
+        else if (!strcmp(argv[i], "--filter") && i + 1 < argc) {
+            options.contrast_filter = argv[++i];
+            if (!pj_contrast_filter_known(options.contrast_filter)) {
+                fprintf(stderr, "superjuice: unknown filter '%s'; the rack "
+                        "holds: yellow, orange, red, green, blue, none\n",
+                        options.contrast_filter);
+                return EXIT_FAILURE;
+            }
+        }
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
             usage(stdout);
             return EXIT_SUCCESS;

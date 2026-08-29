@@ -227,3 +227,15 @@ Grain families modify: tabular crystals (T-Max, Delta, Acros, XP2) run
 finer, color dye clouds soften, HIE keeps its legendary grit. This is
 a first-order model of granularity-versus-speed, not measured RMS
 granularity; the camera retains the format's magnification character.
+
+## Contrast filters (1.15.0)
+
+The classic Wratten rack - #8 yellow, #15 orange, #25 red, #58 green,
+#47 blue - as per-channel transmittances applied to scene light before
+the film stage, exposure renormalized by the photometric filter factor
+(as a metering camera compensated). On three-channel input this is the
+correct first-order spectral model: orange and red darken blue skies
+through black-and-white film exactly as they did on Tri-X; green
+lightens foliage. On color stock the result is the strong cast those
+filters always produced there. Transmittance triplets are stylized from
+published Wratten band curves, not measured.

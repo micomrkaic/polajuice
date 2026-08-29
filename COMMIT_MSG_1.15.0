@@ -1,0 +1,13 @@
+1.15.0: the filter rack - Wratten contrast filters before the film
+
+--filter yellow|orange|red|green|blue on polajuice and superjuice,
+FILTER= in super8ify, a dropdown on the page: per-channel transmittance
+applied to the light before the film integrates it, exposure
+renormalized by the filter factor. Orange+bw darkens skies and pops
+clouds, red is the violent version, green lightens foliage; on color
+stock it is the period cast it always was. Works with measured cubes
+(the emulsion sees filtered light, as in life) and the scalar engine
+alike. Unknown filters refused with the rack named. Core test proves
+yellow < none and red < yellow on a blue sky through bw; movie, wasm
+and DOM suites cover their layers. Wratten triplets stylized from
+published band curves, disclosed in PRESET_SOURCES.

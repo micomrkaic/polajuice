@@ -103,4 +103,15 @@ try {
   if (!out || out.length < 500)
       throw new Error("custom cube render failed");
 }
+{
+  // filter reaches the engine: red differs from none on the same seed
+  const src = await readFile(new URL("../web/samples/sleeping-cat.jpg",
+                                     import.meta.url));
+  const plain = await engine.render({ inputBytes: src, ext: "jpg",
+      camera: "bw-35", filmProcess: "bw", seed: 6 });
+  const red = await engine.render({ inputBytes: src, ext: "jpg",
+      camera: "bw-35", filmProcess: "bw", seed: 6, filter: "red" });
+  if (Buffer.compare(Buffer.from(plain), Buffer.from(red)) === 0)
+      throw new Error("filter had no effect through wasm");
+}
 console.log("wasm engine tests passed");
