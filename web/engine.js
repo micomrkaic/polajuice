@@ -59,8 +59,8 @@ export async function createEngine(wasmBytes) {
         /* inputBytes: Uint8Array; ext: "jpg"|"png"; cubeText: string|null;
          * maxDim 0 = full resolution. Returns Uint8Array of JPEG bytes. */
         async render({ inputBytes, ext, camera, cubeText, filmProcess = null,
-                       printCubeText = null, strength = 1.0, seed = 42,
-                       age = 0, develop = "normal", maxDim = 0 }) {
+                       filmStem = null, printCubeText = null, strength = 1.0,
+                       seed = 42, age = 0, develop = "normal", maxDim = 0 }) {
             const inName = "in." + (ext === "png" ? "png" : "jpg");
             const workFiles = { [inName]: inputBytes };
             let filmArg = "-";
@@ -75,7 +75,7 @@ export async function createEngine(wasmBytes) {
             }
             const r = await run(
                 ["render", "work/" + inName, camera, filmArg,
-                 filmProcess || "-", printArg,
+                 filmProcess || "-", filmStem || "-", printArg,
                  String(strength), String(seed >>> 0), String(age),
                  develop, String(maxDim), "work/out.jpg"], workFiles);
             if (r.code !== 0)

@@ -1,0 +1,13 @@
+1.13.0: grain belongs to the film - speed and granularity per stock
+
+Grain was the last camera/film fusion: every stock through a camera
+got identical texture. Amount now scales ~sqrt(ISO) parsed from the
+film stem against the camera's canonical stock (defaults render
+unchanged), texture by a gentler fourth root, with grain-family
+modifiers: tabular (T-Max, Delta, Acros, XP2) finer, color dye clouds
+softer, HIE grittier; trailing +/- stem tokens count as push stops, so
+the measured push variants earn their grain. Implemented centrally in
+the engine; CLI, superjuice, wasm and page all pass the stem (wasi
+render grows a FILMSTEM arg). Core tests assert the speed ladder
+orders variance (Pan F < HP5 < Delta 3200) and tabular runs finer than
+cubic at equal speed (T-Max < Tri-X); no stem means no change.

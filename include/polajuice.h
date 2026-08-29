@@ -10,8 +10,8 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 12
-#define PJ_VERSION_PATCH 3
+#define PJ_VERSION_MINOR 13
+#define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
 typedef struct PjLut3D PjLut3D;
@@ -49,6 +49,12 @@ typedef struct {
     const char *film_process;   /* film process token ("slide", "negative",
                     "bw", "integral", "pack") or NULL when unknown. Age
                     uses it: dye layers fade differently per process. */
+    const char *film_stem;      /* film stock stem (e.g. "ilford_delta_3200")
+                    or NULL. Grain derives speed and granularity from it:
+                    amount scales ~sqrt(ISO) against the camera's canonical
+                    stock, texture by grain family (tabular finer, dye
+                    clouds softer, HIE grittier), push suffixes (_+, _++)
+                    add stops. NULL leaves the camera's grain untouched. */
 } PjRenderOptions;
 
 PjImage *pj_image_new(size_t width, size_t height, PjError *error);

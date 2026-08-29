@@ -158,7 +158,7 @@
 import { createEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
 let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
-const PAGE_VERSION = "1.12.3";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.13.0";   // kept in step by scripts/release checks
 let filmFamilies = [];   // module scope: render() needs it, not just boot()
 function familyToken(family) {
   const p = family.process || "";
@@ -340,7 +340,7 @@ async function render(maxDim) {
     const t0 = performance.now();
     const out = await engine.render({
       inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
-      filmProcess, printCubeText,
+      filmProcess, filmStem: stem, printCubeText,
       strength: parseFloat($("strength").value),
       seed: parseInt($("seed").value, 10) || 0,
       age: parseFloat($("age").value),

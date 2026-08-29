@@ -262,6 +262,57 @@ int main(void)
         remove("/tmp/pj_test_print.cube");
     }
 
+    /* Grain character from the film stem: speed orders variance, tabular
+     * runs finer than cubic at equal speed, no stem changes nothing. */
+    {
+        PjImage *flat = pj_image_new(97, 97, &error);
+        assert(flat);
+        fill_uniform(flat, 0.42f);
+        float variance[4];
+        const char *stems[4] = {NULL, "ilford_pan_f_plus_50",
+                                "ilford_hp_5_plus_400", "ilford_delta_3200"};
+        for (int k = 0; k < 4; ++k) {
+            PjRenderOptions go = {.seed = 9, .strength = 1.0f,
+                                  .color_lut = identity,
+                                  .film_process = "bw",
+                                  .film_stem = stems[k]};
+            PjImage *out = pj_render(flat, "bw-35", &go, &error);
+            assert(out);
+            const float *px = pj_image_pixels_const(out);
+            size_t n = pj_image_width(out) * pj_image_height(out);
+            double mean = 0, var = 0;
+            for (size_t i = 0; i < n; ++i) mean += px[i * 3];
+            mean /= (double)n;
+            for (size_t i = 0; i < n; ++i)
+                var += (px[i * 3] - mean) * (px[i * 3] - mean);
+            variance[k] = (float)(var / (double)n);
+            pj_image_free(out);
+        }
+        assert(variance[1] < variance[2]);          /* Pan F < HP5 */
+        assert(variance[2] < variance[3]);          /* HP5 < Delta 3200 */
+        /* tabular vs cubic at 400: T-Max finer than Tri-X */
+        float tv[2];
+        const char *pair[2] = {"kodak_tri-x_400", "kodak_t-max_400"};
+        for (int k = 0; k < 2; ++k) {
+            PjRenderOptions go = {.seed = 9, .strength = 1.0f,
+                                  .color_lut = identity,
+                                  .film_process = "bw", .film_stem = pair[k]};
+            PjImage *out = pj_render(flat, "bw-35", &go, &error);
+            assert(out);
+            const float *px = pj_image_pixels_const(out);
+            size_t n = pj_image_width(out) * pj_image_height(out);
+            double mean = 0, var = 0;
+            for (size_t i = 0; i < n; ++i) mean += px[i * 3];
+            mean /= (double)n;
+            for (size_t i = 0; i < n; ++i)
+                var += (px[i * 3] - mean) * (px[i * 3] - mean);
+            tv[k] = (float)(var / (double)n);
+            pj_image_free(out);
+        }
+        assert(tv[1] < tv[0]);
+        pj_image_free(flat);
+    }
+
     /* Film-process compatibility truth table. */
     assert(pj_preset_accepts_film("super8", "slide"));
     assert(!pj_preset_accepts_film("super8", "negative"));

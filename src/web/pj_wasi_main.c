@@ -49,20 +49,21 @@ static int list_cameras(void)
 
 static int render(int argc, char **argv)
 {
-    if (argc != 13) {
-        fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- PRINT|- "
-                        "STRENGTH SEED AGE DEVELOP MAX_DIM OUT\n");
+    if (argc != 14) {
+        fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- FILMSTEM|- "
+                        "PRINT|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
     const char *process = argv[5];
-    const char *print_path = argv[6];
-    float strength = strtof(argv[7], NULL);
-    uint64_t seed = strtoull(argv[8], NULL, 0);
-    float age = strtof(argv[9], NULL);
-    const char *dev = argv[10];
-    size_t max_dim = (size_t)strtoull(argv[11], NULL, 0);
-    const char *out_path = argv[12];
+    const char *film_stem = argv[6];
+    const char *print_path = argv[7];
+    float strength = strtof(argv[8], NULL);
+    uint64_t seed = strtoull(argv[9], NULL, 0);
+    float age = strtof(argv[10], NULL);
+    const char *dev = argv[11];
+    size_t max_dim = (size_t)strtoull(argv[12], NULL, 0);
+    const char *out_path = argv[13];
 
     /* Engine-level compatibility parity with the CLI: the browser UI
      * filters too, but the artifact itself must refuse nonsense. An
@@ -117,7 +118,9 @@ static int render(int argc, char **argv)
                                .film_process =
                                    strcmp(process, "-")
                                        ? process
-                                       : pj_preset_primary_process(camera)};
+                                       : pj_preset_primary_process(camera),
+                               .film_stem =
+                                   strcmp(film_stem, "-") ? film_stem : NULL};
     if (!strcmp(dev, "push+1")) options.push = 1.0f;
     else if (!strcmp(dev, "push+2")) options.push = 2.0f;
     else if (!strcmp(dev, "pull-1")) options.push = -1.0f;

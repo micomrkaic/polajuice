@@ -232,6 +232,74 @@ static void apply_gate_weave(PjImage *image, float amplitude, float period,
     free(shifted);
 }
 
+/*
+ * Film grain character from the stock's stem: first-order but honest.
+ * ISO is the largest plausible speed token in the stem (so variant
+ * digits don't confuse it); trailing +/- tokens are push/pull stops.
+ * Amount scales as sqrt(ISO ratio) against the reference (the camera's
+ * canonical stock, so default pairings render unchanged); texture
+ * (grain size) follows a gentler fourth-root. Grain families modify:
+ * tabular crystals (T-Max, Delta, Acros, XP2) run finer; color dye
+ * clouds are softer; HIE is its legendary gritty self.
+ */
+static int film_iso_of(const char *stem, int *push_stops)
+{
+    if (push_stops) *push_stops = 0;
+    if (!stem) return 0;
+    int iso = 0;
+    const char *s = stem;
+    while (*s) {
+        if (*s >= '0' && *s <= '9') {
+            int value = 0;
+            while (*s >= '0' && *s <= '9') value = value * 10 + (*s++ - '0');
+            if (value >= 12 && value <= 6400 && value > iso) iso = value;
+        } else ++s;
+    }
+    if (push_stops) {
+        size_t len = strlen(stem);
+        while (len && (stem[len-1] == '+' || stem[len-1] == '-')) {
+            *push_stops += stem[len-1] == '+' ? 1 : -1;
+            --len;
+        }
+    }
+    return iso;
+}
+
+static void film_grain_character(const char *stem, const char *ref_stem,
+                                 const char *process,
+                                 float *amount_mult, float *scale_mult)
+{
+    *amount_mult = 1.0f;
+    *scale_mult = 1.0f;
+    if (!stem) return;
+    int push = 0, ref_push = 0;
+    int iso = film_iso_of(stem, &push);
+    int ref = film_iso_of(ref_stem, &ref_push);
+    if (iso > 0 && ref > 0) {
+        float eff = (float)iso * exp2f((float)push);
+        float eff_ref = (float)ref * exp2f((float)ref_push);
+        float ratio = eff / eff_ref;
+        float a = sqrtf(ratio);
+        float s = powf(ratio, 0.20f);
+        *amount_mult = a < 0.4f ? 0.4f : (a > 2.5f ? 2.5f : a);
+        *scale_mult = s < 0.7f ? 0.7f : (s > 1.6f ? 1.6f : s);
+    }
+    if (strstr(stem, "t-max") || strstr(stem, "tmax") ||
+        strstr(stem, "delta") || strstr(stem, "acros") ||
+        strstr(stem, "xp_2") || strstr(stem, "xp2")) {
+        *amount_mult *= 0.80f;              /* tabular grain */
+        *scale_mult *= 0.85f;
+    }
+    if (process && (strcmp(process, "bw") != 0)) {
+        *amount_mult *= 0.95f;              /* dye clouds, not silver */
+        *scale_mult *= 1.05f;
+    }
+    if (strstr(stem, "hie")) {
+        *amount_mult *= 1.40f;              /* the grittiest legend */
+        *scale_mult *= 1.25f;
+    }
+}
+
 /* Exposure flicker: slow per-frame EV jitter from uneven camera speed. */
 static void apply_flicker(PjImage *image, float amplitude_ev, uint64_t seed,
                           int64_t frame)
@@ -664,8 +732,15 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         uint64_t grain_seed = temporal
             ? seed ^ ((uint64_t)frame * UINT64_C(0x9E3779B97F4A7C15))
             : seed;
-        apply_grain(image, preset->grain * strength * grain_gain,
-                    preset->grain_scale, preset->grain_midtone_bias,
+        float film_amount = 1.0f, film_scale = 1.0f;
+        film_grain_character(options ? options->film_stem : NULL,
+                             preset->default_film,
+                             options ? options->film_process : NULL,
+                             &film_amount, &film_scale);
+        apply_grain(image,
+                    preset->grain * strength * grain_gain * film_amount,
+                    preset->grain_scale * film_scale,
+                    preset->grain_midtone_bias,
                     preset->grain_chroma, grain_seed);
     }
 

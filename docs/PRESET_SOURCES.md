@@ -214,3 +214,16 @@ chroma grain, Super-8-gauge gate, and motion character (weave, player
 flicker) tuned to the home-movie register. No measured characterization
 of Polavision phototape is known to exist; this is the inspired-by tier
 and says so.
+
+## Grain speed and granularity (1.13.0)
+
+Grain amount and texture derive from the film stock rather than the
+camera alone. The stem's ISO (largest plausible speed token; trailing
++/- tokens count as push/pull stops, so measured push variants earn
+their grain) scales amount as the square root of the speed ratio
+against the camera's canonical stock - default pairings therefore
+render exactly as before - and grain size by a gentler fourth root.
+Grain families modify: tabular crystals (T-Max, Delta, Acros, XP2) run
+finer, color dye clouds soften, HIE keeps its legendary grit. This is
+a first-order model of granularity-versus-speed, not measured RMS
+granularity; the camera retains the format's magnification character.

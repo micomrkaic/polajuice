@@ -271,6 +271,15 @@ int main(int argc, char **argv)
     PjLut3D *lut = NULL;
     if (film_path) {
         options.film_process = film_process_of(film_path);
+        {
+            const char *slash = strrchr(film_path, '/');
+            static char stem_buffer[256];
+            snprintf(stem_buffer, sizeof stem_buffer, "%s",
+                     slash ? slash + 1 : film_path);
+            char *dot = strrchr(stem_buffer, '.');
+            if (dot) *dot = '\0';
+            options.film_stem = stem_buffer;
+        }
         lut = pj_lut3d_load_cube(film_path, &error);
         free(film_path);
         if (!lut) { fprintf(stderr, "superjuice: %s\n", error.message); return EXIT_FAILURE; }
