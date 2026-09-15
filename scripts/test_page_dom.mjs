@@ -38,6 +38,8 @@ if (!doc.getElementById("filter"))
     throw new Error("contrast filter select missing");
 if (!doc.getElementById("cubefile"))
     throw new Error("custom .cube input missing");
+if (!doc.getElementById("grain") || !doc.getElementById("edge"))
+    throw new Error("grain model select or edge slider missing");
 if (doc.getElementById("camera").options.length < 14)
   fail("camera dropdown short");
 // print selector contract when print stocks are staged

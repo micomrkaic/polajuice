@@ -9,10 +9,13 @@
  *   polajuice.wasm --list-cameras
  *       prints "name<TAB>default_film<TAB>description" per camera
  *   polajuice.wasm --version
- *   polajuice.wasm render IN CAMERA FILM|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT
+ *   polajuice.wasm render IN CAMERA FILM|- PROCESS|- FILMSTEM|- PRINT|-
+ *                         FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT
+ *                         GRAIN EDGE
  *       FILM "-" selects the built-in scalar engine; MAX_DIM 0 renders
  *       at full resolution, otherwise the input is box-average
- *       downscaled in linear light first (preview mode).
+ *       downscaled in linear light first (preview mode). GRAIN is
+ *       classic or silver; EDGE the development edge amount 0..2.
  */
 #include "polajuice.h"
 
@@ -49,10 +52,10 @@ static int list_cameras(void)
 
 static int render(int argc, char **argv)
 {
-    if (argc != 15) {
+    if (argc != 17) {
         fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- FILMSTEM|- "
                         "PRINT|- FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM "
-                        "OUT\n");
+                        "OUT GRAIN EDGE\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
@@ -66,6 +69,17 @@ static int render(int argc, char **argv)
     const char *dev = argv[12];
     size_t max_dim = (size_t)strtoull(argv[13], NULL, 0);
     const char *out_path = argv[14];
+    const char *grain_model = argv[15];
+    float edge = strtof(argv[16], NULL);
+    if (!pj_grain_model_known(grain_model)) {
+        fprintf(stderr, "unknown grain model '%s' (classic, silver)\n",
+                grain_model);
+        return 2;
+    }
+    if (edge < 0.0f || edge > 2.0f) {
+        fprintf(stderr, "edge must be 0..2\n");
+        return 2;
+    }
 
     /* Engine-level compatibility parity with the CLI: the browser UI
      * filters too, but the artifact itself must refuse nonsense. An
@@ -124,7 +138,9 @@ static int render(int argc, char **argv)
                                .film_stem =
                                    strcmp(film_stem, "-") ? film_stem : NULL,
                                .contrast_filter =
-                                   strcmp(filter, "-") ? filter : NULL};
+                                   strcmp(filter, "-") ? filter : NULL,
+                               .grain_model = grain_model,
+                               .edge = edge};
     if (!strcmp(dev, "push+1")) options.push = 1.0f;
     else if (!strcmp(dev, "push+2")) options.push = 2.0f;
     else if (!strcmp(dev, "pull-1")) options.push = -1.0f;

@@ -119,11 +119,22 @@ const char *film_process_of(const char *path)
         return "print";
     if (!strncmp(stem, "fuji_neopan", 11) || !strncmp(stem, "fuji_acros", 10))
         return "bw";   /* B+W stocks shelved in the color-negative pack */
-    if (strstr(path, "instant_consumer")) return "integral";
-    if (strstr(path, "instant_pro")) return "pack";
-    if (strstr(path, "colorslide")) return "slide";
-    if (strstr(path, "/bw/")) return "bw";
-    if (strstr(path, "negative_old") || strstr(path, "negative_new"))
+    /* Family directories are matched below the library root only. The
+     * root itself can contain anything: macOS puts per-user temp trees
+     * under /var/folders/XX/ with a random two-letter XX, and a user
+     * whose XX was "bw" had every stock in a temp library classified as
+     * black-and-white, Portra included. */
+    const char *rel = path;
+    const char *root = film_library_root();
+    size_t rlen = strlen(root);
+    while (rlen && root[rlen - 1] == '/') --rlen;
+    if (rlen && !strncmp(path, root, rlen) && path[rlen] == '/')
+        rel = path + rlen + 1;
+    if (strstr(rel, "instant_consumer")) return "integral";
+    if (strstr(rel, "instant_pro")) return "pack";
+    if (strstr(rel, "colorslide")) return "slide";
+    if (!strncmp(rel, "bw/", 3) || strstr(rel, "/bw/")) return "bw";
+    if (strstr(rel, "negative_old") || strstr(rel, "negative_new"))
         return "negative";
     return NULL;
 }

@@ -61,7 +61,7 @@ export async function createEngine(wasmBytes) {
         async render({ inputBytes, ext, camera, cubeText, filmProcess = null,
                        filmStem = null, printCubeText = null, filter = null,
                        strength = 1.0, seed = 42, age = 0, develop = "normal",
-                       maxDim = 0 }) {
+                       maxDim = 0, grainModel = "classic", edge = 0 }) {
             const inName = "in." + (ext === "png" ? "png" : "jpg");
             const workFiles = { [inName]: inputBytes };
             let filmArg = "-";
@@ -79,7 +79,8 @@ export async function createEngine(wasmBytes) {
                  filmProcess || "-", filmStem || "-", printArg,
                  filter || "-",
                  String(strength), String(seed >>> 0), String(age),
-                 develop, String(maxDim), "work/out.jpg"], workFiles);
+                 develop, String(maxDim), "work/out.jpg",
+                 grainModel || "classic", String(edge)], workFiles);
             if (r.code !== 0)
                 throw new Error(r.stderr.trim() || `render failed (${r.code})`);
             const out = r.files.get("out.jpg");

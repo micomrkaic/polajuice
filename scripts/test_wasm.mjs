@@ -5,6 +5,20 @@ import { readFile } from "node:fs/promises";
 import { createEngine } from "../web/engine.js";
 
 const engine = await createEngine(await readFile(new URL("../web/polajuice.wasm", import.meta.url)));
+// A built-in 64x64 test card (gradient with a light patch) so the engine
+// checks below run without staged samples; the shipped sample photo is
+// used when present, since it also exercises JPEG/EXIF decoding.
+const TEST_CARD = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAeklEQVR42u3ZsQ3AIAwEQEeCdSkZgpJhmC9FJoCkiKV7UeLi5OrlK6KViONXX8x+NF4idQAAAAAAAAAAAAAAAAAAjgHVBgB+ARijbf1ffSbfQAkAAAAAAAAAAAAAgCd9zb0rb/oNKPU6MQAAAAAAAAAAAAAAAIBSnzo3iMsI6AYmoUAAAAAASUVORK5CYII=", "base64");
+async function testInput() {
+    try {
+        const sample = await readFile(new URL("../web/samples/sleeping-cat.jpg",
+                                             import.meta.url));
+        return { bytes: sample, ext: "jpg" };
+    } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+        return { bytes: TEST_CARD, ext: "png" };
+    }
+}
 const version = await engine.version();
 const cameras = await engine.cameras();
 if (cameras.length < 14) throw new Error("camera enumeration short: " + cameras.length);
@@ -95,9 +109,8 @@ try {
 {
   // arbitrary cube text with a grainy stem must render (the custom-cube path)
   const identity = 'LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n';
-  const src = await readFile(new URL("../web/samples/sleeping-cat.jpg",
-                                     import.meta.url));
-  const out = await engine.render({ inputBytes: src, ext: "jpg",
+  const { bytes: src, ext: srcExt } = await testInput();
+  const out = await engine.render({ inputBytes: src, ext: srcExt,
       camera: "bw-35", cubeText: identity, filmProcess: "bw",
       filmStem: "ilford_delta_3200", seed: 5 });
   if (!out || out.length < 500)
@@ -105,13 +118,30 @@ try {
 }
 {
   // filter reaches the engine: red differs from none on the same seed
-  const src = await readFile(new URL("../web/samples/sleeping-cat.jpg",
-                                     import.meta.url));
-  const plain = await engine.render({ inputBytes: src, ext: "jpg",
+  const { bytes: src, ext: srcExt } = await testInput();
+  const plain = await engine.render({ inputBytes: src, ext: srcExt,
       camera: "bw-35", filmProcess: "bw", seed: 6 });
-  const red = await engine.render({ inputBytes: src, ext: "jpg",
+  const red = await engine.render({ inputBytes: src, ext: srcExt,
       camera: "bw-35", filmProcess: "bw", seed: 6, filter: "red" });
   if (Buffer.compare(Buffer.from(plain), Buffer.from(red)) === 0)
       throw new Error("filter had no effect through wasm");
+}
+{
+  // grain model and edge effects reach the engine; bad values are refused
+  const { bytes: src, ext: srcExt } = await testInput();
+  const base = { inputBytes: src, ext: srcExt, camera: "bw-35",
+                 filmProcess: "bw", seed: 6, maxDim: 300 };
+  const plain = await engine.render(base);
+  const silver = await engine.render({ ...base, grainModel: "silver" });
+  if (Buffer.compare(Buffer.from(plain), Buffer.from(silver)) === 0)
+      throw new Error("silver grain had no effect through wasm");
+  const edged = await engine.render({ ...base, edge: 1.5 });
+  if (Buffer.compare(Buffer.from(plain), Buffer.from(edged)) === 0)
+      throw new Error("edge effects had no effect through wasm");
+  let refused = false;
+  try { await engine.render({ ...base, grainModel: "bromide" }); }
+  catch (e) { refused = /unknown grain model/.test(e.message); }
+  if (!refused) throw new Error("unknown grain model accepted by wasm");
+  console.log("grain model and edge effects ok through wasm");
 }
 console.log("wasm engine tests passed");

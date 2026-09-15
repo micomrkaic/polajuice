@@ -121,9 +121,15 @@ done
 # Keep renders and the fetched film library out of history, idempotently.
 for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/' \
                'web/polajuice.wasm' 'web/films/' 'web/samples/' 'third_party/wasi-sdk*' \
-               'web/_pagecheck.mjs'; do
+               'web/_pagecheck.mjs' '*.d' '/superjuice' '/tests/test_web_shim'; do
     grep -qxF "$pattern" .gitignore || echo "$pattern" >> .gitignore
 done
+# build byproducts that slipped into history at some point (the .d
+# dependency files, the superjuice binary) dirty the tree on every make
+# and block the clean-tree check on the next release; drop them from the
+# index once, idempotently
+git rm -q --cached --ignore-unmatch -- '*.d' superjuice tests/test_web_shim \
+    >/dev/null 2>&1 || true
 
 echo "== building and testing from the repo state"
 make clean

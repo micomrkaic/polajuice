@@ -108,6 +108,17 @@ elems["camera"].value = "35mm-slide";
 elems["camera"].handlers["change"]();
 if (elems["film"].disabled) throw new Error("film select stuck disabled");
 console.log("compatibility filtering: sealed disables film, film camera re-enables");
+// edge follows develop's instant-camera rule (the fake DOM only knows
+// ids the page has touched; presence of the grain select is the real-DOM
+// suite's job)
+if (!elems["edge"]) throw new Error("edge slider absent");
+elems["camera"].value = "polaroid-600";
+elems["camera"].handlers["change"]();
+if (!elems["edge"].disabled) throw new Error("instant camera did not disable edge");
+elems["camera"].value = "bw-35";
+elems["camera"].handlers["change"]();
+if (elems["edge"].disabled) throw new Error("edge slider stuck disabled");
+console.log("edge slider present; disabled for instant cameras, re-enabled for film");
 
 // THE regression: pick an instant camera, then click a sample that suggests
 // a slide camera; the film dropdown must be rebuilt for the new camera.

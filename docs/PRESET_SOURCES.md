@@ -239,3 +239,28 @@ through black-and-white film exactly as they did on Tri-X; green
 lightens foliage. On color stock the result is the strong cast those
 filters always produced there. Transmittance triplets are stylized from
 published Wratten band curves, not measured.
+
+## Silver grain and development edge effects (1.16.0)
+
+`--grain silver` is a first-order model of granularity, not measured
+RMS granularity curves. Amplitude follows binomial statistics of the
+developed fraction, tempered to `(4u(1-u))^0.75` for the print/scan
+slope that falls away at both ends. Texture follows exposure through
+two correlated Gaussian fields, coarse (sigma 0.6 x the camera's grain
+scale) and fine (0.3 x), blended with variance-preserving weights
+`sqrt(1-t)` and `sqrt(t)` where `t` is display value raised to a power
+that grows with push; the physics is that the large fast crystals
+develop first. Color stock couples three layers at 0.7 minus the
+camera's `grain_chroma`, with the blue-sensitive top layer weighted
+1.18 relative to red 1.00 and green 0.92 (luma RMS preserved). The
+absolute amplitude is calibrated to match the classic model's RMS at
+mid gray for the same camera and film, so the film-stem grain ladder
+of 1.14.0 carries over unchanged.
+
+`--edge` is the steady-state local developer exhaustion model
+`D' = D (1 - g Dbar) / (1 - g D)`, `g = 0.16 x amount`, with `Dbar`
+a triple box blur of display density over a 0.15 mm diffusion length
+on the 35mm diagonal (three box passes approximate a Gaussian). The
+diffusion length and `g` are stylized from the published order of
+magnitude of adjacency effects in dilute and stand development, not
+fitted to microdensitometer traces.

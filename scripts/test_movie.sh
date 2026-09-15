@@ -53,6 +53,24 @@ cmp -s "$TMP/out.y4m" "$TMP/out_red.y4m" && {
 grep -q "unknown filter" "$TMP/badfilter" || {
     echo "test_movie: unknown-filter message missing"; exit 1; }
 
+# silver grain and edge effects each change the reel; bad values refused
+./superjuice -c super8 --no-film --seed 7 --grain silver \
+    < "$TMP/in.y4m" > "$TMP/silver.y4m" 2>/dev/null
+cmp -s "$TMP/out.y4m" "$TMP/silver.y4m" && {
+    echo "test_movie: silver grain had no effect"; exit 1; }
+./superjuice -c super8 --no-film --seed 7 --edge 1.5 \
+    < "$TMP/in.y4m" > "$TMP/edge.y4m" 2>/dev/null
+cmp -s "$TMP/out.y4m" "$TMP/edge.y4m" && {
+    echo "test_movie: edge effects had no effect"; exit 1; }
+./superjuice -c super8 --no-film --grain bromide \
+    < "$TMP/in.y4m" > /dev/null 2>"$TMP/badgrain" && {
+    echo "test_movie: unknown grain model accepted"; exit 1; }
+grep -q "unknown grain model" "$TMP/badgrain" || {
+    echo "test_movie: unknown-grain message missing"; exit 1; }
+./superjuice -c super8 --no-film --edge 3 \
+    < "$TMP/in.y4m" > /dev/null 2>/dev/null && {
+    echo "test_movie: edge 3 accepted"; exit 1; }
+
 # motion scale changes the reel
 ./superjuice -c super8 --no-film --seed 7 --motion-scale 3 \
     < "$TMP/in.y4m" > "$TMP/out_m3.y4m" 2>/dev/null

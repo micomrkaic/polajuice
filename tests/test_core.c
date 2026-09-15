@@ -350,6 +350,114 @@ int main(void)
         pj_image_free(sky);
     }
 
+    /* Silver grain: texture follows exposure. On the same stock a dark
+     * field is carried by the coarse population and a bright one by the
+     * fine, so the high-passed noise correlates more between neighbors in
+     * the shadows than in the highlights. Classic grain has no such
+     * dependence. Deterministic per seed, and a uniform field still
+     * shows grain (the image is made of grains, not overlaid). */
+    {
+        const char *models[2] = {"classic", "silver"};
+        float corr[2][2];   /* [model][dark, bright] */
+        for (int m = 0; m < 2; ++m)
+            for (int b = 0; b < 2; ++b) {
+                PjImage *field = pj_image_new(96, 96, &error);
+                assert(field);
+                fill_uniform(field, b ? 0.75f : 0.06f);
+                PjRenderOptions go = {.seed = 11, .strength = 1.0f,
+                                      .color_lut = identity,
+                                      .film_process = "bw",
+                                      .grain_model = models[m]};
+                PjImage *out = pj_render(field, "bw-35", &go, &error);
+                assert(out);
+                PjImage *again = pj_render(field, "bw-35", &go, &error);
+                assert(again);
+                assert(memcmp(pj_image_pixels_const(out),
+                              pj_image_pixels_const(again),
+                              96 * 96 * 3 * sizeof(float)) == 0);
+                pj_image_free(again);
+                /* high-pass with a 5x5 box removes the vignette; lag-1
+                 * correlation of the residual measures grain size */
+                const float *q = pj_image_pixels_const(out);
+                static float hp[96 * 96];
+                for (size_t y = 2; y < 94; ++y)
+                    for (size_t x = 2; x < 94; ++x) {
+                        float s = 0.0f;
+                        for (int dy = -2; dy <= 2; ++dy)
+                            for (int dx = -2; dx <= 2; ++dx)
+                                s += q[((y + (size_t)dy) * 96 + x + (size_t)dx) * 3];
+                        hp[y * 96 + x] = q[(y * 96 + x) * 3] - s / 25.0f;
+                    }
+                double v = 0, c = 0;
+                for (size_t y = 24; y < 72; ++y)
+                    for (size_t x = 24; x < 72; ++x) {
+                        v += (double)hp[y * 96 + x] * hp[y * 96 + x];
+                        c += (double)hp[y * 96 + x] * hp[y * 96 + x + 1];
+                    }
+                assert(v > 1e-9);               /* grain present */
+                corr[m][b] = (float)(c / v);
+                pj_image_free(out);
+                pj_image_free(field);
+            }
+        assert(corr[1][0] > corr[1][1] + 0.05f);    /* silver: shadows coarser */
+        assert(fabsf(corr[0][0] - corr[0][1]) < 0.05f); /* classic: no such trend */
+        assert(pj_grain_model_known(NULL));
+        assert(pj_grain_model_known("classic"));
+        assert(pj_grain_model_known("silver"));
+        assert(!pj_grain_model_known("bromide"));
+    }
+
+    /* Development edge effects: a uniform field maps to itself exactly;
+     * a small dense detail on a thin field develops denser than without
+     * (Eberhard), while the thin field far from it is untouched. */
+    {
+        PjImage *flat2 = pj_image_new(49, 49, &error);
+        assert(flat2);
+        fill_uniform(flat2, 0.30f);
+        PjRenderOptions e0 = {.seed = 5, .strength = 1.0f,
+                              .color_lut = identity, .film_process = "bw"};
+        PjRenderOptions e2 = e0;
+        e2.edge = 2.0f;
+        PjImage *u0 = pj_render(flat2, "bw-35", &e0, &error);
+        PjImage *u2 = pj_render(flat2, "bw-35", &e2, &error);
+        assert(u0 && u2);
+        {   /* the camera's vignette is the only gradient: negligible */
+            const float *a0 = pj_image_pixels_const(u0);
+            const float *a2 = pj_image_pixels_const(u2);
+            float worst = 0.0f;
+            for (size_t i = 0; i < 49 * 49 * 3; ++i)
+                worst = fmaxf(worst, fabsf(a0[i] - a2[i]));
+            assert(worst < 2e-3f);
+        }
+        pj_image_free(u0);
+        pj_image_free(u2);
+
+        fill_uniform(flat2, 0.03f);
+        float *fp = pj_image_pixels(flat2);
+        for (size_t y = 21; y < 28; ++y)
+            for (size_t x = 21; x < 28; ++x)
+                for (size_t c = 0; c < 3; ++c) fp[(y * 49 + x) * 3 + c] = 0.85f;
+        PjImage *d0 = pj_render(flat2, "bw-35", &e0, &error);
+        PjImage *d2 = pj_render(flat2, "bw-35", &e2, &error);
+        assert(d0 && d2);
+        double sq0 = 0, sq2 = 0, far0 = 0, far2 = 0;
+        for (size_t y = 22; y < 27; ++y)
+            for (size_t x = 22; x < 27; ++x) {
+                sq0 += luma_at(d0, x, y);
+                sq2 += luma_at(d2, x, y);
+            }
+        for (size_t y = 2; y < 6; ++y)
+            for (size_t x = 2; x < 6; ++x) {
+                far0 += luma_at(d0, x, y);
+                far2 += luma_at(d2, x, y);
+            }
+        assert(sq2 > sq0 * 1.02);               /* dense detail gains */
+        assert(fabs(far2 - far0) < 1e-4);        /* distant field unchanged */
+        pj_image_free(d0);
+        pj_image_free(d2);
+        pj_image_free(flat2);
+    }
+
     /* Film-process compatibility truth table. */
     assert(pj_preset_accepts_film("super8", "slide"));
     assert(!pj_preset_accepts_film("super8", "negative"));

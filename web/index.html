@@ -124,6 +124,24 @@ green lightens foliage. On color stock: a period-correct strong cast.">
       <input id="age" type="range" min="0" max="1" step="0.05" value="0">
     </div>
     <div>
+      <label for="grain" title="classic: display noise laid over the finished picture.
+silver: grain formed from exposure inside the film - coarse in the
+shadows, fine in the highlights, and the print stock, push and age
+act on it as they act on the image.">Grain model</label>
+      <select id="grain">
+        <option value="classic">classic (overlaid)</option>
+        <option value="silver">silver (from exposure)</option>
+      </select>
+    </div>
+    <div>
+      <label for="edge" title="Development edge effects. Developer exhausts locally, so the dense
+side of a boundary develops denser and a small dense detail more than a
+large one (border, fringe and Eberhard effects). 1 is a dilute developer,
+2 stand development. Not an unsharp mask: uniform areas are untouched.
+Ignored for instant cameras.">Edge effects <span id="edgeval">off</span></label>
+      <input id="edge" type="range" min="0" max="2" step="0.1" value="0">
+    </div>
+    <div>
       <label for="seed">Grain seed</label>
       <input id="seed" type="number" value="42" step="1">
     </div>
@@ -147,7 +165,15 @@ green lightens foliage. On color stock: a period-correct strong cast.">
         magenta drift that works with any camera and film. Developing is
         the chemistry: push for contrast and grain, pull to soften, or
         cross-process slide film for shifted colors — disabled for
-        instant cameras, which develop inside the film unit.</p>
+        instant cameras, which develop inside the film unit. Grain model
+        chooses where the grain comes from: classic lays display noise over
+        the finished picture; silver forms it from exposure inside the
+        film, so shadows run coarse and highlights fine, and print stock,
+        push and age act on it as on the image. Edge effects are the
+        developer exhausting locally — the dense side of a boundary
+        develops denser and small dense details most (border, fringe and
+        Eberhard effects) — 1 is a dilute developer, 2 stand development;
+        uniform areas are untouched.</p>
         <dl id="helpfilms"></dl>
       </div>
     </div>
@@ -175,7 +201,7 @@ green lightens foliage. On color stock: a period-correct strong cast.">
 import { createEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
 let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
-const PAGE_VERSION = "1.15.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.16.0";   // kept in step by scripts/release checks
 let filmFamilies = [];   // module scope: render() needs it, not just boot()
 function familyToken(family) {
   const p = family.process || "";
@@ -251,6 +277,7 @@ async function boot() {
     const cam = currentCamera();
     $("develop").disabled = cam.instant;
     if (cam.instant) $("develop").value = "normal";
+    $("edge").disabled = cam.instant;
     rebuildFilmSelect();
   }
   cameraSel.addEventListener("change", syncCompat);
@@ -386,7 +413,9 @@ async function render(maxDim) {
       strength: parseFloat($("strength").value),
       seed: parseInt($("seed").value, 10) || 0,
       age: parseFloat($("age").value),
-      develop: $("develop").value, maxDim });
+      develop: $("develop").value, maxDim,
+      grainModel: $("grain").value,
+      edge: parseFloat($("edge").value) });
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
     $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
@@ -441,6 +470,10 @@ $("strength").addEventListener("input",
 $("age").addEventListener("input", () => {
   const v = parseFloat($("age").value);
   $("ageval").textContent = v === 0 ? "fresh" : v.toFixed(2);
+});
+$("edge").addEventListener("input", () => {
+  const v = parseFloat($("edge").value);
+  $("edgeval").textContent = v === 0 ? "off" : v.toFixed(1);
 });
 $("render").addEventListener("click", async () => {
   const blob = await render(1400);

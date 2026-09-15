@@ -6,8 +6,14 @@ set -eu
 cd "$(dirname "$0")/.."
 [ -x ./polajuice ] || { echo "test_compat: build polajuice first" >&2; exit 1; }
 
-LIB=$(mktemp -d)
-trap 'rm -rf "$LIB"' EXIT
+# The library root deliberately contains a /bw/ component: macOS temp
+# roots under /var/folders/XX/ once had XX = "bw", which the old
+# whole-path family match read as a black-and-white shelf for every
+# stock. The matrix below is the regression.
+TOP=$(mktemp -d)
+trap 'rm -rf "$TOP"' EXIT
+LIB="$TOP/bw/library"
+mkdir -p "$LIB"
 mkdir -p "$LIB/colorslide" "$LIB/negative_new" "$LIB/negative_old" \
          "$LIB/bw" "$LIB/instant_consumer" "$LIB/instant_pro"
 cube() { printf 'TITLE "t"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n' > "$1"; }
@@ -23,8 +29,10 @@ mkdir -p "$LIB/../prints"
 cube "$LIB/../prints/synthetic_cine_print.cube"
 export POLAJUICE_PRINTS="$LIB/../prints"
 
-IN=$(mktemp --suffix=.ppm)
-OUT=$(mktemp --suffix=.jpg)
+# inside $LIB (cleaned by the trap): BSD mktemp has no --suffix, and the
+# extension must be real because format dispatch reads it
+IN="$LIB/in.ppm"
+OUT="$LIB/out.jpg"
 printf 'P6 2 2 255 ' > "$IN"
 printf '\200\200\200\200\200\200\200\200\200\200\200\200' >> "$IN"
 

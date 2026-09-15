@@ -53,8 +53,8 @@ One command, movie in, vintage movie out:
 superjuice drives FFmpeg itself (decoding, H.264 encoding at `--crf 18`
 by default, audio passthrough); it needs `ffmpeg` on PATH and tells you
 so if it is missing. All the stills options apply: `-f` for the film,
-`--develop`, `--age`, `--strength`, `--seed`, `-o` for an explicit
-output path. For custom pipelines (different codecs, filters, no
+`--develop`, `--age`, `--grain`, `--edge`, `--strength`, `--seed`, `-o`
+for an explicit output path. For custom pipelines (different codecs, filters, no
 re-encode of your choosing), plumbing mode remains: with no input file,
 superjuice reads YUV4MPEG2 on stdin and writes it on stdout, and the
 engine itself stays dependency-free:
@@ -216,11 +216,43 @@ the pairing table).
 A render decomposes the way a film workflow does:
 
     image -> F (film color transform, a measured .cube LUT)
+          -> E (development edge effects, `--edge`: developer exhaustion
+                at boundaries - border, fringe and Eberhard effects)
+          -> G (silver grain, `--grain silver`: the grains that form the
+                image, coarse in the shadows and fine in the highlights)
           -> P (optional print/scan stock, a second chained LUT)
           -> develop (push/pull/cross chemistry)
           -> A (age: per-process differential dye fade)
-          -> S (spatial effects: grain, halation, softness, vignette,
-                flash, frames - always the camera's, never baked into cubes)
+          -> S (spatial effects: classic grain, halation, softness,
+                vignette, flash, frames - always the camera's, never
+                baked into cubes)
+
+Two grain models. `--grain classic` (the default, unchanged since 1.0)
+lays display noise over the finished picture at the end. `--grain
+silver` generates the grain inside the film: developed-fraction
+statistics set the amplitude (binomial, so paper white and deep black
+stay quiet), and texture follows exposure - the large fast crystals
+develop first, so low exposure is carried by the coarse population
+alone and higher exposure fills in with fine grain. Because it forms
+before the print stock, push and age, those act on it as they act on
+the image: pushing favors the coarse population, an aged print carries
+fogged grain. Color stock gets three partly correlated dye-cloud layers,
+the fast blue-sensitive top layer grainiest; silver stock one luminance
+field. Mid gray carries the same RMS in both models for the same camera
+and film, so switching changes texture, not noisiness.
+
+`--edge 0..2` is the developer running out where density forms.
+Developer exhausts locally, so the dense side of a boundary sees
+fresher developer and gains density (border effect), the thin side
+loses a little (fringe), and a small dense detail gains most
+(Eberhard). It is a first-order steady state, `D' = D (1 - g Dbar) /
+(1 - g D)` with `Dbar` the density averaged over a 0.15 mm diffusion
+length on a 35mm diagonal: multiplicative in density and asymmetric,
+unlike an unsharp mask, and a uniform area maps exactly to itself. 1 is
+a dilute developer, 2 stand development. Silver stock works on luma and
+applies one gain to all channels; color stock works per dye layer, which
+is how DIR-coupler interimage effects behave. Ignored for instant
+cameras.
 
 `--print NAME|FILE` chains a print emulsion after the film - the cinema
 negative->print model (Vision3 through Kodak 2383 territory); print

@@ -1,0 +1,43 @@
+1.16.0: the film is made of grains - silver grain and edge effects
+
+--grain silver on polajuice and superjuice, GRAIN= in super8ify, a
+selector on the page: grain generated from exposure inside the film
+rather than laid over the finished picture. Binomial developed-fraction
+statistics set the amplitude (paper white and deep black stay quiet),
+and texture follows exposure - the large fast crystals develop first,
+so shadows are carried by the coarse population and highlights fill in
+fine. It forms before the print stock, push and age, which act on it as
+they act on the image; color stock gets three partly correlated dye
+layers with the fast blue-sensitive top layer grainiest. Mid gray
+carries the same RMS as classic for the same camera and film, so the
+1.14 film-stem grain ladder carries over. Classic remains the default.
+
+--edge 0..2 (EDGE= in super8ify, a slider on the page): development
+edge effects. Developer exhausts locally, so the dense side of a
+boundary gains density (border), the thin side loses a little (fringe)
+and a small dense detail gains most (Eberhard). First-order steady state
+D' = D(1 - g Dbar)/(1 - g D) over a 0.15 mm diffusion length on the
+35mm diagonal, scaled with the image: multiplicative and asymmetric,
+not an unsharp mask, and uniform areas map exactly to themselves. 1 is
+a dilute developer, 2 stand development. Silver stock applies one gain
+on luma, color stock works per dye layer (DIR interimage behavior).
+Ignored for instant cameras, with the usual note.
+
+Core tests: silver grain correlates neighbors more in a dark field than
+a bright one while classic shows no trend, renders are deterministic,
+unknown models refused; edge leaves a uniform field alone to 2e-3 and
+raises a small dense detail by >2% while the distant field is
+unchanged. Movie, wasm, page and DOM suites cover their layers. Model
+constants disclosed in PRESET_SOURCES; ROADMAP's exposure-dependent
+grain item closed.
+
+Also: test_compat.sh no longer uses GNU mktemp --suffix (BSD mktemp
+lacks it, so every cell refused on macOS); release.sh untracks the .d
+dependency files and the superjuice binary that had slipped into
+history and dirtied the tree on every make.
+
+Film-family inference now looks only below the library root: macOS
+temp roots live under /var/folders/XX/ and a user whose XX was "bw"
+had Portra refused from 35mm-negative as black-and-white film.
+test_compat.sh runs its stub library under a /bw/ root as the
+regression.

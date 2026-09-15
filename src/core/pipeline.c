@@ -644,6 +644,262 @@ static void apply_grain(PjImage *image, float amount, float scale,
     }
 }
 
+/*
+ * Development edge effects. Developer diffuses and exhausts locally, so
+ * development rate depends on how much density is forming nearby. First-
+ * order steady state: the local developer strength is 1 - g*Dbar, where
+ * Dbar is density averaged over the diffusion length, normalized by the
+ * strength a large uniform area would see (1 - g*D):
+ *     D' = D * (1 - g*Dbar) / (1 - g*D)
+ * Uniform areas map to themselves. The dense side of an edge sees fresher
+ * developer (Dbar < D) and gains density (border effect); the thin side
+ * loses a little (fringe effect), proportionally less because it had
+ * little to lose; a small dense detail gains most (Eberhard). Unlike an
+ * unsharp mask this is multiplicative in density and asymmetric.
+ *
+ * Density proxy: display value of the formed image, bright = dense, which
+ * is the negative's orientation - and the first developer of reversal
+ * stock develops that same negative silver image. Diffusion length 0.15 mm
+ * on a 35mm frame diagonal, scaled with the image so previews stay
+ * faithful miniatures. Monochrome stock works on luma and applies one
+ * ratio to all channels (silver has no color fringes); color stock works
+ * per dye layer, which is also how DIR interimage effects behave.
+ */
+static void apply_edge_effects(PjImage *image, float amount, bool mono)
+{
+    if (amount <= 0.0f) return;
+    if (amount > 2.0f) amount = 2.0f;
+    size_t w = image->width, h = image->height, n = w * h;
+    float *dens = malloc(n * 3 * sizeof *dens);
+    float *avg = malloc(n * 3 * sizeof *avg);
+    if (!dens || !avg) { free(dens); free(avg); return; }
+    for (size_t i = 0; i < n; ++i) {
+        float *px = &image->rgb[i * 3];
+        if (mono) {
+            float y = 0.2126f * px[0] + 0.7152f * px[1] + 0.0722f * px[2];
+            dens[i * 3] = dens[i * 3 + 1] = dens[i * 3 + 2] =
+                linear_to_srgb(y);
+        } else
+            for (size_t c = 0; c < 3; ++c)
+                dens[i * 3 + c] = linear_to_srgb(px[c]);
+    }
+    memcpy(avg, dens, n * 3 * sizeof *avg);
+    float diagonal = hypotf((float)w, (float)h);
+    const float diffusion_mm = 0.15f, frame_diagonal_mm = 43.27f;
+    unsigned radius = (unsigned)lrintf(diffusion_mm * diagonal /
+                                       frame_diagonal_mm);
+    if (radius < 1) radius = 1;
+    box_blur(avg, w, h, radius);
+    box_blur(avg, w, h, radius);
+    box_blur(avg, w, h, radius);
+    float g = 0.16f * amount;
+    for (size_t i = 0; i < n; ++i) {
+        float *px = &image->rgb[i * 3];
+        if (mono) {
+            float d = dens[i * 3];
+            float ratio = (1.0f - g * avg[i * 3]) / (1.0f - g * d);
+            float target = clamp01(d * ratio);
+            /* one gain in linear light keeps neutral silver neutral */
+            float y = 0.2126f * px[0] + 0.7152f * px[1] + 0.0722f * px[2];
+            float gain = y > 1e-6f ? srgb_to_linear(target) / y : 0.0f;
+            for (size_t c = 0; c < 3; ++c) px[c] = clamp01(px[c] * gain);
+        } else
+            for (size_t c = 0; c < 3; ++c) {
+                float d = dens[i * 3 + c];
+                float ratio = (1.0f - g * avg[i * 3 + c]) / (1.0f - g * d);
+                px[c] = srgb_to_linear(clamp01(d * ratio));
+            }
+    }
+    free(dens);
+    free(avg);
+}
+
+/*
+ * Silver grain: the image is made of grains rather than overlaid by noise.
+ * Amplitude: a developed fraction u of the available grains, counted over
+ * a small area, fluctuates binomially, std ~ sqrt(u(1-u)); the print/scan
+ * slope that falls away at both ends tempers this to (4u(1-u))^0.75, so
+ * deep shadows and paper white stay quieter than the midtones but not
+ * silent as with the classic u(1-u) window.
+ * Texture: grain size follows exposure. Large crystals are the sensitive
+ * ones and develop first, so low exposure is carried by the coarse
+ * population alone and higher exposure fills in with fine grains; the two
+ * independent correlated fields blend with variance-preserving weights.
+ * Pushing favors the coarse population further. Color stock has three
+ * partly correlated dye layers (the fast top layer grainiest); silver
+ * stock one luminance field. Amplitude is calibrated so mid display gray
+ * carries the same RMS as the classic model for the same camera and film.
+ */
+/* Separable Gaussian with fractional sigma for grain-sized kernels, where
+ * integer box radii are far too coarse a control (radius 1 already
+ * correlates neighbors at 0.9). Edges clamp. */
+static void gaussian_blur_small(float *rgb, size_t w, size_t h, float sigma)
+{
+    if (sigma < 0.05f || w == 0 || h == 0) return;
+    int radius = (int)ceilf(3.0f * sigma);
+    if (radius > 16) radius = 16;
+    float kernel[33];
+    float total = 0.0f;
+    for (int k = -radius; k <= radius; ++k) {
+        kernel[k + radius] = expf(-(float)(k * k) / (2.0f * sigma * sigma));
+        total += kernel[k + radius];
+    }
+    for (int k = 0; k <= 2 * radius; ++k) kernel[k] /= total;
+    float *temp = malloc(w * h * 3 * sizeof *temp);
+    if (!temp) return;
+    for (size_t y = 0; y < h; ++y)
+        for (size_t x = 0; x < w; ++x)
+            for (size_t c = 0; c < 3; ++c) {
+                float acc = 0.0f;
+                for (int k = -radius; k <= radius; ++k) {
+                    long xx = (long)x + k;
+                    if (xx < 0) xx = 0;
+                    if (xx >= (long)w) xx = (long)w - 1;
+                    acc += kernel[k + radius] * rgb[(y * w + (size_t)xx) * 3 + c];
+                }
+                temp[(y * w + x) * 3 + c] = acc;
+            }
+    for (size_t y = 0; y < h; ++y)
+        for (size_t x = 0; x < w; ++x)
+            for (size_t c = 0; c < 3; ++c) {
+                float acc = 0.0f;
+                for (int k = -radius; k <= radius; ++k) {
+                    long yy = (long)y + k;
+                    if (yy < 0) yy = 0;
+                    if (yy >= (long)h) yy = (long)h - 1;
+                    acc += kernel[k + radius] * temp[((size_t)yy * w + x) * 3 + c];
+                }
+                rgb[(y * w + x) * 3 + c] = acc;
+            }
+    free(temp);
+}
+
+static void fill_grain_field(float *field, size_t w, size_t h, uint64_t seed,
+                             float sigma)
+{
+    size_t n = w * h * 3;
+    for (size_t y = 0; y < h; ++y)
+        for (size_t x = 0; x < w; ++x)
+            for (unsigned c = 0; c < 3; ++c)
+                field[(y * w + x) * 3 + c] =
+                    0.5f * (signed_noise(seed, x, y, c) +
+                            signed_noise(seed ^ UINT64_C(0xA5A5F00DCAFE1234),
+                                         x, y, c));
+    gaussian_blur_small(field, w, h, sigma);
+    double sum2 = 0.0;
+    for (size_t i = 0; i < n; ++i) sum2 += (double)field[i] * field[i];
+    float inv = sum2 > 0.0 ? (float)(1.0 / sqrt(sum2 / (double)n)) : 0.0f;
+    for (size_t i = 0; i < n; ++i) field[i] *= inv;
+}
+
+/* k = 1: one shared field; k = 0: independent layers. Unit variance kept. */
+static void couple_layers(float *field, size_t pixels, float k)
+{
+    if (k >= 1.0f) {
+        for (size_t i = 0; i < pixels; ++i) {
+            float m = (field[i * 3] + field[i * 3 + 1] + field[i * 3 + 2]) /
+                      sqrtf(3.0f);
+            field[i * 3] = field[i * 3 + 1] = field[i * 3 + 2] = m;
+        }
+        return;
+    }
+    if (k <= 0.0f) return;
+    float norm = 1.0f / sqrtf((1.0f - k) * (1.0f - k) +
+                              (2.0f * k - k * k) / 3.0f);
+    for (size_t i = 0; i < pixels; ++i) {
+        float *f = &field[i * 3];
+        float m = (f[0] + f[1] + f[2]) / 3.0f;
+        for (size_t c = 0; c < 3; ++c)
+            f[c] = ((1.0f - k) * f[c] + k * m) * norm;
+    }
+}
+
+static float classic_grain_rms(float scale, float midtone_bias)
+{
+    if (scale < 1.0f) scale = 1.0f;
+    double sum2 = 0.0;
+    for (size_t y = 0; y < 64; ++y)
+        for (size_t x = 0; x < 64; ++x) {
+            float v = smooth_noise(UINT64_C(0x5CA1AB1E), (float)x / scale,
+                                   (float)y / scale);
+            sum2 += (double)v * v;
+        }
+    float l = srgb_to_linear(0.5f);
+    return mixf(1.0f, 4.0f * l * (1.0f - l), clamp01(midtone_bias)) *
+           (float)sqrt(sum2 / 4096.0);
+}
+
+static void apply_silver_grain(PjImage *image, float amount, float scale,
+                               float midtone_bias, float chroma, bool mono,
+                               float push, uint64_t seed)
+{
+    if (amount <= 0.0f) return;
+    size_t w = image->width, h = image->height, n = w * h;
+    float amplitude = amount * classic_grain_rms(scale, midtone_bias);
+    if (scale < 0.5f) scale = 0.5f;
+    /* Gaussian sigmas in pixels: neighbor correlation exp(-1/(4 s^2)) is
+     * about 0.2 for the fine population and 0.65 for the coarse one at
+     * scale 1.25 (the classic model sits near 0.33). */
+    float coarse_sigma = 0.60f * scale;
+    float fine_sigma = 0.30f * scale;
+    float k = mono ? 1.0f : 0.70f * (1.0f - clamp01(chroma));
+    float weight[3] = {1.0f, 1.0f, 1.0f};
+    if (!mono) {   /* fast top (blue-sensitive) layer grainiest; luma RMS kept */
+        const float raw[3] = {1.00f, 0.92f, 1.18f};
+        float luma = 0.2126f * raw[0] + 0.7152f * raw[1] + 0.0722f * raw[2];
+        for (size_t c = 0; c < 3; ++c) weight[c] = raw[c] / luma;
+    }
+    float exposure_power = 1.0f + 0.35f * fmaxf(0.0f, push);
+
+    float *coarse = malloc(n * 3 * sizeof *coarse);
+    if (!coarse) return;
+    fill_grain_field(coarse, w, h, seed ^ UINT64_C(0xC0A45E6A1B), coarse_sigma);
+    couple_layers(coarse, n, k);
+    /* coarse contribution first, from the untouched image; frees one
+     * field's worth of memory before the fine field exists */
+    for (size_t i = 0; i < n; ++i) {
+        const float *px = &image->rgb[i * 3];
+        float y = mono ? linear_to_srgb(0.2126f * px[0] + 0.7152f * px[1] +
+                                        0.0722f * px[2]) : 0.0f;
+        for (size_t c = 0; c < 3; ++c) {
+            float u = mono ? y : linear_to_srgb(px[c]);
+            float t = powf(clamp01(u), exposure_power);
+            float shape = powf(4.0f * u * (1.0f - u), 0.75f);
+            coarse[i * 3 + c] *= amplitude * weight[c] * shape *
+                                 sqrtf(1.0f - t);
+        }
+    }
+    float *fine = malloc(n * 3 * sizeof *fine);
+    if (!fine) { free(coarse); return; }
+    fill_grain_field(fine, w, h, seed ^ UINT64_C(0xF1AE6A1B), fine_sigma);
+    couple_layers(fine, n, k);
+    for (size_t i = 0; i < n; ++i) {
+        float *px = &image->rgb[i * 3];
+        float y = mono ? linear_to_srgb(0.2126f * px[0] + 0.7152f * px[1] +
+                                        0.0722f * px[2]) : 0.0f;
+        float display[3];
+        for (size_t c = 0; c < 3; ++c) {
+            display[c] = linear_to_srgb(px[c]);
+            float u = mono ? y : display[c];
+            float t = powf(clamp01(u), exposure_power);
+            float shape = powf(4.0f * u * (1.0f - u), 0.75f);
+            float grain = coarse[i * 3 + c] +
+                          fine[i * 3 + c] * amplitude * weight[c] * shape *
+                          sqrtf(t);
+            display[c] += grain;
+        }
+        for (size_t c = 0; c < 3; ++c)
+            px[c] = srgb_to_linear(clamp01(display[c]));
+    }
+    free(fine);
+    free(coarse);
+}
+
+bool pj_grain_model_known(const char *name)
+{
+    return !name || !strcmp(name, "classic") || !strcmp(name, "silver");
+}
+
 static PjImage *square_crop(const PjImage *input, PjError *error)
 {
     size_t side = input->width < input->height ? input->width : input->height;
@@ -761,32 +1017,54 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_builtin_tone(image, preset, strength);
         apply_builtin_color(image, preset, strength);
     }
-    /* optional print/scan stock, chained after the film transform */
-    if (options && options->print_lut)
-        apply_color_lut(image, options->print_lut, strength);
     {
+        const char *process = options ? options->film_process : NULL;
+        bool mono = preset->monochrome ||
+                    (process && !strcmp(process, "bw"));
+        bool silver = options && options->grain_model &&
+                      !strcmp(options->grain_model, "silver");
         float push = options ? options->push : 0.0f;
         bool cross = options ? options->cross_process : false;
-        if (preset->instant_frame) { push = 0.0f; cross = false; }
-        apply_develop(image, push, cross);
-        float age = preset->fade * strength + (options ? options->age : 0.0f);
-        apply_age(image, age, options ? options->film_process : NULL);
-        /* pushed development coarsens grain; pulling calms it */
-        float grain_gain = 1.0f + 0.45f * fmaxf(0.0f, push)
-                                + 0.15f * fminf(0.0f, push);
+        float edge = options ? options->edge * strength : 0.0f;
+        if (preset->instant_frame) { push = 0.0f; cross = false; edge = 0.0f; }
         uint64_t grain_seed = temporal
             ? seed ^ ((uint64_t)frame * UINT64_C(0x9E3779B97F4A7C15))
             : seed;
         float film_amount = 1.0f, film_scale = 1.0f;
         film_grain_character(options ? options->film_stem : NULL,
-                             preset->default_film,
-                             options ? options->film_process : NULL,
+                             preset->default_film, process,
                              &film_amount, &film_scale);
-        apply_grain(image,
-                    preset->grain * strength * grain_gain * film_amount,
-                    preset->grain_scale * film_scale,
-                    preset->grain_midtone_bias,
-                    preset->grain_chroma, grain_seed);
+
+        /* the film is developed: edge effects, then (silver) its grain */
+        apply_edge_effects(image, edge, mono);
+        if (silver) {
+            /* develop's contrast gain already amplifies grain formed
+             * before it, so push adds less here than in classic */
+            float silver_gain = 1.0f + 0.30f * fmaxf(0.0f, push)
+                                     + 0.15f * fminf(0.0f, push);
+            apply_silver_grain(image,
+                               preset->grain * strength * silver_gain *
+                                   film_amount,
+                               preset->grain_scale * film_scale,
+                               preset->grain_midtone_bias,
+                               preset->grain_chroma, mono, push, grain_seed);
+        }
+        /* optional print/scan stock, chained after the film transform */
+        if (options && options->print_lut)
+            apply_color_lut(image, options->print_lut, strength);
+        apply_develop(image, push, cross);
+        float age = preset->fade * strength + (options ? options->age : 0.0f);
+        apply_age(image, age, process);
+        if (!silver) {
+            /* pushed development coarsens grain; pulling calms it */
+            float grain_gain = 1.0f + 0.45f * fmaxf(0.0f, push)
+                                    + 0.15f * fminf(0.0f, push);
+            apply_grain(image,
+                        preset->grain * strength * grain_gain * film_amount,
+                        preset->grain_scale * film_scale,
+                        preset->grain_midtone_bias,
+                        preset->grain_chroma, grain_seed);
+        }
     }
 
     if (preset->instant_frame) {

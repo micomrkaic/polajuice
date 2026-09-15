@@ -13,3 +13,6 @@ third_party/wasi-sdk*
 web/_pagecheck.mjs
 web/samples/
 *.png
+*.d
+/superjuice
+/tests/test_web_shim

@@ -107,6 +107,9 @@ static void usage(FILE *stream)
         "      --develop MODE      normal, push+1, push+2, pull-1, cross\n"
         "      --age NUMBER        0..1\n"
         "      --strength NUMBER   0..1\n"
+        "      --grain MODEL       classic (default) or silver (grain from\n"
+        "                          exposure: coarse shadows, fine highlights)\n"
+        "      --edge NUMBER       development edge effects 0..2\n"
         "      --seed INTEGER      base seed; grain decorrelates per frame\n"
         "      --motion-scale N    scale gate weave and flicker (default 1;\n"
         "                          0.5 steadier, 2 a worn projector)\n"
@@ -203,6 +206,22 @@ int main(int argc, char **argv)
                 fprintf(stderr, "superjuice: unknown filter '%s'; the rack "
                         "holds: yellow, orange, red, green, blue, none\n",
                         options.contrast_filter);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (!strcmp(argv[i], "--grain") && i + 1 < argc) {
+            options.grain_model = argv[++i];
+            if (!pj_grain_model_known(options.grain_model)) {
+                fprintf(stderr, "superjuice: unknown grain model '%s' "
+                        "(classic, silver)\n", options.grain_model);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (!strcmp(argv[i], "--edge") && i + 1 < argc) {
+            char *end = NULL;
+            options.edge = strtof(argv[++i], &end);
+            if (!end || *end || options.edge < 0.0f || options.edge > 2.0f) {
+                fprintf(stderr, "superjuice: invalid edge (0..2)\n");
                 return EXIT_FAILURE;
             }
         }

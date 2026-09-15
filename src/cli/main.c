@@ -42,6 +42,11 @@ static void usage(FILE *stream)
         "                          not applicable to instant cameras\n"
         "      --age NUMBER        storage aging from 0 (fresh) to 1\n"
         "                          (fog, faded contrast, magenta drift)\n"
+        "      --grain MODEL       classic (default) or silver: grain formed\n"
+        "                          from exposure inside the film, coarse in\n"
+        "                          the shadows and fine in the highlights\n"
+        "      --edge NUMBER       development edge effects 0..2 (0 off,\n"
+        "                          1 dilute developer, 2 stand development)\n"
         "      --seed INTEGER      deterministic grain seed\n"
         "  -h, --help              show this help\n\n"
         "Film library: $POLAJUICE_FILMS, else ./data/luts ('make fetch-luts').\n",
@@ -147,6 +152,20 @@ static int apply(int argc, char **argv)
                         options.contrast_filter);
                 return EXIT_FAILURE;
             }
+        } else if (!strcmp(argv[i], "--grain") && i + 1 < argc) {
+            options.grain_model = argv[++i];
+            if (!pj_grain_model_known(options.grain_model)) {
+                fprintf(stderr, "polajuice: unknown grain model '%s' "
+                        "(classic, silver)\n", options.grain_model);
+                return EXIT_FAILURE;
+            }
+        } else if (!strcmp(argv[i], "--edge") && i + 1 < argc) {
+            char *end = NULL;
+            options.edge = strtof(argv[++i], &end);
+            if (!end || *end || options.edge < 0.0f || options.edge > 2.0f) {
+                fprintf(stderr, "invalid edge (0..2)\n");
+                return EXIT_FAILURE;
+            }
         } else if (!strcmp(argv[i], "--seed") && i + 1 < argc) {
             char *end = NULL;
             errno = 0;
@@ -183,6 +202,9 @@ static int apply(int argc, char **argv)
         pj_preset_is_instant(camera))
         fprintf(stderr, "note: %s develops inside the film unit; "
                 "--develop is ignored for instant cameras\n", camera);
+    if (options.edge > 0.0f && pj_preset_is_instant(camera))
+        fprintf(stderr, "note: %s develops inside the film unit; "
+                "--edge is ignored for instant cameras\n", camera);
 
     /* Choose the film: explicit request > camera default > scalar engine. */
     char *film_path = NULL;

@@ -19,6 +19,11 @@
 #   FILTER   []                    lens contrast filter (yellow, orange,
 #                                   red, green, blue); orange + a bw
 #                                   camera is the dramatic-sky classic
+#   GRAIN    [classic]             grain model: classic (overlaid) or
+#                                   silver (formed from exposure inside
+#                                   the film: coarse shadows, fine lights)
+#   EDGE     [0]                    development edge effects 0..2 (1 dilute
+#                                   developer, 2 stand development)
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
 #                                   2 = worn projector, 0 = tripod-locked
 #   SOUND    [stripe]              stripe = audiotard tape mangle;
@@ -60,6 +65,8 @@ SEED=${SEED:-7}
 FPS=${FPS:-18}
 HEIGHT=${HEIGHT:-720}
 FILTER=${FILTER:-}
+GRAIN=${GRAIN:-classic}
+EDGE=${EDGE:-0}
 MOTION=${MOTION:-1}
 SOUND=${SOUND:-stripe}
 WOW=${WOW:-14}
@@ -105,9 +112,9 @@ ffmpeg -v error -i "$IN" -vf "fps=$FPS,scale=-2:$HEIGHT" \
        -f yuv4mpegpipe -pix_fmt yuv420p - \
   | ( cd "$SJ_DIR" && \
       case "$FILM" in \
-      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} ;; \
-      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} ;; \
-      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} ;; \
+      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" ;; \
+      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" ;; \
+      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" ;; \
       esac ) \
   | ffmpeg -v error -y -f yuv4mpegpipe -i - \
        -vf 'crop=trunc(iw/2)*2:trunc(ih/2)*2' \

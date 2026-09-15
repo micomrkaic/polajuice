@@ -33,7 +33,7 @@
 
 - paired chart-capture calibration utility
 - fitted characteristic curves
-- exposure-dependent grain statistics
+- exposure-dependent grain statistics (done: `--grain silver`, 1.16.0)
 - separate stock and scanner/print models
 - perceptual visual-regression suite
 

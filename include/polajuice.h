@@ -63,6 +63,21 @@ typedef struct {
                     stock, texture by grain family (tabular finer, dye
                     clouds softer, HIE grittier), push suffixes (_+, _++)
                     add stops. NULL leaves the camera's grain untouched. */
+    const char *grain_model;    /* "classic" (NULL): additive display noise
+                    at the end of the pipeline, as through 1.15.
+                    "silver": grain generated from exposure inside the
+                    film - binomial grain statistics set the amplitude,
+                    and texture follows exposure (low exposure develops
+                    only the large fast grains, so shadows run coarse,
+                    highlights fine). It sits before the print stock, push
+                    and age, which act on it as they act on the image. */
+    float edge;     /* development edge effects, 0 (off) .. 2: 1 is a dilute
+                    developer, 2 stand development. Developer exhausts
+                    locally, so the dense side of a boundary develops
+                    denser and a small dense detail more than a large one
+                    (border, fringe and Eberhard effects). Nonlinear and
+                    asymmetric, unlike an unsharp mask; uniform areas are
+                    untouched. Ignored for instant cameras. */
 } PjRenderOptions;
 
 PjImage *pj_image_new(size_t width, size_t height, PjError *error);
@@ -117,6 +132,8 @@ char *pj_preset_film_processes(const char *camera, char *buffer, size_t size);
  * default the age profile when no film supplies a process. */
 const char *pj_preset_primary_process(const char *camera);
 bool pj_contrast_filter_known(const char *name);
+/* True for NULL, "classic" and "silver". */
+bool pj_grain_model_known(const char *name);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,
