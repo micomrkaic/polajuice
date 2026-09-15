@@ -27,6 +27,36 @@ cd "$SRC"
 
 TREE_VERSION=$(cat "$SRC/VERSION")
 
+# Publish $REPO/web/ as the gh-pages branch from an orphan staging
+# branch. The staging tree is emptied with git rm first, which removes
+# .gitignore from it, so the *.jpg rule of main cannot swallow the
+# sample photos (the restage path once branched from main and pushed a
+# strip with captions and no pictures). Runs in $REPO.
+deploy_pages() {
+    stamp=$(git rev-parse --short HEAD)
+    git branch -D gh-pages-staging >/dev/null 2>&1 || true
+    git worktree prune
+    work=$(mktemp -d)
+    git worktree add --detach "$work" >/dev/null
+    (
+        cd "$work"
+        git checkout -q --orphan gh-pages-staging
+        git rm -rfq . 2>/dev/null || true
+        cp -R "$REPO/web/." .
+        git add -A
+        n=$(git ls-files samples | grep -c '\.jpg$' || true)
+        [ "$n" -ge 12 ] || {
+            echo "!! only $n sample photos staged for gh-pages (expected 12);" >&2
+            echo "   refusing to publish a strip without pictures" >&2
+            exit 1
+        }
+        git commit -qm "pages build from $stamp"
+        git push --force origin HEAD:gh-pages
+    ) || { git worktree remove --force "$work"; exit 1; }
+    git worktree remove --force "$work"
+    git branch -D gh-pages-staging >/dev/null 2>&1 || true
+}
+
 # --restage: redeploy gh-pages from the CURRENT repo state (fresh film
 # staging included) without importing, committing, tagging or touching
 # main. For when the film library changed but the source did not -
@@ -37,17 +67,7 @@ if [ "${1:-}" = "--restage" ]; then
     cd "$REPO"
     echo "== restaging films and redeploying gh-pages (no release)"
     sh scripts/stage_web_films.sh
-    sh scripts/deploy_pages.sh 2>/dev/null || {
-        # inline deploy, mirroring the release path
-        STAGING_BRANCH=gh-pages-staging
-        git worktree remove --force /tmp/pj-pages 2>/dev/null || true
-        git branch -D "$STAGING_BRANCH" 2>/dev/null || true
-        git worktree add -q /tmp/pj-pages -b "$STAGING_BRANCH"
-        cp -R "$REPO/web/." /tmp/pj-pages/
-        ( cd /tmp/pj-pages && git add -A &&           git commit -qm "pages restage: film catalog update" &&           git push -q -f origin "$STAGING_BRANCH:gh-pages" )
-        git worktree remove --force /tmp/pj-pages
-        git branch -D "$STAGING_BRANCH" 2>/dev/null || true
-    }
+    deploy_pages
     echo "== done: gh-pages restaged from current repo (main untouched)"
     exit 0
 fi
@@ -120,10 +140,19 @@ for entry in "$SRC"/* "$SRC"/.[!.]*; do
 done
 # Keep renders and the fetched film library out of history, idempotently.
 for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/' \
-               'web/polajuice.wasm' 'web/films/' 'web/samples/' 'third_party/wasi-sdk*' \
-               'web/_pagecheck.mjs' '*.d' '/superjuice' '/tests/test_web_shim'; do
+               'web/polajuice.wasm' 'web/films/' 'third_party/wasi-sdk*' \
+               'web/_pagecheck.mjs' '*.d' '/superjuice' '/tests/test_web_shim' \
+               '!web/samples/*.jpg' '!web/samples/*.json'; do
     grep -qxF "$pattern" .gitignore || echo "$pattern" >> .gitignore
 done
+# the sample photos used to be ignored and lived only in working trees
+# and on gh-pages, so a fresh clone deployed a strip without pictures;
+# they are tracked from 1.16.1 on - drop the old rule and add them
+if grep -qxF 'web/samples/' .gitignore; then
+    grep -vxF 'web/samples/' .gitignore > .gitignore.tmp
+    mv .gitignore.tmp .gitignore
+fi
+git add -f web/samples
 # build byproducts that slipped into history at some point (the .d
 # dependency files, the superjuice binary) dirty the tree on every make
 # and block the clean-tree check on the next release; drop them from the
@@ -165,23 +194,7 @@ else
     echo "note: no film library (make fetch-luts); deploying without films" >&2
 fi
 STAMP=$(git rev-parse --short HEAD)
-# the staging branch persists after a deploy; remove leftovers or the
-# second release on the same repo collides with the first one's branch
-git branch -D gh-pages-staging >/dev/null 2>&1 || true
-git worktree prune
-WORK=$(mktemp -d)
-git worktree add --detach "$WORK" >/dev/null
-(
-    cd "$WORK"
-    git checkout -q --orphan gh-pages-staging
-    git rm -rfq . 2>/dev/null || true
-    cp -R "$REPO/web/." .
-    git add -A
-    git commit -qm "pages build from $STAMP"
-    git push --force origin HEAD:gh-pages
-)
-git worktree remove --force "$WORK"
-git branch -D gh-pages-staging >/dev/null 2>&1 || true
+deploy_pages
 
 echo
 echo "== done: $STAMP tagged $TAG, gh-pages updated"

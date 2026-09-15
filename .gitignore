@@ -2,17 +2,21 @@
 *.a
 *.jpeg
 *.jpg
+*.png
 *.o
+*.d
 *.ppm
 /polajuice
+/superjuice
 /tests/test_core
+/tests/test_web_shim
 data/luts/
 web/polajuice.wasm
 web/films/
 third_party/wasi-sdk*
 web/_pagecheck.mjs
-web/samples/
-*.png
-*.d
-/superjuice
-/tests/test_web_shim
+# the six sample photos and their manifest are tracked: they are the
+# author's own (CC BY 4.0) and every clone, tarball and gh-pages deploy
+# must carry them
+!web/samples/*.jpg
+!web/samples/*.json

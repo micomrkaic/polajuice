@@ -1,0 +1,22 @@
+1.16.1: the sample photos travel with the source
+
+The six sample photographs (the author's own, CC BY 4.0) and their
+manifest are now tracked in git and ship in every tarball. Since 0.9.0
+they had been ignored and lived only in working trees and on gh-pages,
+so a fresh clone - the MacBook, the sandbox - had none, and a release
+from such a tree published a strip with captions and no pictures.
+.gitignore keeps *.jpg but un-ignores web/samples/*.jpg and *.json;
+release.sh drops the old web/samples/ rule from an existing checkout
+and adds the photos on import.
+
+Both gh-pages deploys (release and --restage) now go through one
+deploy_pages function using the orphan-branch sequence: the staging
+tree is emptied with git rm first, which removes .gitignore from it,
+so main's *.jpg rule can no longer swallow the photos - the --restage
+path had branched from main and did exactly that. The function refuses
+to publish if fewer than twelve sample jpgs are staged, and cleans up
+its worktree on failure. The restage also no longer copies the source
+tree onto gh-pages.
+
+.gitignore consolidated: *.d, /superjuice and /tests/test_web_shim
+grouped with the other build products.
