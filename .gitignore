@@ -20,3 +20,5 @@ web/_pagecheck.mjs
 # must carry them
 !web/samples/*.jpg
 !web/samples/*.json
+# synthetic raw test files (tools/make_test_raws.py), a few KB each
+!tests/raw/*

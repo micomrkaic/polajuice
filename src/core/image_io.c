@@ -45,7 +45,7 @@ static float io_linear_to_srgb(float x)
                            : 1.055f * powf(x, 1.0f / 2.4f) - 0.055f;
 }
 
-typedef enum { PJ_FMT_UNKNOWN, PJ_FMT_PPM, PJ_FMT_PNG, PJ_FMT_JPEG } PjFormat;
+typedef enum { PJ_FMT_UNKNOWN, PJ_FMT_PPM, PJ_FMT_PNG, PJ_FMT_JPEG, PJ_FMT_RAW } PjFormat;
 
 static PjFormat format_from_path(const char *path)
 {
@@ -58,6 +58,7 @@ static PjFormat format_from_path(const char *path)
     if (!strcmp(ext, "ppm")) return PJ_FMT_PPM;
     if (!strcmp(ext, "png")) return PJ_FMT_PNG;
     if (!strcmp(ext, "jpg") || !strcmp(ext, "jpeg")) return PJ_FMT_JPEG;
+    if (!strcmp(ext, "nef") || !strcmp(ext, "dng")) return PJ_FMT_RAW;
     return PJ_FMT_UNKNOWN;
 }
 
@@ -140,7 +141,7 @@ done:
 }
 
 /* Bake EXIF orientation 2..8 into the pixel buffer. */
-static PjImage *apply_orientation(PjImage *image, int orientation,
+PjImage *pj_image_apply_orientation(PjImage *image, int orientation,
                                   PjError *error)
 {
     if (orientation <= 1 || orientation > 8 || !image) return image;
@@ -153,6 +154,7 @@ static PjImage *apply_orientation(PjImage *image, int orientation,
         pj_image_free(image);
         return NULL;
     }
+    out->scene_linear = image->scene_linear;
     for (size_t y = 0; y < image->height; ++y) {
         for (size_t x = 0; x < image->width; ++x) {
             size_t ox = 0, oy = 0;
@@ -211,11 +213,14 @@ PjImage *pj_image_load(const char *path, PjError *error)
     case PJ_FMT_JPEG: {
         PjImage *image = load_stb(path, error);
         if (!image) return NULL;
-        return apply_orientation(image, jpeg_exif_orientation(path), error);
+        return pj_image_apply_orientation(image, jpeg_exif_orientation(path), error);
     }
+    case PJ_FMT_RAW:
+        return pj_image_load_raw(path, error);
     default:
         pj_set_error(error,
-                     "'%s': unsupported format (use .ppm, .png, .jpg or .jpeg)",
+                     "'%s': unsupported format (use .ppm, .png, .jpg, .jpeg, "
+                     ".nef or .dng)",
                      path);
         return NULL;
     }

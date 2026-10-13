@@ -27,7 +27,9 @@
 - HEIC/Display P3 decoding
 - explicit SDR and HDR paths
 - conservative computational-photography normalization
-- optional ProRAW input through LibRaw
+- optional ProRAW input through LibRaw (done without LibRaw: the
+  scene-linear door, 1.17.0 - NEF, DNG, --linear)
+- adaptive demosaic (AHD) for the raw door; bilinear fringes hard edges
 
 ## 0.4 — calibrated stocks
 

@@ -11,7 +11,11 @@
  *   polajuice.wasm --version
  *   polajuice.wasm render IN CAMERA FILM|- PROCESS|- FILMSTEM|- PRINT|-
  *                         FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT
- *                         GRAIN EDGE
+ *                         GRAIN EDGE EV HALATION
+ *   polajuice.wasm develop IN MAX_DIM OUT
+ *       the straight print of a raw (.nef/.dng) input: scene-linear
+ *       decode, a stop up, shoulder, JPEG - what the page shows as the
+ *       "original" when the browser itself cannot decode the file.
  *       FILM "-" selects the built-in scalar engine; MAX_DIM 0 renders
  *       at full resolution, otherwise the input is box-average
  *       downscaled in linear light first (preview mode). GRAIN is
@@ -52,10 +56,10 @@ static int list_cameras(void)
 
 static int render(int argc, char **argv)
 {
-    if (argc != 17) {
+    if (argc != 19) {
         fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- FILMSTEM|- "
                         "PRINT|- FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM "
-                        "OUT GRAIN EDGE\n");
+                        "OUT GRAIN EDGE EV HALATION\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
@@ -80,6 +84,10 @@ static int render(int argc, char **argv)
         fprintf(stderr, "edge must be 0..2\n");
         return 2;
     }
+    float ev = strtof(argv[17], NULL);
+    float halation = strtof(argv[18], NULL);
+    if (ev < -4.0f || ev > 4.0f) { fprintf(stderr, "ev must be -4..4\n"); return 2; }
+    if (halation < 0.0f || halation > 2.0f) { fprintf(stderr, "halation must be 0..2\n"); return 2; }
 
     /* Engine-level compatibility parity with the CLI: the browser UI
      * filters too, but the artifact itself must refuse nonsense. An
@@ -140,7 +148,10 @@ static int render(int argc, char **argv)
                                .contrast_filter =
                                    strcmp(filter, "-") ? filter : NULL,
                                .grain_model = grain_model,
-                               .edge = edge};
+                               .edge = edge,
+                               .ev = ev,
+                               .halation = halation == 0.0f ? PJ_HALATION_OFF
+                                                            : halation};
     if (!strcmp(dev, "push+1")) options.push = 1.0f;
     else if (!strcmp(dev, "push+2")) options.push = 2.0f;
     else if (!strcmp(dev, "pull-1")) options.push = -1.0f;
@@ -156,14 +167,30 @@ static int render(int argc, char **argv)
     return 0;
 }
 
+static int develop(int argc, char **argv)
+{
+    if (argc != 5) { fprintf(stderr, "args: develop IN MAX_DIM OUT\n"); return 2; }
+    PjError error = {{0}};
+    PjImage *image = pj_image_load(argv[2], &error);
+    if (!image) { fprintf(stderr, "%s\n", error.message); return 1; }
+    image = pj_image_downscale(image, (size_t)strtoull(argv[3], NULL, 0), &error);
+    if (!image) { fprintf(stderr, "%s\n", error.message); return 1; }
+    pj_image_scene_to_display(image, 0.0f);
+    bool saved = pj_image_save(image, argv[4], &error);
+    pj_image_free(image);
+    if (!saved) { fprintf(stderr, "%s\n", error.message); return 1; }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && !strcmp(argv[1], "develop")) return develop(argc, argv);
     if (argc >= 2 && !strcmp(argv[1], "--list-cameras")) return list_cameras();
     if (argc >= 2 && !strcmp(argv[1], "--version")) {
         printf("%s\n", pj_version_string());
         return 0;
     }
     if (argc >= 2 && !strcmp(argv[1], "render")) return render(argc, argv);
-    fprintf(stderr, "modes: --list-cameras | --version | render ...\n");
+    fprintf(stderr, "modes: --list-cameras | --version | render ... | develop ...\n");
     return 2;
 }

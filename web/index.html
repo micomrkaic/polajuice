@@ -71,8 +71,8 @@
      everything renders locally in WebAssembly.</p>
 </header>
 <main>
-  <div id="drop">drop a JPEG or PNG here, click to choose — or try a sample below
-    <input id="file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden>
+  <div id="drop">drop a JPEG, PNG, NEF or DNG here, click to choose — or try a sample below
+    <input id="file" type="file" accept=".jpg,.jpeg,.png,.nef,.dng,image/jpeg,image/png" hidden>
   </div>
 
   <div id="samplestrip" class="samplestrip"></div>
@@ -142,6 +142,19 @@ Ignored for instant cameras.">Edge effects <span id="edgeval">off</span></label>
       <input id="edge" type="range" min="0" max="2" step="0.1" value="0">
     </div>
     <div>
+      <label for="ev" title="Exposure in stops on the scene light, before anything else.
+Raw files open one stop up on top of this, with the sensor's top stop
+rolled in by a shoulder before the film sees it.">Exposure <span id="evval">0</span></label>
+      <input id="ev" type="range" min="-2" max="2" step="0.1" value="0">
+    </div>
+    <div>
+      <label for="halation" title="Scales the camera's halation: the brightest light scattering back
+through the film base as a red-orange glow. 0 off, 1 the camera's own,
+2 double. Strongest with raw input, where speculars still exist above
+white.">Halation <span id="halval">1.0</span></label>
+      <input id="halation" type="range" min="0" max="2" step="0.1" value="1">
+    </div>
+    <div>
       <label for="seed">Grain seed</label>
       <input id="seed" type="number" value="42" step="1">
     </div>
@@ -173,7 +186,12 @@ Ignored for instant cameras.">Edge effects <span id="edgeval">off</span></label>
         developer exhausting locally — the dense side of a boundary
         develops denser and small dense details most (border, fringe and
         Eberhard effects) — 1 is a dilute developer, 2 stand development;
-        uniform areas are untouched.</p>
+        uniform areas are untouched. Raw files (.nef, .dng) come through a
+        scene-linear door: the sensor's white sits a stop above display
+        white and the top stop rolls in through a shoulder, so halation
+        and the film curve see real highlights instead of a plateau;
+        Exposure moves from there. JPEG and PNG render exactly as before.
+        Halation scales the camera's glow, strongest from raw.</p>
         <dl id="helpfilms"></dl>
       </div>
     </div>
@@ -201,7 +219,7 @@ Ignored for instant cameras.">Edge effects <span id="edgeval">off</span></label>
 import { createEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
 let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
-const PAGE_VERSION = "1.16.1";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.17.0";   // kept in step by scripts/release checks
 let filmFamilies = [];   // module scope: render() needs it, not just boot()
 function familyToken(family) {
   const p = family.process || "";
@@ -415,7 +433,9 @@ async function render(maxDim) {
       age: parseFloat($("age").value),
       develop: $("develop").value, maxDim,
       grainModel: $("grain").value,
-      edge: parseFloat($("edge").value) });
+      edge: parseFloat($("edge").value),
+      ev: parseFloat($("ev").value),
+      halation: parseFloat($("halation").value) });
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
     $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
@@ -426,12 +446,26 @@ async function render(maxDim) {
   }
 }
 
-function acceptBytes(bytes, name) {
+async function acceptBytes(bytes, name) {
   inputName = name.replace(/\.[^.]+$/, "");
-  inputExt = /\.png$/i.test(name) ? "png" : "jpg";
+  const m = /\.(png|nef|dng)$/i.exec(name);
+  inputExt = m ? m[1].toLowerCase() : "jpg";
   inputBytes = bytes;
-  $("before").src = URL.createObjectURL(new Blob([inputBytes]));
   $("render").disabled = $("download").disabled = false;
+  if (inputExt === "nef" || inputExt === "dng") {
+    /* the browser cannot show a raw file: the engine prints it straight */
+    setStatus(`decoding ${name}…`);
+    try {
+      const jpg = await engine.develop({ inputBytes, ext: inputExt, maxDim: 1400 });
+      $("before").src = URL.createObjectURL(new Blob([jpg], { type: "image/jpeg" }));
+      setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB raw — straight print shown)`);
+    } catch (e) {
+      setStatus(`cannot decode ${name}: ${e.message}`, true);
+      $("render").disabled = $("download").disabled = true;
+    }
+    return;
+  }
+  $("before").src = URL.createObjectURL(new Blob([inputBytes]));
   setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB)`);
 }
 
@@ -474,6 +508,14 @@ $("age").addEventListener("input", () => {
 $("edge").addEventListener("input", () => {
   const v = parseFloat($("edge").value);
   $("edgeval").textContent = v === 0 ? "off" : v.toFixed(1);
+});
+$("ev").addEventListener("input", () => {
+  const v = parseFloat($("ev").value);
+  $("evval").textContent = (v > 0 ? "+" : "") + v.toFixed(1);
+});
+$("halation").addEventListener("input", () => {
+  const v = parseFloat($("halation").value);
+  $("halval").textContent = v === 0 ? "off" : v.toFixed(1);
 });
 $("render").addEventListener("click", async () => {
   const blob = await render(1400);

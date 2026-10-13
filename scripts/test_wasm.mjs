@@ -144,4 +144,27 @@ try {
   if (!refused) throw new Error("unknown grain model accepted by wasm");
   console.log("grain model and edge effects ok through wasm");
 }
+{
+  // the raw door: a synthetic NEF and DNG decode in the engine, the
+  // straight print comes back as a JPEG, and ev/halation reach render
+  const nef = await readFile(new URL("../tests/raw/lossless14.nef", import.meta.url));
+  const dng = await readFile(new URL("../tests/raw/bayer_lj92.dng", import.meta.url));
+  const straight = await engine.develop({ inputBytes: nef, ext: "nef", maxDim: 0 });
+  if (!(straight.length > 100 && straight[0] === 0xFF && straight[1] === 0xD8))
+      throw new Error("develop did not return a JPEG");
+  const base = { inputBytes: dng, ext: "dng", camera: "35mm-negative",
+                 filmProcess: "negative", seed: 6, maxDim: 0 };
+  const plain = await engine.render(base);
+  const brighter = await engine.render({ ...base, ev: 1 });
+  if (Buffer.compare(Buffer.from(plain), Buffer.from(brighter)) === 0)
+      throw new Error("ev had no effect through wasm");
+  const noglow = await engine.render({ ...base, halation: 0 });
+  if (Buffer.compare(Buffer.from(plain), Buffer.from(noglow)) === 0)
+      throw new Error("halation 0 had no effect through wasm");
+  let refused = false;
+  try { await engine.render({ ...base, ev: 9 }); }
+  catch (e) { refused = /ev must be/.test(e.message); }
+  if (!refused) throw new Error("ev 9 accepted by wasm");
+  console.log("raw door ok through wasm (NEF straight print, DNG render, ev, halation)");
+}
 console.log("wasm engine tests passed");

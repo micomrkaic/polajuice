@@ -40,6 +40,10 @@ if (!doc.getElementById("cubefile"))
     throw new Error("custom .cube input missing");
 if (!doc.getElementById("grain") || !doc.getElementById("edge"))
     throw new Error("grain model select or edge slider missing");
+if (!doc.getElementById("ev") || !doc.getElementById("halation"))
+    throw new Error("exposure or halation slider missing");
+if (!/\.nef/.test(doc.getElementById("file").getAttribute("accept")))
+    throw new Error("file input does not accept raw files");
 if (doc.getElementById("camera").options.length < 14)
   fail("camera dropdown short");
 // print selector contract when print stocks are staged

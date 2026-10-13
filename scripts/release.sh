@@ -142,7 +142,7 @@ done
 for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/' \
                'web/polajuice.wasm' 'web/films/' 'third_party/wasi-sdk*' \
                'web/_pagecheck.mjs' '*.d' '/superjuice' '/tests/test_web_shim' \
-               '!web/samples/*.jpg' '!web/samples/*.json'; do
+               '!web/samples/*.jpg' '!web/samples/*.json' '!tests/raw/*'; do
     grep -qxF "$pattern" .gitignore || echo "$pattern" >> .gitignore
 done
 # the sample photos used to be ignored and lived only in working trees
@@ -152,7 +152,7 @@ if grep -qxF 'web/samples/' .gitignore; then
     grep -vxF 'web/samples/' .gitignore > .gitignore.tmp
     mv .gitignore.tmp .gitignore
 fi
-git add -f web/samples
+git add -f web/samples tests/raw
 # build byproducts that slipped into history at some point (the .d
 # dependency files, the superjuice binary) dirty the tree on every make
 # and block the clean-tree check on the next release; drop them from the

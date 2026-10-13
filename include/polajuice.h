@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 15
+#define PJ_VERSION_MINOR 17
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -19,6 +19,11 @@ typedef struct PjLut3D PjLut3D;
 typedef struct {
     char message[256];
 } PjError;
+
+/* Sentinel for PjRenderOptions.halation meaning "no halation at all";
+ * 0 keeps the preset's default so that zero-initialized options render
+ * exactly as before. */
+#define PJ_HALATION_OFF (-1.0f)
 
 typedef struct {
     uint64_t seed;
@@ -71,6 +76,18 @@ typedef struct {
                     only the large fast grains, so shadows run coarse,
                     highlights fine). It sits before the print stock, push
                     and age, which act on it as they act on the image. */
+    float ev;       /* exposure adjustment in stops applied to the scene
+                    light before anything else. 0 leaves display-referred
+                    input untouched. Scene-linear input (raw, --linear)
+                    always opens one stop up on top of this, with the
+                    sensor's top stop rolled in by a shoulder before the
+                    film sees it. */
+    float halation; /* scales the camera's halation: 0 means unset (the
+                    preset's own amount, so zeroed options render as
+                    before), 1 the same, 2 twice the glow, PJ_HALATION_OFF
+                    none. The glow is the brightest light scattering back
+                    through the base, so it is strongest with raw input,
+                    where speculars still exist above white. */
     float edge;     /* development edge effects, 0 (off) .. 2: 1 is a dilute
                     developer, 2 stand development. Developer exhausts
                     locally, so the dense side of a boundary develops
@@ -82,9 +99,21 @@ typedef struct {
 
 PjImage *pj_image_new(size_t width, size_t height, PjError *error);
 
-/* Format chosen from the file extension: .ppm, .png, .jpg/.jpeg.
- * JPEG loading honors the EXIF orientation tag. */
+/* Format chosen from the file extension: .ppm, .png, .jpg/.jpeg are
+ * display-referred 8-bit sRGB decoded to linear; .nef and .dng are raw
+ * camera files decoded to scene-linear RGB (sensor white at 1.0, headroom
+ * above it kept). JPEG and raw loading honor the orientation tag. */
 PjImage *pj_image_load(const char *path, PjError *error);
+/* A 16-bit (or 8-bit) PNG or uncompressed RGB TIFF taken as scene-linear
+ * with no gamma decode: for dcraw -4 -T and similar linear exports. */
+PjImage *pj_image_load_linear(const char *path, PjError *error);
+/* True when the image came through a scene-linear door. */
+bool pj_image_is_scene_linear(const PjImage *image);
+/* The straight print: opens a scene-linear image the stop the pipeline
+ * would (plus ev), rolls the headroom in with the scene shoulder, and
+ * marks it display-referred. No camera, no film. Display-referred input
+ * is untouched. */
+void pj_image_scene_to_display(PjImage *image, float ev);
 bool pj_image_save(const PjImage *image, const char *path, PjError *error);
 
 /* Box-average downscale in linear light so the long edge is at most

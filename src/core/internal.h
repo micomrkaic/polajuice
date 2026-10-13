@@ -13,6 +13,12 @@ struct PjImage {
     size_t width;
     size_t height;
     float *rgb;
+    bool scene_linear;  /* raw / --linear input: values are scene-referred
+                           with the sensor's white at 1.0 and headroom
+                           above it preserved; the pipeline opens such
+                           images a stop up and shoulders the headroom.
+                           Display-referred (8-bit) input leaves this
+                           false and renders exactly as before. */
 };
 
 struct PjLut3D {
@@ -69,6 +75,11 @@ typedef struct {
 } PjPreset;
 
 void pj_set_error(PjError *error, const char *format, ...);
+/* rawdec.c: scene-linear doors (NEF, DNG; 16-bit TIFF/PNG as linear) */
+PjImage *pj_image_load_raw(const char *path, PjError *error);
+/* image_io.c: bake an EXIF/TIFF orientation (1..8) into the pixels; takes
+ * ownership of image */
+PjImage *pj_image_apply_orientation(PjImage *image, int orientation, PjError *error);
 const PjPreset *pj_find_preset(const char *name);
 const PjPreset *pj_preset_at(size_t index);
 

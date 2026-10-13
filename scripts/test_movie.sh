@@ -71,6 +71,23 @@ grep -q "unknown grain model" "$TMP/badgrain" || {
     < "$TMP/in.y4m" > /dev/null 2>/dev/null && {
     echo "test_movie: edge 3 accepted"; exit 1; }
 
+# exposure and halation reach the reel; the defaults leave it untouched
+./superjuice -c super8 --no-film --seed 7 --ev 1 \
+    < "$TMP/in.y4m" > "$TMP/ev.y4m" 2>/dev/null
+cmp -s "$TMP/out.y4m" "$TMP/ev.y4m" && {
+    echo "test_movie: --ev had no effect"; exit 1; }
+./superjuice -c super8 --no-film --seed 7 --halation 0 \
+    < "$TMP/in.y4m" > "$TMP/hal.y4m" 2>/dev/null
+cmp -s "$TMP/out.y4m" "$TMP/hal.y4m" && {
+    echo "test_movie: --halation 0 had no effect"; exit 1; }
+./superjuice -c super8 --no-film --seed 7 --ev 0 --halation 1 \
+    < "$TMP/in.y4m" > "$TMP/same.y4m" 2>/dev/null
+cmp -s "$TMP/out.y4m" "$TMP/same.y4m" || {
+    echo "test_movie: default ev/halation changed the reel"; exit 1; }
+./superjuice -c super8 --no-film --ev 9 \
+    < "$TMP/in.y4m" > /dev/null 2>/dev/null && {
+    echo "test_movie: ev 9 accepted"; exit 1; }
+
 # motion scale changes the reel
 ./superjuice -c super8 --no-film --seed 7 --motion-scale 3 \
     < "$TMP/in.y4m" > "$TMP/out_m3.y4m" 2>/dev/null

@@ -184,8 +184,50 @@ per photo, and CLI users can run e.g.
 `./polajuice apply web/samples/classic-jaguar.jpg -c technicolor-3strip`.
 
 HEIC still needs one external conversion (`magick input.heic input.jpg`, or
-`sips -s format jpeg` on macOS). All files are treated as 8-bit sRGB at the
-boundary and converted to linear RGB for processing.
+`sips -s format jpeg` on macOS). JPEG, PNG and PPM are treated as 8-bit
+sRGB at the boundary and converted to linear RGB for processing; they
+render exactly as they did before raw input existed.
+
+### Raw input: the scene-linear door
+
+`.nef` (Nikon) and `.dng` (Adobe, iPhone, most converters) open through
+a second door that decodes the sensor data itself: dependency-free
+TIFF walking, lossless JPEG and Nikon's Huffman scheme, black and white
+levels, the as-shot white balance, the camera's color matrix (from the
+DNG, or a small per-model table for NEF) and a bilinear demosaic.
+
+```sh
+./polajuice apply DSC_0412.NEF -c 35mm-negative -f portra_400
+./polajuice apply IMG_0033.dng -c super8 --ev -0.5 --halation 1.5
+./polajuice develop DSC_0412.NEF            # the straight print, no look
+./polajuice inspect DSC_0412.NEF            # clipped fraction, mean level
+./polajuice apply scan.tif --linear -c bw-35 # dcraw -4 -T, darktable linear
+```
+
+What changes with raw is where the highlights are. An 8-bit file has
+already been through a tone curve and clipped at white, so halation and
+the film curve work on a plateau. Raw comes in scene-linear with the
+sensor's white at 1.0; the pipeline opens it one stop up, so that white
+sits a stop above display white, and rolls that top stop in with a
+shoulder after halation has seen it and before the film transforms,
+which are display-referred. `--ev` moves from there. The practical
+advice stands: expose a stop under in the camera and let the shoulder
+bring the highlights back.
+
+`--linear` takes a 16-bit PNG or uncompressed RGB TIFF as scene-linear
+with no gamma decode, for exports that are already linear. A 16-bit file
+from an ordinary converter is not that: it is display-referred with
+better quantization, and goes through the normal door.
+
+`--halation 0..2` scales the camera's glow on any input; it is at its
+strongest from raw, where speculars still exist above white. Flash
+cameras (the instant presets) clip at the flash stage before halation,
+so they see less of the headroom.
+
+The demosaic is bilinear, which fringes at hard high-contrast edges;
+the camera softness stage and film grain cover most of it, and an
+adaptive demosaic is on the roadmap. Clipped sensor channels are clipped
+to neutral white (dcraw's default), not reconstructed.
 
 ## Presets
 
@@ -215,6 +257,12 @@ the pairing table).
 
 A render decomposes the way a film workflow does:
 
+    raw   -> decode (NEF/DNG: black, white, white balance, matrix,
+             demosaic; scene-linear, sensor white = 1.0)
+          -> +1 stop and `--ev`
+          -> halation (`--halation`), on the real highlights
+          -> scene shoulder (rolls the top stop in; 8-bit input skips
+             this stage and renders as before)
     image -> F (film color transform, a measured .cube LUT)
           -> E (development edge effects, `--edge`: developer exhaustion
                 at boundaries - border, fringe and Eberhard effects)

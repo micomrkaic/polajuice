@@ -24,6 +24,8 @@
 #                                   the film: coarse shadows, fine lights)
 #   EDGE     [0]                    development edge effects 0..2 (1 dilute
 #                                   developer, 2 stand development)
+#   EV       [0]                    exposure in stops, -4..4
+#   HALATION [1]                    scale the camera's halation 0..2 (0 off)
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
 #                                   2 = worn projector, 0 = tripod-locked
 #   SOUND    [stripe]              stripe = audiotard tape mangle;
@@ -67,6 +69,8 @@ HEIGHT=${HEIGHT:-720}
 FILTER=${FILTER:-}
 GRAIN=${GRAIN:-classic}
 EDGE=${EDGE:-0}
+EV=${EV:-0}
+HALATION=${HALATION:-1}
 MOTION=${MOTION:-1}
 SOUND=${SOUND:-stripe}
 WOW=${WOW:-14}
@@ -112,9 +116,9 @@ ffmpeg -v error -i "$IN" -vf "fps=$FPS,scale=-2:$HEIGHT" \
        -f yuv4mpegpipe -pix_fmt yuv420p - \
   | ( cd "$SJ_DIR" && \
       case "$FILM" in \
-      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" ;; \
-      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" ;; \
-      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" ;; \
+      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" --ev "$EV" --halation "$HALATION" ;; \
+      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" --ev "$EV" --halation "$HALATION" ;; \
+      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" --ev "$EV" --halation "$HALATION" ;; \
       esac ) \
   | ffmpeg -v error -y -f yuv4mpegpipe -i - \
        -vf 'crop=trunc(iw/2)*2:trunc(ih/2)*2' \

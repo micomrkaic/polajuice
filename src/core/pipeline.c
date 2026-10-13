@@ -30,6 +30,7 @@ static float linear_to_srgb(float x)
 static PjImage *clone_image(const PjImage *input, PjError *error)
 {
     PjImage *copy = pj_image_new(input->width, input->height, error);
+    if (copy) copy->scene_linear = input->scene_linear;
     if (copy)
         memcpy(copy->rgb, input->rgb,
                input->width * input->height * 3 * sizeof(float));
@@ -138,7 +139,10 @@ static void apply_halation(PjImage *image, float amount, unsigned radius)
         float b = image->rgb[i * 3 + 2];
         float y = 0.2126f * r + 0.7152f * g + 0.0722f * b;
         float h = fmaxf(0.0f, y - 0.55f) / 0.45f;
-        h = h * h * (3.0f - 2.0f * h);   /* soft threshold */
+        /* soft threshold up to display white; above it (scene-linear
+         * input) the mask keeps growing with the light, which is what
+         * makes a specular glow more than a white wall does */
+        h = h < 1.0f ? h * h * (3.0f - 2.0f * h) : fminf(h, 8.0f);
         mask[i * 3] = h;
         mask[i * 3 + 1] = h;
         mask[i * 3 + 2] = h;
@@ -157,6 +161,45 @@ static void apply_halation(PjImage *image, float amount, unsigned radius)
         image->rgb[i * 3 + 2] += h * 0.04f;
     }
     free(mask);
+}
+
+/* Exposure in stops on scene light, before any other stage. */
+static void apply_exposure(PjImage *image, float ev)
+{
+    if (ev == 0.0f) return;
+    float gain = exp2f(ev);
+    for (size_t i = 0; i < image->width * image->height * 3; ++i)
+        image->rgb[i] *= gain;
+}
+
+/*
+ * Scene shoulder: scene-linear input carries light above display white
+ * (the sensor's top stop, after the pipeline opens the image one stop
+ * up). The film transforms are display-referred and clamp at 1.0, so
+ * the headroom is rolled in here, after halation has seen it. Identity
+ * below the knee, exponential approach to 1.0 above it; C1 at the knee.
+ * Display-referred input never reaches this stage, so 8-bit renders are
+ * untouched.
+ */
+static void apply_scene_shoulder(PjImage *image)
+{
+    const float knee = 0.75f;
+    for (size_t i = 0; i < image->width * image->height * 3; ++i) {
+        float x = image->rgb[i];
+        if (x > knee)
+            image->rgb[i] = knee + (1.0f - knee) * (1.0f - expf(-(x - knee) / (1.0f - knee)));
+    }
+}
+
+/* A straight print from scene-linear input: the stop the pipeline opens
+ * raw by, plus ev, then the scene shoulder, and the image becomes
+ * display-referred. Display-referred input is left alone. */
+void pj_image_scene_to_display(PjImage *image, float ev)
+{
+    if (!image || !image->scene_linear) return;
+    apply_exposure(image, ev + 1.0f);
+    apply_scene_shoulder(image);
+    image->scene_linear = false;
 }
 
 /*
@@ -991,6 +1034,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     else
         image = clone_image(input, error);
     if (!image) return NULL;
+    image->scene_linear = input->scene_linear;   /* crops start fresh */
 
     bool temporal = options && options->temporal;
     int64_t frame = options ? options->frame : 0;
@@ -1002,14 +1046,24 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_flicker(image, preset->flicker_ev * strength * motion,
                       seed, frame);
     }
+    {
+        float ev = options ? options->ev : 0.0f;
+        if (image->scene_linear) ev += 1.0f;   /* raw opens a stop up */
+        apply_exposure(image, ev);
+    }
     apply_contrast_filter(image,
                           options ? options->contrast_filter : NULL,
                           strength);
     apply_direct_flash(image, preset, strength);
     apply_softness(image, preset->softness * strength);
     apply_vignette(image, preset->vignette * strength);
-    apply_halation(image, preset->halation * strength,
-                   preset->halation_radius);
+    {
+        float h = options ? options->halation : 0.0f;
+        float scale = h == 0.0f ? 1.0f : (h < 0.0f ? 0.0f : h);
+        apply_halation(image, preset->halation * strength * scale,
+                       preset->halation_radius);
+    }
+    if (image->scene_linear) apply_scene_shoulder(image);
     apply_input_balance(image, preset, strength);
     if (lut)
         apply_color_lut(image, lut, strength);

@@ -14,7 +14,13 @@ import { WASI, WASIProcExit, File, PreopenDirectory, ConsoleStdout }
 export async function createEngine(wasmBytes) {
     const module = await WebAssembly.compile(wasmBytes);
 
-    async function run(args, workFiles) {
+    /* file extension the engine dispatches on; raw formats keep theirs */
+function inputExtension(ext) {
+    const e = String(ext || "jpg").toLowerCase();
+    return e === "png" || e === "nef" || e === "dng" ? e : "jpg";
+}
+
+async function run(args, workFiles) {
         const contents = new Map();
         for (const [name, bytes] of Object.entries(workFiles))
             contents.set(name, new File(bytes));
@@ -56,13 +62,27 @@ export async function createEngine(wasmBytes) {
                          processes: procs ? procs.split(",") : [] };
             });
         },
-        /* inputBytes: Uint8Array; ext: "jpg"|"png"; cubeText: string|null;
+        /* inputBytes: Uint8Array; ext: "jpg"|"png"|"nef"|"dng"; cubeText: string|null;
          * maxDim 0 = full resolution. Returns Uint8Array of JPEG bytes. */
+        /* The straight print of a raw file (scene-linear decode, a stop
+         * up, shoulder), as JPEG bytes: the page's "original" view for a
+         * .nef or .dng the browser cannot decode itself. */
+        async develop({ inputBytes, ext, maxDim = 0 }) {
+            const inName = "in." + inputExtension(ext);
+            const r = await run(["develop", "work/" + inName, String(maxDim),
+                                 "work/out.jpg"], { [inName]: inputBytes });
+            if (r.code !== 0)
+                throw new Error(r.stderr.trim() || `develop failed (${r.code})`);
+            const out = r.files.get("out.jpg");
+            if (!out) throw new Error("develop produced no output");
+            return out.data;
+        },
         async render({ inputBytes, ext, camera, cubeText, filmProcess = null,
                        filmStem = null, printCubeText = null, filter = null,
                        strength = 1.0, seed = 42, age = 0, develop = "normal",
-                       maxDim = 0, grainModel = "classic", edge = 0 }) {
-            const inName = "in." + (ext === "png" ? "png" : "jpg");
+                       maxDim = 0, grainModel = "classic", edge = 0,
+                       ev = 0, halation = 1 }) {
+            const inName = "in." + inputExtension(ext);
             const workFiles = { [inName]: inputBytes };
             let filmArg = "-";
             if (cubeText != null) {
@@ -80,7 +100,8 @@ export async function createEngine(wasmBytes) {
                  filter || "-",
                  String(strength), String(seed >>> 0), String(age),
                  develop, String(maxDim), "work/out.jpg",
-                 grainModel || "classic", String(edge)], workFiles);
+                 grainModel || "classic", String(edge),
+                 String(ev), String(halation)], workFiles);
             if (r.code !== 0)
                 throw new Error(r.stderr.trim() || `render failed (${r.code})`);
             const out = r.files.get("out.jpg");

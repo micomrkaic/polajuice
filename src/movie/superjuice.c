@@ -110,6 +110,8 @@ static void usage(FILE *stream)
         "      --grain MODEL       classic (default) or silver (grain from\n"
         "                          exposure: coarse shadows, fine highlights)\n"
         "      --edge NUMBER       development edge effects 0..2\n"
+        "      --ev NUMBER         exposure in stops, -4..+4\n"
+        "      --halation NUMBER   scale the camera's halation 0..2 (0 off)\n"
         "      --seed INTEGER      base seed; grain decorrelates per frame\n"
         "      --motion-scale N    scale gate weave and flicker (default 1;\n"
         "                          0.5 steadier, 2 a worn projector)\n"
@@ -224,6 +226,23 @@ int main(int argc, char **argv)
                 fprintf(stderr, "superjuice: invalid edge (0..2)\n");
                 return EXIT_FAILURE;
             }
+        }
+        else if (!strcmp(argv[i], "--ev") && i + 1 < argc) {
+            char *end = NULL;
+            options.ev = strtof(argv[++i], &end);
+            if (!end || *end || options.ev < -4.0f || options.ev > 4.0f) {
+                fprintf(stderr, "superjuice: invalid ev (-4..4)\n");
+                return EXIT_FAILURE;
+            }
+        }
+        else if (!strcmp(argv[i], "--halation") && i + 1 < argc) {
+            char *end = NULL;
+            float h = strtof(argv[++i], &end);
+            if (!end || *end || h < 0.0f || h > 2.0f) {
+                fprintf(stderr, "superjuice: invalid halation (0..2)\n");
+                return EXIT_FAILURE;
+            }
+            options.halation = h == 0.0f ? PJ_HALATION_OFF : h;
         }
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
             usage(stdout);

@@ -112,6 +112,7 @@ console.log("compatibility filtering: sealed disables film, film camera re-enabl
 // ids the page has touched; presence of the grain select is the real-DOM
 // suite's job)
 if (!elems["edge"]) throw new Error("edge slider absent");
+if (!elems["ev"] || !elems["halation"]) throw new Error("ev or halation slider absent");
 elems["camera"].value = "polaroid-600";
 elems["camera"].handlers["change"]();
 if (!elems["edge"].disabled) throw new Error("instant camera did not disable edge");

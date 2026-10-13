@@ -620,6 +620,110 @@ int main(void)
     pj_image_free(unaged);
     pj_image_free(black);
 
+    /* The scene-linear door. Five synthetic files of one scene (gray
+     * card 0.18, red and blue patches, an exactly-white patch, a ramp
+     * that clips) through every decoder: uncompressed and lossless-JPEG
+     * Bayer DNG, LinearRaw DNG, Nikon-compressed NEF, and a 16-bit PNG
+     * through --linear. The DNGs declare a color matrix whose composite
+     * with the decoder's recipe is the identity, so decoded pixels must
+     * equal the scene; the NEF goes through the D610 table, so only its
+     * neutrals are checked. */
+    {
+        const char *files[4] = {"tests/raw/bayer_u16.dng", "tests/raw/bayer_lj92.dng",
+                                "tests/raw/linear_lj92.dng", "tests/raw/lossless14.nef"};
+        PjImage *decoded[5] = {0};
+        for (int f = 0; f < 4; ++f) {
+            decoded[f] = pj_image_load(files[f], &error);
+            if (!decoded[f]) { fprintf(stderr, "%s: %s\n", files[f], error.message); }
+            assert(decoded[f]);
+            assert(pj_image_is_scene_linear(decoded[f]));
+            assert(pj_image_width(decoded[f]) == 64 && pj_image_height(decoded[f]) == 48);
+        }
+        decoded[4] = pj_image_load_linear("tests/raw/linear16.png", &error);
+        assert(decoded[4] && pj_image_is_scene_linear(decoded[4]));
+        for (int f = 0; f < 5; ++f) {
+            const float *px = pj_image_pixels_const(decoded[f]);
+            size_t w = 64;
+            const float *gray = px + (24 * w + 30) * 3;
+            const float *white = px + (8 * w + 57) * 3;
+            const float *red = px + (38 * w + 14) * 3;
+            const float *ramp = px + (2 * w + 10) * 3;
+            for (int c = 0; c < 3; ++c) {
+                assert(fabsf(gray[c] - 0.18f) < 0.004f);
+                assert(fabsf(white[c] - 1.0f) < 0.004f);
+                assert(fabsf(ramp[c] - 0.476f) < 0.006f);
+            }
+            if (f != 3) {   /* not the NEF: full color round trip */
+                assert(fabsf(red[0] - 0.60f) < 0.004f);
+                assert(fabsf(red[1] - 0.05f) < 0.004f);
+                assert(fabsf(red[2] - 0.05f) < 0.004f);
+            } else {
+                assert(red[0] > 0.5f && red[1] < 0.1f && red[2] < 0.1f);
+            }
+            /* nothing above sensor white comes out of the door (the NEF's
+             * camera matrix can push a saturated color past 1.0, which is
+             * gamut, not headroom; neutrals are checked above) */
+            if (f != 3) {
+                float peak = 0.0f;
+                for (size_t i = 0; i < 64 * 48 * 3; ++i) peak = fmaxf(peak, px[i]);
+                assert(peak <= 1.0001f);
+            }
+        }
+        /* uncompressed and lossless-JPEG Bayer agree to the bit (same
+         * samples, same demosaic); LinearRaw differs only at patch edges,
+         * where there is no demosaic to blur them */
+        assert(memcmp(pj_image_pixels_const(decoded[0]), pj_image_pixels_const(decoded[1]),
+                      64 * 48 * 3 * sizeof(float)) == 0);
+
+        /* Through the pipeline: raw opens a stop up, so at --ev -1 the
+         * gray card renders as the same scene would from an 8-bit file;
+         * the white patch is pulled under 1.0 by the scene shoulder; at
+         * --ev 0 everything is brighter; and the headroom feeds halation:
+         * the dark surround of the white patch glows more from raw than
+         * from the display-referred copy. */
+        PjImage *eight = pj_image_new(64, 48, &error);
+        assert(eight);
+        {
+            float *q = pj_image_pixels(eight);
+            memcpy(q, pj_image_pixels_const(decoded[4]), 64 * 48 * 3 * sizeof(float));
+        }
+        PjRenderOptions ro = {.seed = 3, .strength = 1.0f, .color_lut = identity,
+                              .film_process = "negative"};
+        PjRenderOptions rm1 = ro; rm1.ev = -1.0f;
+        PjImage *from_raw_m1 = pj_render(decoded[0], "35mm-negative", &rm1, &error);
+        PjImage *from_raw_0 = pj_render(decoded[0], "35mm-negative", &ro, &error);
+        PjImage *from_8bit = pj_render(eight, "35mm-negative", &ro, &error);
+        assert(from_raw_m1 && from_raw_0 && from_8bit);
+        {
+            float g_raw = luma_at(from_raw_m1, 30, 24), g_8 = luma_at(from_8bit, 30, 24);
+            assert(fabs(g_raw - g_8) < 0.01);
+            float w_raw = luma_at(from_raw_m1, 57, 8), w_8 = luma_at(from_8bit, 57, 8);
+            assert(w_raw < w_8 - 0.02);
+            assert(luma_at(from_raw_0, 30, 24) > g_raw * 1.5);
+            /* halation: dark pixel two to the left of the white patch */
+            float h_raw = luma_at(from_raw_0, 52, 8), h_8 = luma_at(from_8bit, 52, 8);
+            assert(h_raw > h_8);
+        }
+        /* --halation: off removes the glow, 2 adds to it, 0 is the preset */
+        PjRenderOptions hoff = ro; hoff.halation = PJ_HALATION_OFF;
+        PjRenderOptions h2 = ro; h2.halation = 2.0f;
+        PjRenderOptions h1 = ro; h1.halation = 1.0f;
+        PjImage *r_off = pj_render(decoded[0], "35mm-negative", &hoff, &error);
+        PjImage *r_2 = pj_render(decoded[0], "35mm-negative", &h2, &error);
+        PjImage *r_1 = pj_render(decoded[0], "35mm-negative", &h1, &error);
+        assert(r_off && r_2 && r_1);
+        assert(luma_at(r_off, 52, 8) < luma_at(from_raw_0, 52, 8));
+        assert(luma_at(r_2, 52, 8) > luma_at(from_raw_0, 52, 8));
+        assert(memcmp(pj_image_pixels_const(r_1), pj_image_pixels_const(from_raw_0),
+                      pj_image_width(r_1) * pj_image_height(r_1) * 3 * sizeof(float)) == 0);
+        pj_image_free(r_off); pj_image_free(r_2); pj_image_free(r_1);
+        pj_image_free(from_raw_m1); pj_image_free(from_raw_0); pj_image_free(from_8bit);
+        pj_image_free(eight);
+        for (int f = 0; f < 5; ++f) pj_image_free(decoded[f]);
+        /* the door refuses what it does not understand */
+        assert(!pj_image_load("tests/test_core.c", &error));
+    }
+
     pj_image_free(instant);
     pj_image_free(flashed);
     pj_image_free(flat);

@@ -7,6 +7,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +23,10 @@ static void usage(FILE *stream)
         "  polajuice cameras\n"
         "  polajuice describe CAMERA\n"
         "  polajuice films [NAME]\n"
-        "  polajuice inspect INPUT\n\n"
+        "  polajuice inspect INPUT\n"
+        "  polajuice develop INPUT [-o OUTPUT] [--ev N] [--linear]\n"
+        "      the straight print of a raw: scene-linear decode, a stop up,\n"
+        "      the scene shoulder, no camera and no film\n\n"
         "A look is a CAMERA (optics, grain, framing, process) plus a FILM\n"
         "(color chemistry as a .cube 3D LUT). Each camera has a canonical\n"
         "film used automatically when installed; -f overrides it.\n\n"
@@ -36,6 +40,7 @@ static void usage(FILE *stream)
         "                          film (cinema negative->print model)\n"
         "  -o, --output PATH       output path; default INPUT_CAMERA.ext\n"
         "                          formats by extension: .ppm .png .jpg .jpeg\n"
+        "                          (input also .nef .dng, or --linear)\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
         "      --develop MODE      development: normal (default), push+1,\n"
         "                          push+2, pull-1, or cross (E-6 in C-41);\n"
@@ -48,7 +53,16 @@ static void usage(FILE *stream)
         "      --edge NUMBER       development edge effects 0..2 (0 off,\n"
         "                          1 dilute developer, 2 stand development)\n"
         "      --seed INTEGER      deterministic grain seed\n"
+        "      --ev NUMBER         exposure in stops, -4..+4 (default 0)\n"
+        "      --halation NUMBER   scale the camera's halation 0..2 (0 off,\n"
+        "                          default 1)\n"
+        "      --linear            take a 16-bit PNG/TIFF as scene-linear\n"
+        "                          (dcraw -4 -T, darktable linear export)\n"
         "  -h, --help              show this help\n\n"
+        "Raw input: .nef and .dng files open through a scene-linear door -\n"
+        "the sensor's white sits a stop above display white and the top stop\n"
+        "rolls in through a shoulder, so halation and the film curve see real\n"
+        "highlights. JPEG/PNG input renders exactly as before.\n\n"
         "Film library: $POLAJUICE_FILMS, else ./data/luts ('make fetch-luts').\n",
         pj_version_string());
 }
@@ -82,10 +96,76 @@ static int inspect_image(const char *path)
     PjError error = {{0}};
     PjImage *image = pj_image_load(path, &error);
     if (!image) return fail(&error);
-    printf("path: %s\nwidth: %zu\nheight: %zu\ncolorspace: sRGB\n",
-           path, pj_image_width(image), pj_image_height(image));
+    bool raw = pj_image_is_scene_linear(image);
+    const float *px = pj_image_pixels_const(image);
+    size_t n = pj_image_width(image) * pj_image_height(image);
+    size_t clipped = 0;
+    double mean = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        float y = 0.2126f * px[i * 3] + 0.7152f * px[i * 3 + 1] + 0.0722f * px[i * 3 + 2];
+        mean += y;
+        if (px[i * 3] >= 0.999f || px[i * 3 + 1] >= 0.999f || px[i * 3 + 2] >= 0.999f) ++clipped;
+    }
+    mean = n ? mean / (double)n : 0.0;
+    printf("path: %s\nwidth: %zu\nheight: %zu\ncolorspace: %s\n",
+           path, pj_image_width(image), pj_image_height(image),
+           raw ? "scene-linear (sensor white = 1.0)" : "sRGB");
+    if (raw)
+        printf("mean luminance: %.3f (%.2f stops below sensor white)\n"
+               "clipped: %.2f%% of pixels at sensor white\n",
+               mean, mean > 0.0 ? -log2(mean) : 0.0,
+               100.0 * (double)clipped / (double)(n ? n : 1));
     pj_image_free(image);
     return EXIT_SUCCESS;
+}
+
+/* ---- develop ---------------------------------------------------------- */
+
+static int develop(int argc, char **argv)
+{
+    const char *input = argv[2];
+    const char *output = NULL;
+    float ev = 0.0f;
+    bool linear_input = false;
+    for (int i = 3; i < argc; ++i) {
+        if ((!strcmp(argv[i], "-o") || !strcmp(argv[i], "--output")) && i + 1 < argc)
+            output = argv[++i];
+        else if (!strcmp(argv[i], "--ev") && i + 1 < argc) {
+            char *end = NULL;
+            ev = strtof(argv[++i], &end);
+            if (!end || *end || ev < -4.0f || ev > 4.0f) {
+                fprintf(stderr, "invalid ev (-4..4)\n");
+                return EXIT_FAILURE;
+            }
+        } else if (!strcmp(argv[i], "--linear")) linear_input = true;
+        else {
+            fprintf(stderr, "unknown or incomplete option: %s\n", argv[i]);
+            return EXIT_FAILURE;
+        }
+    }
+    char derived[4096];
+    if (!output) {
+        const char *dot = strrchr(input, '.');
+        const char *slash = strrchr(input, '/');
+        if (!dot || (slash && dot < slash)) dot = input + strlen(input);
+        int n = snprintf(derived, sizeof derived, "%.*s_straight.jpg",
+                         (int)(dot - input), input);
+        if (n < 0 || (size_t)n >= sizeof derived) {
+            fprintf(stderr, "input path too long\n");
+            return EXIT_FAILURE;
+        }
+        output = derived;
+    }
+    PjError error = {{0}};
+    PjImage *image = linear_input ? pj_image_load_linear(input, &error)
+                                  : pj_image_load(input, &error);
+    if (!image) return fail(&error);
+    if (!pj_image_is_scene_linear(image))
+        fprintf(stderr, "note: %s is display-referred; written back as is\n", input);
+    pj_image_scene_to_display(image, ev);
+    bool saved = pj_image_save(image, output, &error);
+    pj_image_free(image);
+    return saved ? EXIT_SUCCESS : fail(&error);
 }
 
 /* ---- apply ------------------------------------------------------------ */
@@ -98,6 +178,7 @@ static int apply(int argc, char **argv)
     const char *film_request = NULL;
     const char *print_request = NULL;
     bool no_film = false;
+    bool linear_input = false;
     bool any_film = false;
     PjRenderOptions options = {.seed = UINT64_C(0x504f4c414a554943),
                                .strength = 1.0f};
@@ -159,6 +240,23 @@ static int apply(int argc, char **argv)
                         "(classic, silver)\n", options.grain_model);
                 return EXIT_FAILURE;
             }
+        } else if (!strcmp(argv[i], "--ev") && i + 1 < argc) {
+            char *end = NULL;
+            options.ev = strtof(argv[++i], &end);
+            if (!end || *end || options.ev < -4.0f || options.ev > 4.0f) {
+                fprintf(stderr, "invalid ev (-4..4)\n");
+                return EXIT_FAILURE;
+            }
+        } else if (!strcmp(argv[i], "--halation") && i + 1 < argc) {
+            char *end = NULL;
+            float h = strtof(argv[++i], &end);
+            if (!end || *end || h < 0.0f || h > 2.0f) {
+                fprintf(stderr, "invalid halation (0..2)\n");
+                return EXIT_FAILURE;
+            }
+            options.halation = h == 0.0f ? PJ_HALATION_OFF : h;
+        } else if (!strcmp(argv[i], "--linear")) {
+            linear_input = true;
         } else if (!strcmp(argv[i], "--edge") && i + 1 < argc) {
             char *end = NULL;
             options.edge = strtof(argv[++i], &end);
@@ -189,8 +287,14 @@ static int apply(int argc, char **argv)
         const char *dot = strrchr(input, '.');
         const char *slash = strrchr(input, '/');
         if (!dot || (slash && dot < slash)) dot = input + strlen(input);
+        /* a raw or linear input cannot be written back in its own
+         * format; those derive a .jpg */
+        const char *ext = dot;
+        if (linear_input || !strcasecmp(dot, ".nef") || !strcasecmp(dot, ".dng") ||
+            !strcasecmp(dot, ".tif") || !strcasecmp(dot, ".tiff"))
+            ext = ".jpg";
         int n = snprintf(derived, sizeof derived, "%.*s_%s%s",
-                         (int)(dot - input), input, camera, dot);
+                         (int)(dot - input), input, camera, ext);
         if (n < 0 || (size_t)n >= sizeof derived) {
             fprintf(stderr, "input path too long\n");
             return EXIT_FAILURE;
@@ -275,7 +379,8 @@ static int apply(int argc, char **argv)
     if (!options.film_process)
         options.film_process = pj_preset_primary_process(camera);
 
-    PjImage *source = pj_image_load(input, &error);
+    PjImage *source = linear_input ? pj_image_load_linear(input, &error)
+                                   : pj_image_load(input, &error);
     if (!source) {
         pj_lut3d_free(lut);
         pj_lut3d_free(print_lut);
@@ -320,6 +425,8 @@ int main(int argc, char **argv)
                film ? film : "(built-in scalar engine)");
         return EXIT_SUCCESS;
     }
+    if (!strcmp(argv[1], "develop") && argc > 2)
+        return develop(argc, argv);
     if (!strcmp(argv[1], "inspect") && argc > 2)
         return inspect_image(argv[2]);
     usage(stderr);

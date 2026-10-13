@@ -68,6 +68,11 @@ void pj_image_free(PjImage *image)
     free(image);
 }
 
+bool pj_image_is_scene_linear(const PjImage *image)
+{
+    return image && image->scene_linear;
+}
+
 size_t pj_image_width(const PjImage *image) { return image ? image->width : 0; }
 size_t pj_image_height(const PjImage *image) { return image ? image->height : 0; }
 float *pj_image_pixels(PjImage *image) { return image ? image->rgb : NULL; }
@@ -185,7 +190,7 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
     return ok;
 }
 
-const char *pj_version_string(void) { return "1.16.1"; }
+const char *pj_version_string(void) { return "1.17.0"; }
 
 PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error)
 {
@@ -205,6 +210,7 @@ PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error)
         pj_image_free(image);
         return NULL;
     }
+    out->scene_linear = image->scene_linear;
     const float *src = pj_image_pixels_const(image);
     float *dst = pj_image_pixels(out);
     for (size_t y = 0; y < out_h; ++y) {
