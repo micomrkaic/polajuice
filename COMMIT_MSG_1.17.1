@@ -1,0 +1,9 @@
+1.17.1: every machine releases complete
+
+release.sh fetches the film library when the machine has none, on both
+the release and --restage paths, before the import so that a failed
+fetch (no network) stops the release with the repo untouched; a
+machine that already has the library is unaffected (fetch_luts.sh
+skips present families). A page without films can no longer be
+published by accident - the 1.17.0 release from a fresh clone did
+exactly that.

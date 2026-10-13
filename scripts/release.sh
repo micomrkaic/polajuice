@@ -27,6 +27,25 @@ cd "$SRC"
 
 TREE_VERSION=$(cat "$SRC/VERSION")
 
+# Every machine releases complete: the film library is not in git (30 MB
+# of other people's LUTs), so fetch it when it is missing. fetch_luts.sh
+# skips families already present, so this is a no-op on a machine that
+# has them. A machine without network, or with a failed fetch, cannot
+# publish a page without films by accident: it stops here.
+ensure_films() {
+    if [ -d data/luts ] && \
+       [ -n "$(find data/luts -name '*.cube' -print -quit 2>/dev/null)" ]; then
+        return 0
+    fi
+    echo "== no film library on this machine; fetching (make fetch-luts)"
+    sh scripts/fetch_luts.sh || {
+        echo "!! film library fetch failed; not deploying a page without films" >&2
+        echo "   (fix the network or run 'make fetch-luts', then" >&2
+        echo "    'sh scripts/release.sh --restage' to publish the page)" >&2
+        return 1
+    }
+}
+
 # Publish $REPO/web/ as the gh-pages branch from an orphan staging
 # branch. The staging tree is emptied with git rm first, which removes
 # .gitignore from it, so the *.jpg rule of main cannot swallow the
@@ -66,6 +85,7 @@ if [ "${1:-}" = "--restage" ]; then
     [ -d "$REPO/.git" ] || { echo "$REPO is not a git repository" >&2; exit 1; }
     cd "$REPO"
     echo "== restaging films and redeploying gh-pages (no release)"
+    ensure_films || exit 1
     sh scripts/stage_web_films.sh
     deploy_pages
     echo "== done: gh-pages restaged from current repo (main untouched)"
@@ -128,6 +148,10 @@ if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; the
     echo "tag $TAG already exists on origin; pick the next version" >&2; exit 1
 fi
 
+# before the import: a machine that cannot fetch the library cannot push
+# either, and stopping here leaves the repo exactly as it was
+ensure_films || exit 1
+
 echo "== importing source tree"
 # Copy the release tree over the repo, dotfiles included (a plain * glob
 # silently skips .gitignore, which once let a build artifact reach main).
@@ -188,11 +212,7 @@ echo "== pushing (fast-forward + new tag, no force)"
 git push origin main "refs/tags/$TAG"
 
 echo "== deploying web/ to gh-pages"
-if [ -d data/luts ] && [ -n "$(find data/luts -name '*.cube' -print -quit 2>/dev/null)" ]; then
-    sh scripts/stage_web_films.sh
-else
-    echo "note: no film library (make fetch-luts); deploying without films" >&2
-fi
+sh scripts/stage_web_films.sh
 STAMP=$(git rev-parse --short HEAD)
 deploy_pages
 
