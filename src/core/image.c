@@ -129,6 +129,11 @@ const char *pj_image_comment(const PjImage *image)
     return image ? image->comment : NULL;
 }
 
+void pj_image_copy_flags(PjImage *to, const PjImage *from)
+{
+    if (to && from) to->scene_linear = from->scene_linear;
+}
+
 bool pj_image_is_scene_linear(const PjImage *image)
 {
     return image && image->scene_linear;
@@ -253,7 +258,7 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
     return ok;
 }
 
-const char *pj_version_string(void) { return "1.19.0"; }
+const char *pj_version_string(void) { return "1.20.0"; }
 
 PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error)
 {

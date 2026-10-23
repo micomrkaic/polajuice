@@ -442,6 +442,27 @@ Tune in the page, keep the look under a name, save the .recipe, run
 the folder from the shell. `superjuice --recipe` and `RECIPE=` in
 super8ify take the same files.
 
+### `polajuice serve`: the workspace on the native engine
+
+The page on GitHub renders in WebAssembly, single-threaded. Served by
+polajuice itself, it renders here, on every core, and sees your disk:
+
+```sh
+polajuice serve ~/Pictures/raw          # http://localhost:8000
+make serve DIR=~/Pictures/raw           # the same
+```
+
+The page probes for the server on load and, finding it, sends every
+render to it (the header says "native engine, N threads"). The
+folder's images fill the strip (raw ones shown as straight prints),
+"Export next to source" writes the full-size JPEG beside the original
+with the recipe embedded, "Apply to folder" runs the current look on
+every image, and kept looks are files in `looks/` under the repo, so
+they travel with it. A served render is byte-identical to the CLI's,
+which the test suite checks. The server binds 127.0.0.1 only; a custom
+.cube loaded in the page still renders in wasm, since the server has
+no file for it.
+
 ## Speed
 
 Every image stage runs in row bands on one thread per core (POSIX

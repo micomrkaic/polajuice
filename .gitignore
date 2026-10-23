@@ -28,6 +28,9 @@ web/_pagecheck.mjs
 *.nef
 *.xmp
 /*.cube
+# looks kept from the workspace are yours to track or not: tracked by
+# default (they are tiny text), except the test's scratch one
+looks/__test_serve__.recipe
 # synthetic raw test files (tools/make_test_raws.py), a few KB each;
 # this must stay below the raw ignores above, since the last match wins
 node_modules

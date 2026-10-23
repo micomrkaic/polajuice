@@ -6,6 +6,8 @@
 #include "filmlib.h"
 #include "recipe.h"
 
+int serve_main(int argc, char **argv);
+
 #include <dirent.h>
 #include <errno.h>
 #include <math.h>
@@ -26,6 +28,10 @@ static void usage(FILE *stream)
         "  polajuice describe CAMERA\n"
         "  polajuice films [NAME]\n"
         "  polajuice inspect INPUT\n"
+        "  polajuice serve [DIR] [--port 8000]\n"
+        "      the workspace page on http://localhost:8000, rendering here\n"
+        "      on every core, with DIR's images in the strip, exports next\n"
+        "      to the source, and looks kept as looks/*.recipe\n"
         "  polajuice develop INPUT [-o OUTPUT] [--ev N] [--linear]\n"
         "      the straight print of a raw: scene-linear decode, a stop up,\n"
         "      the scene shoulder, no camera and no film\n\n"
@@ -500,6 +506,8 @@ int main(int argc, char **argv)
     }
     if (!strcmp(argv[1], "develop") && argc > 2)
         return develop(argc, argv);
+    if (!strcmp(argv[1], "serve"))
+        return serve_main(argc, argv);
     if (!strcmp(argv[1], "inspect") && argc > 2)
         return inspect_image(argv[2]);
     usage(stderr);

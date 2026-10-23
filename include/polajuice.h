@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 19
+#define PJ_VERSION_MINOR 20
 #define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
@@ -107,6 +107,8 @@ PjImage *pj_image_load(const char *path, PjError *error);
 /* A 16-bit (or 8-bit) PNG or uncompressed RGB TIFF taken as scene-linear
  * with no gamma decode: for dcraw -4 -T and similar linear exports. */
 PjImage *pj_image_load_linear(const char *path, PjError *error);
+/* Copy the per-image flags (scene-linear) from one image to another. */
+void pj_image_copy_flags(PjImage *to, const PjImage *from);
 /* True when the image came through a scene-linear door. */
 bool pj_image_is_scene_linear(const PjImage *image);
 /* One line describing the structure of the last raw file loaded

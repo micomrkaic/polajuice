@@ -11,7 +11,8 @@ LDLIBS += -lm -pthread
 
 CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/recipe.c src/core/rawdec.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
-ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/cli/filmlib.o src/cli/recipe.o src/movie/superjuice.o tests/test_core.o
+CLI_OBJ = src/cli/filmlib.o src/cli/recipe.o src/cli/look.o src/cli/serve.o
+ALL_OBJ = $(CORE_OBJ) src/cli/main.o $(CLI_OBJ) src/movie/superjuice.o tests/test_core.o
 
 .PHONY: all clean clean-wasm check check-wasm install fetch-luts fetch-polaroid-lut wasm serve
 
@@ -23,8 +24,8 @@ src/core/stb_impl.o: CFLAGS += -w
 libpolajuice.a: $(CORE_OBJ)
 	$(AR) rcs $@ $^
 
-polajuice: src/cli/main.o src/cli/filmlib.o src/cli/recipe.o libpolajuice.a
-	$(CC) $(CFLAGS) -o $@ src/cli/main.o src/cli/filmlib.o src/cli/recipe.o libpolajuice.a $(LDLIBS)
+polajuice: src/cli/main.o $(CLI_OBJ) libpolajuice.a
+	$(CC) $(CFLAGS) -o $@ src/cli/main.o $(CLI_OBJ) libpolajuice.a $(LDLIBS)
 
 tests/test_core: tests/test_core.o libpolajuice.a
 	$(CC) $(CFLAGS) -o $@ tests/test_core.o libpolajuice.a $(LDLIBS)
@@ -37,6 +38,7 @@ check: tests/test_core
 	sh scripts/test_compat.sh
 	sh scripts/test_movie.sh
 	sh scripts/test_threads.sh
+	sh scripts/test_serve.sh
 
 # WebAssembly build via wasi-sdk (auto-downloaded to third_party/ on
 # first run; see docs/WEB.md). 'make' builds native; 'make wasm' the
@@ -52,9 +54,9 @@ check-wasm:
 clean-wasm:
 	$(RM) web/polajuice.wasm
 
-serve:
-	@echo "serving web/ at http://localhost:8000 (Ctrl-C to stop)"
-	cd web && python3 -m http.server 8000
+# the workspace on the native engine; DIR= picks the folder to work in
+serve: polajuice
+	./polajuice serve $(DIR)
 
 fetch-luts:
 	sh scripts/fetch_luts.sh

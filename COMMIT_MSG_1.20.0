@@ -1,0 +1,24 @@
+1.20.0: polajuice serve - the workspace on the native engine
+
+polajuice serve [DIR] [--port N] is a small HTTP server inside the CLI
+(POSIX sockets, loopback only, one request at a time with threaded
+renders inside) that serves the workspace page and takes over its
+rendering. The page probes /api/version on load; finding the native
+engine it sends every render there instead of to the serial wasm, and
+the header says so. What a local process adds: the folder's images in
+the strip (raw ones as straight prints), exports written next to the
+source with the recipe embedded, "apply to folder" batch runs, and
+looks kept as looks/*.recipe files under the repo rather than in the
+browser. Exports (NAME_camera.jpg) are recognized and left out of the
+strip and of batches. A custom .cube loaded in the page still renders
+in wasm, since the server has no file for it. Without a staged
+web/films, the server builds the film manifest from data/luts, so a
+fresh clone with 'make fetch-luts' has every stock in the dropdown.
+
+src/cli/look.c holds the film/print resolution, compatibility checks
+and recipe text as one Look, shared by the server; test_serve.sh
+starts a server on a scratch folder and checks every endpoint, a
+served render byte-identical to the CLI's render of the same look, a
+dropped image in the body, export, batch skipping exports, looks as
+files, and path-escape and bad-camera refusals. 'make serve' runs the
+server (DIR=...).

@@ -110,3 +110,89 @@ async function run(args, workFiles) {
         },
     };
 }
+
+/*
+ * The native engine: polajuice serve on the same origin. Same interface
+ * as the wasm engine (version, cameras, render, develop) plus what only
+ * a local process can do: the folder's files, exports next to the
+ * source, batch runs, and looks kept as files. A render names a file in
+ * the served folder, or carries the bytes of a dropped one.
+ */
+export async function probeNativeEngine(base = "") {
+    try {
+        const r = await fetch(base + "/api/version", { cache: "no-store" });
+        if (!r.ok) return null;
+        const info = await r.json();
+        if (!info || !info.native) return null;
+        return createNativeEngine(base, info);
+    } catch (e) { return null; }
+}
+
+function filmParam(cubeText, filmStem, filmChoice) {
+    if (filmChoice === "none") return "none";
+    if (filmChoice === "auto") return "auto";
+    return filmStem || "auto";
+}
+
+export function createNativeEngine(base, info) {
+    const api = (path, params) => {
+        const q = Object.entries(params || {})
+            .filter(([, v]) => v !== null && v !== undefined)
+            .map(([k, v]) => encodeURIComponent(k) + "=" + encodeURIComponent(String(v)))
+            .join("&");
+        return base + path + (q ? "?" + q : "");
+    };
+    async function expectOk(r) {
+        if (r.ok) return r;
+        let msg = r.statusText;
+        try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) { /* not json */ }
+        throw new Error(msg);
+    }
+    function lookParams(o) {
+        return { camera: o.camera, film: filmParam(o.cubeText, o.filmStem, o.filmChoice),
+                 print: o.printStem || "none", filter: o.filter || "none",
+                 strength: o.strength ?? 1, develop: o.develop || "normal", age: o.age ?? 0,
+                 grain: o.grainModel || "classic", edge: o.edge ?? 0, ev: o.ev ?? 0,
+                 halation: o.halation ?? 1, seed: (o.seed ?? 42) >>> 0 };
+    }
+    return {
+        native: true,
+        info,
+        async version() { return info.version; },
+        async cameras() { return (await expectOk(await fetch(api("/api/cameras")))).json(); },
+        async render(o) {
+            const params = { ...lookParams(o), max: o.maxDim || 0 };
+            let r;
+            if (o.name) r = await fetch(api("/api/render", { ...params, name: o.name }), { method: "POST" });
+            else r = await fetch(api("/api/render", { ...params, ext: o.ext || "jpg" }),
+                                 { method: "POST", body: o.inputBytes });
+            return new Uint8Array(await (await expectOk(r)).arrayBuffer());
+        },
+        async develop(o) {
+            const params = { max: o.maxDim || 0 };
+            let r;
+            if (o.name) r = await fetch(api("/api/develop", { ...params, name: o.name }));
+            else r = await fetch(api("/api/develop", { ...params, ext: o.ext || "jpg" }),
+                                 { method: "POST", body: o.inputBytes });
+            return new Uint8Array(await (await expectOk(r)).arrayBuffer());
+        },
+        async files() { return (await expectOk(await fetch(api("/api/files"), { cache: "no-store" }))).json(); },
+        fileUrl(name) { return api("/api/file", { name }); },
+        developUrl(name, maxDim) { return api("/api/develop", { name, max: maxDim || 0 }); },
+        async exportFile(o) {
+            const r = await fetch(api("/api/export", { ...lookParams(o), name: o.name }), { method: "POST" });
+            return (await expectOk(r)).json();
+        },
+        async batch(o) {
+            const r = await fetch(api("/api/batch", lookParams(o)), { method: "POST" });
+            return (await expectOk(r)).json();
+        },
+        async looks() { return (await expectOk(await fetch(api("/api/looks"), { cache: "no-store" }))).json(); },
+        async saveLook(name, text) {
+            return (await expectOk(await fetch(api("/api/looks", { name }), { method: "PUT", body: text }))).json();
+        },
+        async deleteLook(name) {
+            return (await expectOk(await fetch(api("/api/looks", { name }), { method: "DELETE" }))).json();
+        },
+    };
+}

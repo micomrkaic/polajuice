@@ -107,7 +107,7 @@
 <body>
 <header>
   <h1>Polajuice <small id="version"></small></h1>
-  <span class="tag">camera + film, rendered locally in WebAssembly — photos never leave your machine</span>
+  <span class="tag" id="enginetag">camera + film, rendered locally in WebAssembly — photos never leave your machine</span>
   <span id="status">loading engine…</span>
 </header>
 
@@ -227,7 +227,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
       <button class="small" id="presetsave">keep</button>
     </div>
     <div class="field" style="margin-top:0.4rem">
-      <label for="presets">Kept looks (this browser)</label>
+      <label for="presets" id="presetslabel">Kept looks (this browser)</label>
       <select id="presets"><option value="">—</option></select>
       <div class="btnrow"><button class="small secondary" id="presetdelete">forget</button></div>
     </div>
@@ -286,6 +286,8 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
     <span class="spacer"></span>
     <button id="render" class="secondary" disabled>Render preview</button>
     <button id="download" disabled>Render full size &amp; download</button>
+    <button id="export" disabled style="display:none" title="render full size and write it next to the source, recipe embedded">Export next to source</button>
+    <button id="batch" class="secondary" disabled style="display:none" title="apply the current look to every image in the folder, written next to each">Apply to folder</button>
   </div>
   <div id="viewport"><img id="view" alt=""></div>
   <img id="before" alt=""><img id="after" alt="">
@@ -308,13 +310,15 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 
 <script type="module">
 "use strict";
-import { createEngine } from "./engine.js";
+import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.19.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.20.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
-let engine = null;
+let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
+let wasmEngine = null;  /* always loaded: the fallback, and custom cubes */
 let inputBytes = null, inputName = "photo", inputExt = "jpg";
+let inputServerName = null;   /* a file in the served folder, rendered by name */
 let images = [];          /* {name, ext, bytes, url} loaded this session */
 let current = -1;
 let filmFamilies = [];
@@ -470,20 +474,41 @@ function loadLooks() {
 function saveLooks(looks) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(looks)); } catch (e) { /* private mode */ }
 }
-function refreshPresetList() {
+let serverLooks = {};   /* name -> text, when the engine is native */
+async function refreshPresetList() {
   const sel = $("presets");
   if (!sel) return;
   const previous = sel.value;
+  let names;
+  if (engine && engine.native) {
+    try {
+      serverLooks = {};
+      for (const l of await engine.looks()) serverLooks[l.name] = l.text;
+    } catch (e) { setStatus("cannot read looks/: " + e.message, true); }
+    names = Object.keys(serverLooks);
+  } else names = Object.keys(loadLooks());
   while (sel.firstChild) sel.removeChild(sel.firstChild);
   sel.add(new Option("—", ""));
-  for (const name of Object.keys(loadLooks()).sort()) sel.add(new Option(name, name));
+  for (const name of names.sort()) sel.add(new Option(name, name));
   sel.value = [...sel.options].some(o => o.value === previous) ? previous : "";
+}
+function lookText(name) {
+  return engine && engine.native ? serverLooks[name] : loadLooks()[name];
 }
 
 /* ---- boot ----------------------------------------------------------- */
 async function boot() {
   const wasm = await (await fetch("polajuice.wasm")).arrayBuffer();
-  engine = await createEngine(new Uint8Array(wasm));
+  wasmEngine = await createEngine(new Uint8Array(wasm));
+  engine = wasmEngine;
+  const native = await probeNativeEngine("");
+  if (native) {
+    engine = native;
+    $("enginetag").textContent = `native engine, ${native.info.threads} threads — folder ${native.info.dir}`;
+    $("export").style.display = "";
+    $("batch").style.display = "";
+    $("presetslabel").textContent = "Kept looks (looks/ beside the engine)";
+  }
   const engineVersion = await engine.version();
   $("version").textContent = "v" + engineVersion;
   if (engineVersion !== PAGE_VERSION) {
@@ -550,7 +575,7 @@ async function boot() {
       filmFamilies = [{ name: "Films", note: "", stocks:
         manifest.map(f => typeof f === "string" ? { stem: f, blurb: "" } : f) }];
     else
-      filmFamilies = manifest.families;
+      filmFamilies = Array.isArray(manifest.families) ? manifest.families : [];
     films = filmFamilies.flatMap(f => f.stocks);
   } catch (e) {
     setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
@@ -612,9 +637,27 @@ async function boot() {
   } catch (e) { /* no samples staged; the drop zone is enough */ }
 
   wireCustomCube();
-  refreshPresetList();
+  await refreshPresetList();
   refreshRecipeFromControls();
-  setStatus("ready — drop a photo, or click a sample");
+  if (engine.native) await listFolder();
+  setStatus(engine.native ? "ready — pick an image from the folder, or drop one"
+                          : "ready — drop a photo, or click a sample");
+}
+
+/* the served folder's images become strip entries rendered by name */
+async function listFolder() {
+  try {
+    const files = await engine.files();
+    for (const f of files) {
+      if (images.some(im => im.serverName === f.name)) continue;
+      const raw = /^(nef|dng)$/i.test(f.ext);
+      images.push({ name: f.name, ext: f.ext.toLowerCase() === "jpeg" ? "jpg" : f.ext.toLowerCase(),
+                    bytes: null, serverName: f.name,
+                    url: raw ? engine.developUrl(f.name, 1600) : engine.fileUrl(f.name),
+                    thumb: raw ? engine.developUrl(f.name, 240) : engine.fileUrl(f.name) });
+    }
+    refreshThumbs();
+  } catch (e) { setStatus("cannot list the folder: " + e.message, true); }
 }
 
 function wireCustomCube() {
@@ -665,22 +708,31 @@ function previewSize() {
 }
 
 async function render(maxDim) {
-  if (!inputBytes || !engine) return null;
+  if ((!inputBytes && !inputServerName) || !engine) return null;
   setStatus("rendering…");
   await new Promise(r => setTimeout(r, 20));
   try {
     const stem = customCube ? customCube.stem : resolveFilmStem();
-    const cubeText = customCube ? customCube.text
-                                : (stem ? await loadFilmCube(stem) : null);
+    /* a custom cube is text the server has no file for: the wasm engine
+     * takes that render; everything else goes to the engine in charge */
+    let eng = engine;
+    if (customCube && engine.native) {
+      eng = wasmEngine;
+      if (!inputBytes) inputBytes = new Uint8Array(await (await fetch(engine.fileUrl(inputServerName))).arrayBuffer());
+    }
+    const cubeText = eng.native ? null
+                   : customCube ? customCube.text : (stem ? await loadFilmCube(stem) : null);
+    const filmChoice = $("film").value === "__none__" ? "none" : $("film").value === "__auto__" ? "auto" : "stem";
     const family = (!customCube && stem)
         ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
     const filmProcess = family ? familyToken(family) : null;
     const printStem = $("print") && $("print").value !== "__none__"
         ? $("print").value : null;
-    const printCubeText = printStem ? await loadFilmCube(printStem) : null;
+    const printCubeText = printStem && !eng.native ? await loadFilmCube(printStem) : null;
     const t0 = performance.now();
-    const out = await engine.render({
-      inputBytes, ext: inputExt, camera: $("camera").value, cubeText,
+    const out = await eng.render({
+      inputBytes, ext: inputExt, name: eng.native ? inputServerName : null,
+      camera: $("camera").value, cubeText, filmChoice,
       filmProcess, filmStem: stem, printCubeText,
       filter: $("filter").value || null,
       strength: parseFloat($("strength").value),
@@ -692,8 +744,9 @@ async function render(maxDim) {
       ev: parseFloat($("ev").value),
       halation: parseFloat($("halation").value),
       printStem });
-    const secs = ((performance.now() - t0) / 1000).toFixed(1);
-    setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
+    const secs = ((performance.now() - t0) / 1000).toFixed(secs_digits(performance.now() - t0));
+    setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine") +
+              (eng.native ? "" : (engine.native ? " (wasm, custom cube)" : "")));
     $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "") +
       (maxDim ? ` (preview, long edge ${maxDim}px)` : " (full size)");
     const recipe = readJpegComment(out);
@@ -704,6 +757,8 @@ async function render(maxDim) {
     return null;
   }
 }
+
+function secs_digits(ms) { return ms < 1000 ? 2 : 1; }
 
 function showView(which) {
   view = which;
@@ -736,7 +791,7 @@ async function renderPreview() {
 }
 
 function scheduleRender() {
-  if (!inputBytes) return;
+  if (!inputBytes && !inputServerName) return;
   if (renderTimer) clearTimeout(renderTimer);
   renderTimer = setTimeout(() => { renderTimer = null; renderPreview(); }, 250);
 }
@@ -769,7 +824,8 @@ function refreshThumbs() {
     const fig = document.createElement("figure");
     fig.className = i === current ? "on" : "";
     const img = document.createElement("img");
-    img.src = im.url; img.alt = im.name;
+    img.src = im.thumb || im.url; img.alt = im.name;
+    img.loading = "lazy";
     const cap = document.createElement("figcaption");
     cap.textContent = im.name;
     fig.append(img, cap);
@@ -782,8 +838,11 @@ function selectImage(i) {
   current = i;
   const im = images[i];
   inputBytes = im.bytes; inputExt = im.ext;
+  inputServerName = im.serverName || null;
   inputName = im.name.replace(/\.[^.]+$/, "");
   originalUrl = im.url;
+  $("export").disabled = !inputServerName;
+  $("batch").disabled = !(engine && engine.native);
   lastRender = null;
   $("before").src = im.url;
   $("render").disabled = $("download").disabled = false;
@@ -919,34 +978,67 @@ $("loadrecipe").addEventListener("change", async e => {
   scheduleRender();
   e.target.value = "";
 });
-$("presetsave").addEventListener("click", () => {
+$("presetsave").addEventListener("click", async () => {
   const name = ($("presetname").value || "").trim();
   if (!name) { setStatus("give the look a name first", true); return; }
-  const looks = loadLooks();
-  looks[name] = $("recipe").value;
-  saveLooks(looks);
-  refreshPresetList();
+  try {
+    if (engine.native) await engine.saveLook(name, $("recipe").value);
+    else { const looks = loadLooks(); looks[name] = $("recipe").value; saveLooks(looks); }
+  } catch (e) { setStatus("cannot keep the look: " + e.message, true); return; }
+  await refreshPresetList();
   $("presets").value = name;
-  setStatus(`kept '${name}' in this browser`);
+  setStatus(engine.native ? `kept looks/${name}.recipe` : `kept '${name}' in this browser`);
 });
 $("presets").addEventListener("change", () => {
   const name = $("presets").value;
   if (!name) return;
-  const text = loadLooks()[name];
+  const text = lookText(name);
   if (!text) return;
   const note = applyRecipe(parseRecipe(text));
   setStatus(`look '${name}'` + (note ? " — " + note : ""), !!note);
   scheduleRender();
 });
-$("presetdelete").addEventListener("click", () => {
+$("presetdelete").addEventListener("click", async () => {
   const name = $("presets").value;
   if (!name) return;
-  const looks = loadLooks();
-  delete looks[name];
-  saveLooks(looks);
-  refreshPresetList();
+  try {
+    if (engine.native) await engine.deleteLook(name);
+    else { const looks = loadLooks(); delete looks[name]; saveLooks(looks); }
+  } catch (e) { setStatus("cannot forget the look: " + e.message, true); return; }
+  await refreshPresetList();
   setStatus(`forgot '${name}'`);
 });
+$("export").addEventListener("click", async () => {
+  if (!engine.native || !inputServerName) return;
+  setStatus("exporting full size…");
+  try {
+    const r = await engine.exportFile({ ...lookFromControls(), name: inputServerName });
+    setStatus(`written ${r.written}`);
+  } catch (e) { setStatus("export failed: " + e.message, true); }
+});
+$("batch").addEventListener("click", async () => {
+  if (!engine.native) return;
+  const n = images.filter(im => im.serverName).length;
+  if (typeof confirm === "function" && !confirm(`Apply the current look to all ${n} images in the folder, writing each next to its source?`)) return;
+  setStatus(`rendering ${n} images full size…`);
+  try {
+    const r = await engine.batch(lookFromControls());
+    setStatus(`written ${r.count} files` + (r.failed ? `; ${r.failed} failed: ${r.errors}` : ""), !!r.failed);
+    await listFolder();
+  } catch (e) { setStatus("batch failed: " + e.message, true); }
+});
+
+/* the look as the native engine wants it, from the controls */
+function lookFromControls() {
+  const stem = resolveFilmStem();
+  return { camera: $("camera").value, filmStem: stem,
+    filmChoice: $("film").value === "__none__" ? "none" : $("film").value === "__auto__" ? "auto" : "stem",
+    printStem: $("print") && $("print").value !== "__none__" ? $("print").value : null,
+    filter: $("filter").value || null, strength: parseFloat($("strength").value),
+    seed: parseInt($("seed").value, 10) || 0, age: parseFloat($("age").value),
+    develop: $("develop").value, grainModel: $("grain").value, edge: parseFloat($("edge").value),
+    ev: parseFloat($("ev").value), halation: parseFloat($("halation").value) };
+}
 
 if (typeof document.addEventListener === "function") {
   let glance = false;
