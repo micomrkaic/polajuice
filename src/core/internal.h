@@ -87,6 +87,11 @@ unsigned pj_thread_count(void);
  * instead of powf per sample; pj_srgb_tables_init() is idempotent and
  * must run before any threaded stage (pj_render and the loaders call
  * it). pj_srgb_decode8 is the exact 8-bit decode for loaders. */
+/* jpegenc.c: baseline JPEG, 4:4:4 above quality 90, band-parallel with
+ * restart markers; the same bytes at any thread count */
+bool pj_jpeg_write(const char *path, const unsigned char *rgb, size_t width,
+                   size_t height, int quality, PjError *error);
+
 void pj_srgb_tables_init(void);
 float pj_srgb_encode(float linear);
 float pj_srgb_decode(float srgb);

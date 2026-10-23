@@ -9,7 +9,7 @@ CFLAGS += -std=c17 -Wall -Wextra -Wpedantic -pthread
 CFLAGS += -MMD -MP
 LDLIBS += -lm -pthread
 
-CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/rawdec.c src/core/stb_impl.c
+CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/rawdec.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
 ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/cli/filmlib.o src/movie/superjuice.o tests/test_core.o
 

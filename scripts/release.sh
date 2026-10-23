@@ -166,9 +166,16 @@ done
 for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/' \
                'web/polajuice.wasm' 'web/films/' 'third_party/wasi-sdk*' \
                'web/_pagecheck.mjs' '*.d' '/superjuice' '/tests/test_web_shim' \
-               '!web/samples/*.jpg' '!web/samples/*.json' '!tests/raw/*'; do
+               '!web/samples/*.jpg' '!web/samples/*.json' \
+               '*.DNG' '*.dng' '*.NEF' '*.nef' '*.xmp' '/*.cube' \
+               '!tests/raw/*'; do
     grep -qxF "$pattern" .gitignore || echo "$pattern" >> .gitignore
 done
+# the last match wins in .gitignore: the un-ignore of the synthetic raws
+# must follow the raw ignores, wherever an older checkout had it
+grep -vxF '!tests/raw/*' .gitignore > .gitignore.tmp
+echo '!tests/raw/*' >> .gitignore.tmp
+mv .gitignore.tmp .gitignore
 # the sample photos used to be ignored and lived only in working trees
 # and on gh-pages, so a fresh clone deployed a strip without pictures;
 # they are tracked from 1.16.1 on - drop the old rule and add them

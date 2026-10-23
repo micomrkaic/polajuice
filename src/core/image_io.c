@@ -134,22 +134,16 @@ done:
     return orientation;
 }
 
-/* Bake EXIF orientation 2..8 into the pixel buffer. */
-PjImage *pj_image_apply_orientation(PjImage *image, int orientation,
-                                  PjError *error)
-{
-    if (orientation <= 1 || orientation > 8 || !image) return image;
+typedef struct { const PjImage *in; PjImage *out; int orientation; } OrientCtx;
 
-    bool swaps = orientation >= 5;      /* 5..8 transpose the axes */
-    size_t out_w = swaps ? image->height : image->width;
-    size_t out_h = swaps ? image->width : image->height;
-    PjImage *out = pj_image_new(out_w, out_h, error);
-    if (!out) {
-        pj_image_free(image);
-        return NULL;
-    }
-    out->scene_linear = image->scene_linear;
-    for (size_t y = 0; y < image->height; ++y) {
+static void orient_band(size_t y0, size_t y1, void *vctx)
+{
+    OrientCtx *o = vctx;
+    const PjImage *image = o->in;
+    PjImage *out = o->out;
+    size_t out_w = out->width;
+    int orientation = o->orientation;
+    for (size_t y = y0; y < y1; ++y) {
         for (size_t x = 0; x < image->width; ++x) {
             size_t ox = 0, oy = 0;
             switch (orientation) {
@@ -166,6 +160,25 @@ PjImage *pj_image_apply_orientation(PjImage *image, int orientation,
                    3 * sizeof(float));
         }
     }
+}
+
+/* Bake EXIF orientation 2..8 into the pixel buffer. */
+PjImage *pj_image_apply_orientation(PjImage *image, int orientation,
+                                  PjError *error)
+{
+    if (orientation <= 1 || orientation > 8 || !image) return image;
+
+    bool swaps = orientation >= 5;      /* 5..8 transpose the axes */
+    size_t out_w = swaps ? image->height : image->width;
+    size_t out_h = swaps ? image->width : image->height;
+    PjImage *out = pj_image_new(out_w, out_h, error);
+    if (!out) {
+        pj_image_free(image);
+        return NULL;
+    }
+    out->scene_linear = image->scene_linear;
+    OrientCtx o = {image, out, orientation};
+    pj_parallel_rows(image->height, orient_band, &o);
     pj_image_free(image);
     return out;
 }
@@ -192,6 +205,16 @@ static PjImage *load_stb(const char *path, PjError *error)
         image->rgb[i] = pj_srgb_decode8(pixels[i]);
     stbi_image_free(pixels);
     return image;
+}
+
+typedef struct { const PjImage *image; unsigned char *out; } EncodeCtx;
+
+static void encode_band(size_t y0, size_t y1, void *vctx)
+{
+    EncodeCtx *e = vctx;
+    size_t w = e->image->width;
+    for (size_t i = y0 * w * 3; i < y1 * w * 3; ++i)
+        e->out[i] = (unsigned char)lrintf(255.0f * io_linear_to_srgb(e->image->rgb[i]));
 }
 
 PjImage *pj_image_load(const char *path, PjError *error)
@@ -248,17 +271,19 @@ bool pj_image_save(const PjImage *image, const char *path, PjError *error)
         pj_set_error(error, "could not allocate output buffer");
         return false;
     }
-    for (size_t i = 0; i < samples; ++i)
-        encoded[i] =
-            (unsigned char)lrintf(255.0f * io_linear_to_srgb(image->rgb[i]));
+    EncodeCtx ec = {image, encoded};
+    pj_parallel_rows(image->height, encode_band, &ec);
 
     int ok = 0;
     if (format == PJ_FMT_PNG)
         ok = stbi_write_png(path, (int)image->width, (int)image->height, 3,
                             encoded, (int)(image->width * 3));
-    else
-        ok = stbi_write_jpg(path, (int)image->width, (int)image->height, 3,
-                            encoded, 92);
+    else {
+        bool wrote = pj_jpeg_write(path, encoded, image->width, image->height,
+                                   92, error);
+        free(encoded);
+        return wrote;
+    }
     free(encoded);
     if (!ok) pj_set_error(error, "failed while writing '%s'", path);
     return ok != 0;

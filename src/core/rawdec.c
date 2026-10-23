@@ -271,36 +271,55 @@ typedef struct {
     uint32_t acc;
     int nbits;
     bool zero_after_ff;   /* JPEG byte stuffing: FF 00 is a literal FF */
+    int padded;           /* zero bits appended past the data (or past a
+                             marker); consuming into them is an overrun */
     bool overrun;
 } BitReader;
 
-static unsigned getbits(BitReader *r, int n)
+/* make at least n bits available in acc */
+static void fillbits(BitReader *r, int n)
 {
-    if (n <= 0) return 0;
     while (r->nbits < n) {
         unsigned c = 0;
         if (r->p < r->end) {
             c = *r->p++;
             if (r->zero_after_ff && c == 0xFF) {
                 if (r->p < r->end && *r->p == 0x00) ++r->p;
-                else { --r->p; c = 0; r->overrun = true; }
+                else { --r->p; c = 0; r->padded += 8; }   /* a marker: data ended */
             }
-        } else r->overrun = true;
+        } else r->padded += 8;
         r->acc = r->acc << 8 | c;
         r->nbits += 8;
     }
+}
+
+static unsigned getbits(BitReader *r, int n)
+{
+    if (n <= 0) return 0;
+    fillbits(r, n);
     unsigned v = (r->acc >> (r->nbits - n)) & ((1u << n) - 1u);
     r->nbits -= n;
+    if (r->nbits < r->padded) r->overrun = true;
     return v;
 }
 
-/* Canonical Huffman table from JPEG-style (16 counts, then symbols),
- * decoded bit by bit: tiny, and raw decoding is not where polajuice
- * spends its time. */
+static unsigned peekbits(BitReader *r, int n)
+{
+    fillbits(r, n);
+    return (r->acc >> (r->nbits - n)) & ((1u << n) - 1u);
+}
+
+/* Canonical Huffman table from JPEG-style (16 counts, then symbols).
+ * A 9-bit first-level lookup resolves nearly every code in one step
+ * (raw difference categories are short); longer codes fall back to the
+ * canonical walk. */
+#define HUFF_LOOKUP_BITS 9
 typedef struct {
     unsigned char symbol[256];
     unsigned count[17];
     unsigned mincode[17], maxcode[17], first[17];
+    unsigned char lookup_sym[1 << HUFF_LOOKUP_BITS];
+    unsigned char lookup_len[1 << HUFF_LOOKUP_BITS];   /* 0 = not resolved */
     int ok;
 } Huff;
 
@@ -318,11 +337,35 @@ static void huff_build(Huff *h, const unsigned char *counts, const unsigned char
     }
     if (total > 256) total = 256;
     memcpy(h->symbol, symbols, total);
+    /* fill the lookup: every code of length l <= LOOKUP_BITS owns the
+     * 2^(LOOKUP_BITS-l) slots that start with it */
+    unsigned k = 0;
+    code = 0;
+    for (int l = 1; l <= 16; ++l) {
+        for (unsigned i = 0; i < h->count[l]; ++i, ++k, ++code) {
+            if (l <= HUFF_LOOKUP_BITS && k < 256) {
+                unsigned base = code << (HUFF_LOOKUP_BITS - l);
+                unsigned span = 1u << (HUFF_LOOKUP_BITS - l);
+                for (unsigned j = 0; j < span; ++j) {
+                    h->lookup_sym[base + j] = h->symbol[k];
+                    h->lookup_len[base + j] = (unsigned char)l;
+                }
+            }
+        }
+        code <<= 1;
+    }
     h->ok = 1;
 }
 
 static int huff_decode(BitReader *r, const Huff *h)
 {
+    unsigned peek = peekbits(r, HUFF_LOOKUP_BITS);
+    unsigned len = h->lookup_len[peek];
+    if (len) {
+        r->nbits -= (int)len;
+        if (r->nbits < r->padded) r->overrun = true;
+        return h->lookup_sym[peek];
+    }
     unsigned code = 0;
     for (int l = 1; l <= 16; ++l) {
         code = code << 1 | getbits(r, 1);
@@ -418,7 +461,7 @@ static bool ljpeg_header(LJpeg *j, const unsigned char *p, size_t n)
 /* Decodes the whole scan into out (high rows of wide*clrs samples). */
 static bool ljpeg_decode(const LJpeg *j, uint16_t *out)
 {
-    BitReader r = {j->scan, j->scan + j->scan_len, 0, 0, true, false};
+    BitReader r = {j->scan, j->scan + j->scan_len, 0, 0, true, 0, false};
     unsigned rowlen = j->wide * j->clrs;
     unsigned mcu = 0;
     for (unsigned row = 0; row < j->high; ++row) {
@@ -580,7 +623,7 @@ static bool nikon_decode(const Tiff *t, const NikonMeta *m, uint16_t *out,
                                             : b->size - data_off;
     if (!in_range(b, data_off, 1)) { pj_set_error(error, "NEF: bad strip offset"); free(curve); return false; }
     if (data_len > b->size - data_off) data_len = b->size - data_off;
-    BitReader r = {b->data + data_off, b->data + data_off + data_len, 0, 0, false, false};
+    BitReader r = {b->data + data_off, b->data + data_off + data_len, 0, 0, false, 0, false};
     int hpred[2] = {0, 0};
     int min = 0;
     for (size_t row = 0; row < d->height; ++row) {
@@ -646,6 +689,71 @@ static bool unpack_samples(const Bytes *b, size_t off, size_t len, unsigned bps,
 
 /* ---- the decode: tiles/strips -> one uint16 plane set ---------------- */
 
+typedef struct {
+    const Tiff *t;
+    uint16_t *pix;
+    unsigned spp;
+    size_t tw, th, across;
+    bool tiled;
+    PjError error;
+    size_t ntiles;
+    int failed;
+} TileCtx;
+
+static void decode_tiles_band(size_t t0, size_t t1, void *vctx)
+{
+    TileCtx *tc = vctx;
+    const Tiff *t = tc->t;
+    const Ifd *d = &t->raw;
+    const Bytes *b = &t->b;
+    size_t w = d->width, h = d->height, tw = tc->tw, th = tc->th;
+    unsigned spp = tc->spp;
+    const Entry *offs = tc->tiled ? &d->tile_offsets : &d->strip_offsets;
+    const Entry *cnts = tc->tiled ? &d->tile_counts : &d->strip_counts;
+    uint16_t *tile = malloc(tw * th * spp * sizeof *tile);
+    if (!tile) { tc->failed = 1; pj_set_error(&tc->error, "out of memory"); return; }
+    for (size_t ti = t0; ti < t1 && !tc->failed; ++ti) {
+        size_t off = (size_t)entry_num(b, offs, (uint32_t)ti);
+        size_t len = cnts->count > ti ? (size_t)entry_num(b, cnts, (uint32_t)ti) : b->size - off;
+        if (!in_range(b, off, len)) { pj_set_error(&tc->error, "raw: tile %zu outside file", ti); tc->failed = 1; break; }
+        size_t tx = tc->tiled ? (ti % tc->across) * tw : 0;
+        size_t ty = tc->tiled ? (ti / tc->across) * th : ti * th;
+        size_t rows = th, cols = tw;
+        if (!tc->tiled && ty + rows > h) rows = h - ty;
+        if (d->compression == 1) {
+            if (!unpack_samples(b, off, len, d->bps, cols * rows * spp, tile)) {
+                pj_set_error(&tc->error, "raw: tile %zu truncated", ti); tc->failed = 1; break;
+            }
+        } else {
+            LJpeg j;
+            if (!ljpeg_header(&j, b->data + off, len)) {
+                pj_set_error(&tc->error, "raw: tile %zu is not lossless JPEG", ti); tc->failed = 1; break;
+            }
+            if ((size_t)j.wide * j.clrs != cols * spp || j.high != rows) {
+                /* some encoders fold a Bayer tile as wide/2 x 2 components;
+                 * any layout whose row carries cols*spp samples is fine */
+                if ((size_t)j.wide * j.clrs * j.high != cols * rows * spp) {
+                    pj_set_error(&tc->error, "raw: tile %zu geometry %ux%ux%u does not match %zux%zux%u",
+                                 ti, j.wide, j.high, j.clrs, cols, rows, spp);
+                    tc->failed = 1; break;
+                }
+            }
+            if (!ljpeg_decode(&j, tile)) {
+                pj_set_error(&tc->error, "raw: lossless JPEG data in tile %zu ended early", ti);
+                tc->failed = 1; break;
+            }
+            if (j.point)
+                for (size_t i = 0; i < cols * rows * spp; ++i) tile[i] = (uint16_t)(tile[i] << j.point);
+        }
+        for (size_t y = 0; y < rows && ty + y < h; ++y) {
+            size_t n = cols;
+            if (tx + n > w) n = w - tx;
+            memcpy(tc->pix + ((ty + y) * w + tx) * spp, tile + y * cols * spp, n * spp * sizeof *tc->pix);
+        }
+    }
+    free(tile);
+}
+
 static bool decode_pixels(const Tiff *t, uint16_t *pix, unsigned spp,
                           unsigned *nikon_white, PjError *error)
 {
@@ -665,55 +773,21 @@ static bool decode_pixels(const Tiff *t, uint16_t *pix, unsigned spp,
     size_t th = tiled ? d->tile_h : (d->rows_per_strip.count ? (size_t)entry_num(b, &d->rows_per_strip, 0) : h);
     if (th == 0 || th > h) th = h;
     const Entry *offs = tiled ? &d->tile_offsets : &d->strip_offsets;
-    const Entry *cnts = tiled ? &d->tile_counts : &d->strip_counts;
     size_t across = (w + tw - 1) / tw, down = (h + th - 1) / th;
     size_t ntiles = tiled ? across * down : down;
     if (offs->count < ntiles) { pj_set_error(error, "raw: too few strip/tile offsets"); return false; }
-    uint16_t *tile = malloc(tw * th * spp * sizeof *tile);
-    if (!tile) { pj_set_error(error, "out of memory"); return false; }
-    for (size_t ti = 0; ti < ntiles; ++ti) {
-        size_t off = (size_t)entry_num(b, offs, (uint32_t)ti);
-        size_t len = cnts->count > ti ? (size_t)entry_num(b, cnts, (uint32_t)ti) : b->size - off;
-        if (!in_range(b, off, len)) { pj_set_error(error, "raw: tile %zu outside file", ti); free(tile); return false; }
-        size_t tx = tiled ? (ti % across) * tw : 0;
-        size_t ty = tiled ? (ti / across) * th : ti * th;
-        size_t rows = th, cols = tw;
-        if (!tiled && ty + rows > h) rows = h - ty;
-        if (d->compression == 1) {
-            if (!unpack_samples(b, off, len, d->bps, cols * rows * spp, tile)) {
-                pj_set_error(error, "raw: tile %zu truncated", ti); free(tile); return false;
-            }
-        } else if (d->compression == 7) {
-            LJpeg j;
-            if (!ljpeg_header(&j, b->data + off, len)) {
-                pj_set_error(error, "raw: tile %zu is not lossless JPEG", ti); free(tile); return false;
-            }
-            if ((size_t)j.wide * j.clrs != cols * spp || j.high != rows) {
-                /* some encoders fold a Bayer tile as wide/2 x 2 components;
-                 * any layout whose row carries cols*spp samples is fine */
-                if ((size_t)j.wide * j.clrs * j.high != cols * rows * spp) {
-                    pj_set_error(error, "raw: tile %zu geometry %ux%ux%u does not match %zux%zux%u",
-                                 ti, j.wide, j.high, j.clrs, cols, rows, spp);
-                    free(tile); return false;
-                }
-            }
-            if (!ljpeg_decode(&j, tile)) {
-                pj_set_error(error, "raw: lossless JPEG data in tile %zu ended early", ti);
-                free(tile); return false;
-            }
-            if (j.point)
-                for (size_t i = 0; i < cols * rows * spp; ++i) tile[i] = (uint16_t)(tile[i] << j.point);
-        } else {
-            pj_set_error(error, "raw: compression %u unsupported (uncompressed, lossless JPEG, Nikon)", d->compression);
-            free(tile); return false;
-        }
-        for (size_t y = 0; y < rows && ty + y < h; ++y) {
-            size_t n = cols;
-            if (tx + n > w) n = w - tx;
-            memcpy(pix + ((ty + y) * w + tx) * spp, tile + y * cols * spp, n * spp * sizeof *pix);
-        }
+    if (d->compression != 1 && d->compression != 7) {
+        pj_set_error(error, "raw: compression %u unsupported (uncompressed, lossless JPEG, Nikon)", d->compression);
+        return false;
     }
-    free(tile);
+    /* tiles are independent streams: decode them in parallel, each
+     * band of tiles with its own scratch buffer */
+    TileCtx tc = {t, pix, spp, tw, th, across, tiled, {{0}}, ntiles, 0};
+    pj_parallel_rows(ntiles, decode_tiles_band, &tc);
+    if (tc.failed) {
+        pj_set_error(error, "%s", tc.error.message[0] ? tc.error.message : "raw: tile decode failed");
+        return false;
+    }
     return true;
 }
 
@@ -772,6 +846,106 @@ static bool build_rgb_cam(const double xyz_cam[9], double rgb_cam[9])
     return invert3(cam_rgb, rgb_cam);
 }
 
+/* ---- raw samples -> scene-linear RGB, in row bands -------------------- */
+
+typedef struct { uint16_t *pix; const uint16_t *table; size_t n, stride; } LinCtx;
+
+static void linearize_band(size_t y0, size_t y1, void *vctx)
+{
+    LinCtx *l = vctx;
+    for (size_t i = y0 * l->stride; i < y1 * l->stride; ++i) {
+        uint32_t v = l->pix[i];
+        if (v >= l->n) v = (uint32_t)l->n - 1;
+        l->pix[i] = l->table[v];
+    }
+}
+
+typedef struct {
+    const uint16_t *pix;
+    float *plane;          /* normalized Bayer plane (CFA path) */
+    float *rgb;            /* output */
+    size_t w, h;
+    bool linear_raw;
+    double black[4], white;
+    double wb[3], rgb_cam[9];
+    unsigned cfa[4];
+} ConvertCtx;
+
+static void normalize_band(size_t y0, size_t y1, void *vctx)
+{
+    ConvertCtx *c = vctx;
+    size_t w = c->w;
+    if (c->linear_raw) {
+        for (size_t i = y0 * w; i < y1 * w; ++i)
+            for (int ch = 0; ch < 3; ++ch) {
+                double scale = c->white - c->black[ch];
+                double v = scale > 0 ? (c->pix[i * 3 + ch] - c->black[ch]) / scale : 0.0;
+                c->rgb[i * 3 + ch] = (float)(v < 0 ? 0 : v);
+            }
+        return;
+    }
+    for (size_t y = y0; y < y1; ++y)
+        for (size_t x = 0; x < w; ++x) {
+            unsigned cell = (unsigned)((y & 1) * 2 + (x & 1));
+            double scale = c->white - c->black[cell];
+            double v = scale > 0 ? (c->pix[y * w + x] - c->black[cell]) / scale : 0.0;
+            c->plane[y * w + x] = (float)(v < 0 ? 0 : v);
+        }
+}
+
+static void demosaic_band(size_t y0, size_t y1, void *vctx)
+{
+    ConvertCtx *c = vctx;
+    size_t w = c->w, h = c->h;
+    const float *plane = c->plane;
+    for (size_t y = y0; y < y1; ++y)
+        for (size_t x = 0; x < w; ++x) {
+            float sum[3] = {0, 0, 0}; int cnt[3] = {0, 0, 0};
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dx = -1; dx <= 1; ++dx) {
+                    long yy = (long)y + dy, xx = (long)x + dx;
+                    if (yy < 0) yy = 1;
+                    if (xx < 0) xx = 1;
+                    if (yy >= (long)h) yy = (long)h - 2;
+                    if (xx >= (long)w) xx = (long)w - 2;
+                    unsigned ch = c->cfa[((unsigned)yy & 1) * 2 + ((unsigned)xx & 1)];
+                    /* a 3x3 window mixes the same-color diagonal
+                     * neighbors with the center for R/B at a G site;
+                     * weight the center fully, neighbors by 1 */
+                    sum[ch] += plane[(size_t)yy * w + (size_t)xx];
+                    cnt[ch]++;
+                }
+            unsigned here = c->cfa[(y & 1) * 2 + (x & 1)];
+            for (int ch = 0; ch < 3; ++ch)
+                c->rgb[(y * w + x) * 3 + ch] = (ch == (int)here) ? plane[y * w + x]
+                                             : (cnt[ch] ? sum[ch] / (float)cnt[ch] : 0.0f);
+        }
+}
+
+/* white balance, clip to neutral white, camera->sRGB; in place on rgb */
+static void color_band(size_t y0, size_t y1, void *vctx)
+{
+    ConvertCtx *c = vctx;
+    size_t w = c->w;
+    for (size_t i = y0 * w; i < y1 * w; ++i) {
+        float *px = &c->rgb[i * 3];
+        double r = px[0] * c->wb[0], g = px[1] * c->wb[1], bb = px[2] * c->wb[2];
+        /* A saturated sensor channel knows nothing above white, and the
+         * white-balance gains would otherwise paint every clipped
+         * highlight magenta: clip to neutral white here (dcraw's default
+         * highlight handling). The headroom polajuice works with is the
+         * stop the pipeline opens the image up by, not light the sensor
+         * never saw. */
+        if (r > 1.0) r = 1.0;
+        if (g > 1.0) g = 1.0;
+        if (bb > 1.0) bb = 1.0;
+        for (int ch = 0; ch < 3; ++ch) {
+            double v = c->rgb_cam[ch * 3] * r + c->rgb_cam[ch * 3 + 1] * g + c->rgb_cam[ch * 3 + 2] * bb;
+            px[ch] = (float)(v < 0 ? 0 : v);
+        }
+    }
+}
+
 /* ---- the door --------------------------------------------------------- */
 
 static unsigned char *slurp(const char *path, size_t *size, PjError *error)
@@ -826,12 +1000,14 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
     if (nikon_white) white = nikon_white;
     if (d->have_lin && d->lin_table.count > 1) {
         size_t n = d->lin_table.count;
-        for (size_t i = 0; i < w * h * spp; ++i) {
-            uint32_t v = pix[i];
-            if (v >= n) v = (uint32_t)n - 1;
-            pix[i] = (uint16_t)entry_num(b, &d->lin_table, v);
-        }
-        white = entry_num(b, &d->lin_table, (uint32_t)n - 1);
+        if (n > 65536) n = 65536;
+        uint16_t *table = malloc(n * sizeof *table);
+        if (!table) { pj_set_error(error, "out of memory"); free(pix); free(data); return NULL; }
+        for (size_t i = 0; i < n; ++i) table[i] = (uint16_t)entry_num(b, &d->lin_table, (uint32_t)i);
+        LinCtx lc = {pix, table, n, w * spp};
+        pj_parallel_rows(h, linearize_band, &lc);
+        white = table[n - 1];
+        free(table);
     }
     if (d->have_white) white = entry_num(b, &d->white, 0);
     if (d->have_black) {
@@ -891,69 +1067,25 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
     PjImage *image = pj_image_new(w, h, error);
     if (!image) { free(pix); free(data); return NULL; }
 
-    /* scene-linear camera RGB, black removed, white at 1.0, unclipped */
-    float *cam = malloc(w * h * 3 * sizeof *cam);
-    if (!cam) { pj_set_error(error, "out of memory"); pj_image_free(image); free(pix); free(data); return NULL; }
-    if (linear_raw) {
-        for (size_t i = 0; i < w * h; ++i)
-            for (int c = 0; c < 3; ++c) {
-                double scale = white - black[c];
-                double v = scale > 0 ? (pix[i * 3 + c] - black[c]) / scale : 0.0;
-                cam[i * 3 + c] = (float)(v < 0 ? 0 : v);
-            }
-    } else {
-        /* normalize per CFA cell, then bilinear demosaic */
-        float *plane = malloc(w * h * sizeof *plane);
-        if (!plane) { pj_set_error(error, "out of memory"); free(cam); pj_image_free(image); free(pix); free(data); return NULL; }
-        for (size_t y = 0; y < h; ++y)
-            for (size_t x = 0; x < w; ++x) {
-                unsigned cell = (unsigned)((y & 1) * 2 + (x & 1));
-                double scale = white - black[cell];
-                double v = scale > 0 ? (pix[y * w + x] - black[cell]) / scale : 0.0;
-                plane[y * w + x] = (float)(v < 0 ? 0 : v);
-            }
-        for (size_t y = 0; y < h; ++y)
-            for (size_t x = 0; x < w; ++x) {
-                float sum[3] = {0, 0, 0}; int cnt[3] = {0, 0, 0};
-                for (int dy = -1; dy <= 1; ++dy)
-                    for (int dx = -1; dx <= 1; ++dx) {
-                        long yy = (long)y + dy, xx = (long)x + dx;
-                        if (yy < 0) yy = 1;
-                        if (xx < 0) xx = 1;
-                        if (yy >= (long)h) yy = (long)h - 2;
-                        if (xx >= (long)w) xx = (long)w - 2;
-                        unsigned ch = cfa[((unsigned)yy & 1) * 2 + ((unsigned)xx & 1)];
-                        /* a 3x3 window mixes the same-color diagonal
-                         * neighbors with the center for R/B at a G site;
-                         * weight the center fully, neighbors by 1 */
-                        sum[ch] += plane[(size_t)yy * w + (size_t)xx];
-                        cnt[ch]++;
-                    }
-                unsigned here = cfa[(y & 1) * 2 + (x & 1)];
-                for (int c = 0; c < 3; ++c)
-                    cam[(y * w + x) * 3 + c] = (c == (int)here) ? plane[y * w + x]
-                                             : (cnt[c] ? sum[c] / (float)cnt[c] : 0.0f);
-            }
-        free(plane);
+    /* scene-linear camera RGB, black removed, white at 1.0; the image
+     * buffer itself is the work buffer, so no 144 MB intermediate */
+    ConvertCtx cc = {.pix = pix, .plane = NULL, .rgb = image->rgb, .w = w, .h = h,
+                     .linear_raw = linear_raw, .white = white};
+    memcpy(cc.black, black, sizeof black);
+    memcpy(cc.wb, wb, sizeof wb);
+    memcpy(cc.rgb_cam, rgb_cam, sizeof rgb_cam);
+    memcpy(cc.cfa, cfa, sizeof cfa);
+    if (!linear_raw) {
+        cc.plane = malloc(w * h * sizeof *cc.plane);
+        if (!cc.plane) { pj_set_error(error, "out of memory"); pj_image_free(image); free(pix); free(data); return NULL; }
+    }
+    pj_parallel_rows(h, normalize_band, &cc);
+    if (!linear_raw) {
+        pj_parallel_rows(h, demosaic_band, &cc);
+        free(cc.plane);
     }
     free(pix);
-    for (size_t i = 0; i < w * h; ++i) {
-        double r = cam[i * 3] * wb[0], g = cam[i * 3 + 1] * wb[1], bb = cam[i * 3 + 2] * wb[2];
-        /* A saturated sensor channel knows nothing above white, and the
-         * white-balance gains would otherwise paint every clipped
-         * highlight magenta: clip to neutral white here (dcraw's default
-         * highlight handling). The headroom polajuice works with is the
-         * stop the pipeline opens the image up by, not light the sensor
-         * never saw. */
-        if (r > 1.0) r = 1.0;
-        if (g > 1.0) g = 1.0;
-        if (bb > 1.0) bb = 1.0;
-        for (int c = 0; c < 3; ++c) {
-            double v = rgb_cam[c * 3] * r + rgb_cam[c * 3 + 1] * g + rgb_cam[c * 3 + 2] * bb;
-            image->rgb[i * 3 + c] = (float)(v < 0 ? 0 : v);
-        }
-    }
-    free(cam);
+    pj_parallel_rows(h, color_band, &cc);
     image->scene_linear = true;
     unsigned orientation = d->orientation > 1 ? d->orientation : t.orientation0;
     free(data);

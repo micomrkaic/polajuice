@@ -20,5 +20,14 @@ web/_pagecheck.mjs
 # must carry them
 !web/samples/*.jpg
 !web/samples/*.json
-# synthetic raw test files (tools/make_test_raws.py), a few KB each
+# raw files and sidecars dropped into a checkout for testing, and the
+# Polaroid cube make fetch-polaroid-lut leaves at the root
+*.DNG
+*.dng
+*.NEF
+*.nef
+*.xmp
+/*.cube
+# synthetic raw test files (tools/make_test_raws.py), a few KB each;
+# this must stay below the raw ignores above, since the last match wins
 !tests/raw/*

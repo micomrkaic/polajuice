@@ -1,0 +1,30 @@
+1.18.1: the serial tail - raw decode and JPEG encode in bands
+
+1.18.0 threaded the pipeline; the raw decoder and the JPEG writer were
+still single-threaded and had become the largest part of a raw render.
+
+Raw: tiles decode in parallel (one scratch buffer per band), the
+lossless-JPEG Huffman walk resolves through a 9-bit lookup, the bit
+reader counts padding explicitly so a stream's last code is never
+mistaken for an overrun, and the linearization, normalize, demosaic,
+white-balance/matrix and orientation passes all run in row bands. The
+144 MB intermediate buffer is gone: the image buffer is the work
+buffer.
+
+JPEG: a baseline encoder of our own (src/core/jpegenc.c) replaces
+stb_image_write's. Same arithmetic - the AAN float DCT, stb's quality
+scaling, the Annex K tables, 4:4:4 - so it reproduces stb's output
+pixel for pixel on decode; what differs is structure: the image is
+cut into bands of 8 MCU rows, each entropy-coded on its own thread
+with its own DC predictors, joined with restart markers (DRI). The
+band height is fixed, so the file is the same bytes at any thread
+count; test_threads.sh now checks raw decode and JPEG output too. The
+8-bit quantization before encode is banded as well.
+
+12 MP ProRAW-like DNG through 35mm-negative with a LUT, 2-core
+sandbox: 9.4 s (1.17.1) -> 4.4 s (1 thread) -> 2.9 s (2 threads); the
+decode alone 0.72 -> 0.59 s on a single-tile file.
+
+.gitignore: *.DNG, *.NEF, *.xmp and a root .cube no longer dirty a
+checkout (the synthetic tests/raw files stay un-ignored below them;
+release.sh keeps that order on older checkouts).
