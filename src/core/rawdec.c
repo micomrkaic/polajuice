@@ -964,6 +964,12 @@ static unsigned char *slurp(const char *path, size_t *size, PjError *error)
     return buf;
 }
 
+/* Last raw file's structure, for 'inspect': container, layout, tiling,
+ * compression, bit depth, camera. Static text, overwritten per load. */
+static char raw_description[256];
+const char *pj_raw_last_description(void) { return raw_description; }
+const char *pj_raw_description(void) { return raw_description; }
+
 PjImage *pj_image_load_raw(const char *path, PjError *error)
 {
     size_t size = 0;
@@ -1087,6 +1093,41 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
     free(pix);
     pj_parallel_rows(h, color_band, &cc);
     image->scene_linear = true;
+    {
+        bool tiled = d->tile_w && d->tile_h && d->tile_offsets.count;
+        size_t ntiles = tiled ? ((w + d->tile_w - 1) / d->tile_w) * ((h + d->tile_h - 1) / d->tile_h)
+                              : d->strip_offsets.count;
+        const char *comp = d->compression == 1 ? "uncompressed"
+                         : d->compression == 7 ? "lossless JPEG"
+                         : d->compression == 34713 ? "Nikon compressed" : "other";
+        snprintf(raw_description, sizeof raw_description,
+                 "%s, %s, %u-bit, %s, %zu %s%s%s%s%s",
+                 t.is_dng ? "DNG" : "NEF",
+                 linear_raw ? "LinearRaw (demosaiced in camera)" : "CFA (Bayer)",
+                 d->bps, comp, ntiles, tiled ? "tile" : "strip",
+                 ntiles == 1 ? "" : "s",
+                 t.model[0] ? ", " : "", t.make[0] ? t.make : "", t.model[0] ? t.model : "");
+        if (t.make[0] && t.model[0] && !strstr(t.model, t.make)) {
+            /* "NIKON CORPORATION" + "NIKON D610": the model already names
+             * the maker in most files; otherwise separate the two */
+            char tmp[256];
+            snprintf(tmp, sizeof tmp, "%s", raw_description);
+            char *at = strstr(tmp, t.make);
+            if (at) {
+                size_t pre = (size_t)(at - tmp);
+                snprintf(raw_description, sizeof raw_description, "%.*s%s %s",
+                         (int)pre, tmp, t.make, t.model);
+            }
+        } else if (t.model[0]) {
+            char tmp[256];
+            snprintf(tmp, sizeof tmp, "%s", raw_description);
+            char *at = t.make[0] ? strstr(tmp, t.make) : NULL;
+            if (at) {
+                size_t pre = (size_t)(at - tmp);
+                snprintf(raw_description, sizeof raw_description, "%.*s%s", (int)pre, tmp, t.model);
+            }
+        }
+    }
     unsigned orientation = d->orientation > 1 ? d->orientation : t.orientation0;
     free(data);
     return pj_image_apply_orientation(image, (int)orientation, error);

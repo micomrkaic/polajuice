@@ -11,7 +11,7 @@ extern "C" {
 
 #define PJ_VERSION_MAJOR 1
 #define PJ_VERSION_MINOR 18
-#define PJ_VERSION_PATCH 1
+#define PJ_VERSION_PATCH 2
 
 typedef struct PjImage PjImage;
 typedef struct PjLut3D PjLut3D;
@@ -109,6 +109,9 @@ PjImage *pj_image_load(const char *path, PjError *error);
 PjImage *pj_image_load_linear(const char *path, PjError *error);
 /* True when the image came through a scene-linear door. */
 bool pj_image_is_scene_linear(const PjImage *image);
+/* One line describing the structure of the last raw file loaded
+ * (container, layout, bit depth, compression, tiling, camera). */
+const char *pj_raw_description(void);
 /* The straight print: opens a scene-linear image the stop the pipeline
  * would (plus ev), rolls the headroom in with the scene shoulder, and
  * marks it display-referred. No camera, no film. Display-referred input

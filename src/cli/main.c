@@ -111,8 +111,10 @@ static int inspect_image(const char *path)
            path, pj_image_width(image), pj_image_height(image),
            raw ? "scene-linear (sensor white = 1.0)" : "sRGB");
     if (raw)
-        printf("mean luminance: %.3f (%.2f stops below sensor white)\n"
+        printf("raw: %s\n"
+               "mean luminance: %.3f (%.2f stops below sensor white)\n"
                "clipped: %.2f%% of pixels at sensor white\n",
+               pj_raw_description(),
                mean, mean > 0.0 ? -log2(mean) : 0.0,
                100.0 * (double)clipped / (double)(n ? n : 1));
     pj_image_free(image);

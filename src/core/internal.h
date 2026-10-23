@@ -98,6 +98,7 @@ float pj_srgb_decode(float srgb);
 float pj_srgb_decode8(unsigned char v);
 /* rawdec.c: scene-linear doors (NEF, DNG; 16-bit TIFF/PNG as linear) */
 PjImage *pj_image_load_raw(const char *path, PjError *error);
+const char *pj_raw_last_description(void);
 /* image_io.c: bake an EXIF/TIFF orientation (1..8) into the pixels; takes
  * ownership of image */
 PjImage *pj_image_apply_orientation(PjImage *image, int orientation, PjError *error);

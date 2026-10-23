@@ -30,6 +30,59 @@ typedef struct {
     size_t n;
 } Ctx;
 
+/*
+ * Scratch pool. Every stage that needs a frame-sized temporary (the
+ * blur passes, the halation mask, the grain fields, the edge densities)
+ * used to malloc and free it; at 144 MB a frame the allocator hands
+ * each one back to the OS, and the next stage pays the page faults
+ * again - a third of a render's wall time on a 12 MP frame, in the
+ * kernel, where threads serialize. The pool keeps up to a few frame
+ * buffers for the life of the process and hands them out in turn, so
+ * the pages are faulted once. Slot size follows the largest frame seen.
+ */
+#define SCRATCH_SLOTS 6
+static struct {
+    float *slot[SCRATCH_SLOTS];
+    bool used[SCRATCH_SLOTS];
+    size_t floats;
+} scratch;
+
+static void scratch_prepare(size_t floats)
+{
+    if (floats <= scratch.floats) return;
+    for (int i = 0; i < SCRATCH_SLOTS; ++i) { free(scratch.slot[i]); scratch.slot[i] = NULL; }
+    scratch.floats = floats;
+}
+
+static float *scratch_get(void)
+{
+    for (int i = 0; i < SCRATCH_SLOTS; ++i)
+        if (!scratch.used[i]) {
+            if (!scratch.slot[i]) scratch.slot[i] = malloc(scratch.floats * sizeof(float));
+            if (!scratch.slot[i]) return NULL;
+            scratch.used[i] = true;
+            return scratch.slot[i];
+        }
+    return malloc(scratch.floats * sizeof(float));   /* beyond the pool: plain */
+}
+
+static void scratch_put(float *p)
+{
+    if (!p) return;
+    for (int i = 0; i < SCRATCH_SLOTS; ++i)
+        if (scratch.slot[i] == p) { scratch.used[i] = false; return; }
+    free(p);
+}
+
+/* every pooled temporary is at most one frame of RGB floats; a stage
+ * asking for a buffer must have had scratch_prepare() run for its
+ * image, which pj_render and the scene-to-display helper do */
+static float *scratch_frame(size_t width, size_t height)
+{
+    scratch_prepare(width * height * 3);
+    return scratch_get();
+}
+
 static PjImage *clone_image(const PjImage *input, PjError *error)
 {
     PjImage *copy = pj_image_new(input->width, input->height, error);
@@ -116,12 +169,12 @@ static void box_blur_cols(size_t x0, size_t x1, void *vctx)
 static void box_blur(float *rgb, size_t width, size_t height, unsigned radius)
 {
     if (radius == 0 || width == 0 || height == 0) return;
-    float *temp = malloc(width * height * 3 * sizeof *temp);
+    float *temp = scratch_frame(width, height);
     if (!temp) return;
     BlurCtx b = {rgb, temp, width, height, radius};
     pj_parallel_rows(height, box_blur_rows, &b);
     pj_parallel_rows(width, box_blur_cols, &b);
-    free(temp);
+    scratch_put(temp);
 }
 
 static void softness_band(size_t y0, size_t y1, void *vctx)
@@ -136,7 +189,7 @@ static void softness_band(size_t y0, size_t y1, void *vctx)
 static void apply_softness(PjImage *image, float amount)
 {
     if (amount <= 0.01f) return;
-    float *blurred = malloc(image->width * image->height * 3 * sizeof *blurred);
+    float *blurred = scratch_frame(image->width, image->height);
     if (!blurred) return;
     size_t samples = image->width * image->height * 3;
     memcpy(blurred, image->rgb, samples * sizeof *blurred);
@@ -146,7 +199,7 @@ static void apply_softness(PjImage *image, float amount)
     box_blur(blurred, image->width, image->height, radius);
     Ctx ctx = {.image = image, .aux = blurred, .f = {clamp01(amount / 2.0f)}};
     pj_parallel_rows(image->height, softness_band, &ctx);
-    free(blurred);
+    scratch_put(blurred);
 }
 
 static void vignette_band(size_t y0, size_t y1, void *vctx)
@@ -220,8 +273,7 @@ static void halation_add_band(size_t y0, size_t y1, void *vctx)
 static void apply_halation(PjImage *image, float amount, unsigned radius)
 {
     if (amount <= 0.0f || radius == 0) return;
-    size_t pixels = image->width * image->height;
-    float *mask = calloc(pixels * 3, sizeof *mask);
+    float *mask = scratch_frame(image->width, image->height);
     if (!mask) return;
     Ctx ctx = {.image = image, .aux = mask, .f = {amount}};
     pj_parallel_rows(image->height, halation_mask_band, &ctx);
@@ -233,7 +285,7 @@ static void apply_halation(PjImage *image, float amount, unsigned radius)
     box_blur(mask, image->width, image->height, scaled_radius);
     box_blur(mask, image->width, image->height, scaled_radius);
     pj_parallel_rows(image->height, halation_add_band, &ctx);
-    free(mask);
+    scratch_put(mask);
 }
 
 /* Exposure in stops on scene light, before any other stage. */
@@ -343,12 +395,12 @@ static void apply_gate_weave(PjImage *image, float amplitude, float period,
     float dy = amplitude * (float)image->height *
                smooth_noise(seed ^ UINT64_C(0x57EAFE02), t, 0.75f);
     size_t w = image->width, h = image->height;
-    float *shifted = malloc(w * h * 3 * sizeof *shifted);
+    float *shifted = scratch_frame(w, h);
     if (!shifted) return;
     Ctx ctx = {.image = image, .aux = shifted, .f = {dx, dy}};
     pj_parallel_rows(h, weave_band, &ctx);
     memcpy(image->rgb, shifted, w * h * 3 * sizeof *shifted);
-    free(shifted);
+    scratch_put(shifted);
 }
 
 static void weave_band(size_t y0, size_t y1, void *vctx)
@@ -940,9 +992,9 @@ static void apply_edge_effects(PjImage *image, float amount, bool mono)
     if (amount <= 0.0f) return;
     if (amount > 2.0f) amount = 2.0f;
     size_t w = image->width, h = image->height, n = w * h;
-    float *dens = malloc(n * 3 * sizeof *dens);
-    float *avg = malloc(n * 3 * sizeof *avg);
-    if (!dens || !avg) { free(dens); free(avg); return; }
+    float *dens = scratch_frame(w, h);
+    float *avg = scratch_frame(w, h);
+    if (!dens || !avg) { scratch_put(dens); scratch_put(avg); return; }
     Ctx ctx = {.image = image, .aux = dens, .aux2 = avg, .flag = mono};
     pj_parallel_rows(h, edge_density_band, &ctx);
     memcpy(avg, dens, n * 3 * sizeof *avg);
@@ -956,8 +1008,8 @@ static void apply_edge_effects(PjImage *image, float amount, bool mono)
     box_blur(avg, w, h, radius);
     ctx.f[0] = 0.16f * amount;
     pj_parallel_rows(h, edge_apply_band, &ctx);
-    free(dens);
-    free(avg);
+    scratch_put(dens);
+    scratch_put(avg);
 }
 
 /*
@@ -1031,12 +1083,12 @@ static void gaussian_blur_small(float *rgb, size_t w, size_t h, float sigma)
         total += kernel[k + radius];
     }
     for (int k = 0; k <= 2 * radius; ++k) kernel[k] /= total;
-    float *temp = malloc(w * h * 3 * sizeof *temp);
+    float *temp = scratch_frame(w, h);
     if (!temp) return;
     GaussCtx g = {rgb, temp, kernel, w, h, radius};
     pj_parallel_rows(h, gauss_h_band, &g);
     pj_parallel_rows(h, gauss_v_band, &g);
-    free(temp);
+    scratch_put(temp);
 }
 
 typedef struct { float *field; size_t w; uint64_t seed; float inv; } FieldCtx;
@@ -1196,7 +1248,7 @@ static void apply_silver_grain(PjImage *image, float amount, float scale,
     }
     float exposure_power = 1.0f + 0.35f * fmaxf(0.0f, push);
 
-    float *coarse = malloc(n * 3 * sizeof *coarse);
+    float *coarse = scratch_frame(w, h);
     if (!coarse) return;
     fill_grain_field(coarse, w, h, seed ^ UINT64_C(0xC0A45E6A1B), coarse_sigma);
     couple_layers(coarse, n, k);
@@ -1205,14 +1257,14 @@ static void apply_silver_grain(PjImage *image, float amount, float scale,
     /* coarse contribution first, from the untouched image; frees one
      * field's worth of memory before the fine field exists */
     pj_parallel_rows(h, silver_coarse_band, &ctx);
-    float *fine = malloc(n * 3 * sizeof *fine);
-    if (!fine) { free(coarse); return; }
+    float *fine = scratch_frame(w, h);
+    if (!fine) { scratch_put(coarse); return; }
     fill_grain_field(fine, w, h, seed ^ UINT64_C(0xF1AE6A1B), fine_sigma);
     couple_layers(fine, n, k);
     ctx.aux2 = fine;
     pj_parallel_rows(h, silver_fine_band, &ctx);
-    free(fine);
-    free(coarse);
+    scratch_put(fine);
+    scratch_put(coarse);
 }
 
 bool pj_grain_model_known(const char *name)

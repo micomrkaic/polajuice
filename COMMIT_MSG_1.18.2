@@ -1,0 +1,18 @@
+1.18.2: the scratch pool - page faults were a third of the render
+
+Every stage that needed a frame-sized temporary (blur passes, the
+halation mask, the grain fields, the edge densities) mallocs and freed
+it; at 144 MB a frame the allocator returns each one to the OS and the
+next stage faults the pages in again, in the kernel, where threads
+serialize - 340k minor faults and 0.7 s of system time on a 12 MP
+render, and the reason an 8-core machine showed two cores' worth of
+user time. A process-lifetime pool of up to six frame buffers now
+hands them out in turn: 194k faults (the image buffers themselves),
+system time 0.4 s, and the threaded stages no longer wait on the
+kernel. No arithmetic changed; every determinism and reference test
+holds.
+
+'inspect' prints the raw file's structure (container, CFA or
+LinearRaw, bit depth, compression, tile count, camera), so a
+single-tile file - whose decode is the one stage that cannot be
+threaded - can be recognized.
