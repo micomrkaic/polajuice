@@ -75,6 +75,22 @@ typedef struct {
 } PjPreset;
 
 void pj_set_error(PjError *error, const char *format, ...);
+
+/* parallel.c: run fn over [0, rows) in bands, one thread per core;
+ * bit-identical to the serial loop at any thread count */
+typedef void (*PjRowFn)(size_t y0, size_t y1, void *ctx);
+void pj_parallel_rows(size_t rows, PjRowFn fn, void *ctx);
+unsigned pj_thread_count(void);
+
+/* image.c: the sRGB transfer through 8192-cell tables with linear
+ * interpolation (error under 2e-5, a hundredth of an 8-bit level)
+ * instead of powf per sample; pj_srgb_tables_init() is idempotent and
+ * must run before any threaded stage (pj_render and the loaders call
+ * it). pj_srgb_decode8 is the exact 8-bit decode for loaders. */
+void pj_srgb_tables_init(void);
+float pj_srgb_encode(float linear);
+float pj_srgb_decode(float srgb);
+float pj_srgb_decode8(unsigned char v);
 /* rawdec.c: scene-linear doors (NEF, DNG; 16-bit TIFF/PNG as linear) */
 PjImage *pj_image_load_raw(const char *path, PjError *error);
 /* image_io.c: bake an EXIF/TIFF orientation (1..8) into the pixels; takes

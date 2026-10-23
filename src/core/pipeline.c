@@ -13,19 +13,22 @@ static float clamp01(float x)
 
 static float mixf(float a, float b, float t) { return a + (b - a) * t; }
 
-static float srgb_to_linear(float x)
-{
-    x = clamp01(x);
-    return x <= 0.04045f ? x / 12.92f
-                         : powf((x + 0.055f) / 1.055f, 2.4f);
-}
+static float srgb_to_linear(float x) { return pj_srgb_decode(clamp01(x)); }
+static float linear_to_srgb(float x) { return pj_srgb_encode(clamp01(x)); }
 
-static float linear_to_srgb(float x)
-{
-    x = clamp01(x);
-    return x <= 0.0031308f ? 12.92f * x
-                           : 1.055f * powf(x, 1.0f / 2.4f) - 0.055f;
-}
+/* One context shape for every band function: the image, whatever
+ * parameters the stage needs, and up to two side buffers. */
+typedef struct {
+    PjImage *image;
+    const PjPreset *preset;
+    const PjLut3D *lut;
+    float *aux;
+    float *aux2;
+    float f[12];
+    uint64_t seed;
+    int flag;
+    size_t n;
+} Ctx;
 
 static PjImage *clone_image(const PjImage *input, PjError *error)
 {
@@ -37,53 +40,97 @@ static PjImage *clone_image(const PjImage *input, PjError *error)
     return copy;
 }
 
+typedef struct { float *rgb, *temp; size_t width, height; unsigned radius; } BlurCtx;
+
+static void box_blur_rows(size_t y0, size_t y1, void *vctx)
+{
+    BlurCtx *b = vctx;
+    float *rgb = b->rgb, *temp = b->temp;
+    size_t width = b->width;
+    unsigned radius = b->radius;
+    size_t initial_x = radius < width ? radius : width - 1;
+    /* three channels in one sweep; each channel's running sum sees the
+     * same operations in the same order as a channel-at-a-time sweep */
+    for (size_t y = y0; y < y1; ++y) {
+        const float *in = rgb + y * width * 3;
+        float *out = temp + y * width * 3;
+        double sum[3] = {0.0, 0.0, 0.0};
+        for (size_t x = 0; x <= initial_x; ++x)
+            for (size_t c = 0; c < 3; ++c) sum[c] += in[x * 3 + c];
+        size_t count = initial_x + 1;
+        for (size_t x = 0; x < width; ++x) {
+            double inv_count = (double)count;
+            for (size_t c = 0; c < 3; ++c)
+                out[x * 3 + c] = (float)(sum[c] / inv_count);
+            if (x >= radius) {
+                for (size_t c = 0; c < 3; ++c) sum[c] -= in[(x - radius) * 3 + c];
+                --count;
+            }
+            if (x + radius + 1 < width) {
+                for (size_t c = 0; c < 3; ++c) sum[c] += in[(x + radius + 1) * 3 + c];
+                ++count;
+            }
+        }
+    }
+}
+
+/* Vertical pass over a band of columns, swept row by row: each column
+ * keeps the same running sum, updated in the same order, as a column-
+ * at-a-time walk would (so the result is bit-identical), but memory is
+ * touched in row order - the column walk strode width*3 floats per step
+ * and was half the render time on a 12 MP frame. */
+static void box_blur_cols(size_t x0, size_t x1, void *vctx)
+{
+    BlurCtx *b = vctx;
+    float *rgb = b->rgb, *temp = b->temp;
+    size_t width = b->width, height = b->height;
+    unsigned radius = b->radius;
+    size_t initial_y = radius < height ? radius : height - 1;
+    size_t n = (x1 - x0) * 3;
+    double *sum = malloc(n * sizeof *sum);
+    if (!sum) return;
+    for (size_t k = 0; k < n; ++k) sum[k] = 0.0;
+    for (size_t y = 0; y <= initial_y; ++y) {
+        const float *row = temp + (y * width + x0) * 3;
+        for (size_t k = 0; k < n; ++k) sum[k] += row[k];
+    }
+    size_t count = initial_y + 1;
+    for (size_t y = 0; y < height; ++y) {
+        float *out = rgb + (y * width + x0) * 3;
+        double inv_count = (double)count;
+        for (size_t k = 0; k < n; ++k) out[k] = (float)(sum[k] / inv_count);
+        if (y >= radius) {
+            const float *row = temp + ((y - radius) * width + x0) * 3;
+            for (size_t k = 0; k < n; ++k) sum[k] -= row[k];
+            --count;
+        }
+        if (y + radius + 1 < height) {
+            const float *row = temp + ((y + radius + 1) * width + x0) * 3;
+            for (size_t k = 0; k < n; ++k) sum[k] += row[k];
+            ++count;
+        }
+    }
+    free(sum);
+}
+
 static void box_blur(float *rgb, size_t width, size_t height, unsigned radius)
 {
     if (radius == 0 || width == 0 || height == 0) return;
     float *temp = malloc(width * height * 3 * sizeof *temp);
     if (!temp) return;
-
-    size_t initial_x = radius < width ? radius : width - 1;
-    for (size_t y = 0; y < height; ++y) {
-        for (size_t c = 0; c < 3; ++c) {
-            double sum = 0.0;
-            for (size_t x = 0; x <= initial_x; ++x)
-                sum += rgb[(y * width + x) * 3 + c];
-            size_t count = initial_x + 1;
-            for (size_t x = 0; x < width; ++x) {
-                temp[(y * width + x) * 3 + c] = (float)(sum / (double)count);
-                if (x >= radius) {
-                    sum -= rgb[(y * width + (x - radius)) * 3 + c];
-                    --count;
-                }
-                if (x + radius + 1 < width) {
-                    sum += rgb[(y * width + x + radius + 1) * 3 + c];
-                    ++count;
-                }
-            }
-        }
-    }
-    size_t initial_y = radius < height ? radius : height - 1;
-    for (size_t x = 0; x < width; ++x) {
-        for (size_t c = 0; c < 3; ++c) {
-            double sum = 0.0;
-            for (size_t y = 0; y <= initial_y; ++y)
-                sum += temp[(y * width + x) * 3 + c];
-            size_t count = initial_y + 1;
-            for (size_t y = 0; y < height; ++y) {
-                rgb[(y * width + x) * 3 + c] = (float)(sum / (double)count);
-                if (y >= radius) {
-                    sum -= temp[((y - radius) * width + x) * 3 + c];
-                    --count;
-                }
-                if (y + radius + 1 < height) {
-                    sum += temp[((y + radius + 1) * width + x) * 3 + c];
-                    ++count;
-                }
-            }
-        }
-    }
+    BlurCtx b = {rgb, temp, width, height, radius};
+    pj_parallel_rows(height, box_blur_rows, &b);
+    pj_parallel_rows(width, box_blur_cols, &b);
     free(temp);
+}
+
+static void softness_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    size_t w = c->image->width;
+    float blend = c->f[0];
+    for (size_t i = y0 * w * 3; i < y1 * w * 3; ++i)
+        c->image->rgb[i] = mixf(c->image->rgb[i], c->aux[i], blend);
 }
 
 static void apply_softness(PjImage *image, float amount)
@@ -97,20 +144,17 @@ static void apply_softness(PjImage *image, float amount)
     unsigned radius = (unsigned)lrintf(amount * diagonal / 2200.0f);
     if (radius < 1) radius = 1;
     box_blur(blurred, image->width, image->height, radius);
-    float blend = clamp01(amount / 2.0f);
-    for (size_t i = 0; i < samples; ++i)
-        image->rgb[i] = mixf(image->rgb[i], blurred[i], blend);
+    Ctx ctx = {.image = image, .aux = blurred, .f = {clamp01(amount / 2.0f)}};
+    pj_parallel_rows(image->height, softness_band, &ctx);
     free(blurred);
 }
 
-static void apply_vignette(PjImage *image, float amount)
+static void vignette_band(size_t y0, size_t y1, void *vctx)
 {
-    if (amount <= 0.0f) return;
-    float cx = ((float)image->width - 1.0f) * 0.5f;
-    float cy = ((float)image->height - 1.0f) * 0.5f;
-    float invx = cx > 0.0f ? 1.0f / cx : 0.0f;
-    float invy = cy > 0.0f ? 1.0f / cy : 0.0f;
-    for (size_t y = 0; y < image->height; ++y) {
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float amount = c->f[0], cx = c->f[1], cy = c->f[2], invx = c->f[3], invy = c->f[4];
+    for (size_t y = y0; y < y1; ++y) {
         for (size_t x = 0; x < image->width; ++x) {
             float dx = ((float)x - cx) * invx;
             float dy = ((float)y - cy) * invy;
@@ -127,13 +171,23 @@ static void apply_vignette(PjImage *image, float amount)
     }
 }
 
-static void apply_halation(PjImage *image, float amount, unsigned radius)
+static void apply_vignette(PjImage *image, float amount)
 {
-    if (amount <= 0.0f || radius == 0) return;
-    size_t pixels = image->width * image->height;
-    float *mask = calloc(pixels * 3, sizeof *mask);
-    if (!mask) return;
-    for (size_t i = 0; i < pixels; ++i) {
+    if (amount <= 0.0f) return;
+    float cx = ((float)image->width - 1.0f) * 0.5f;
+    float cy = ((float)image->height - 1.0f) * 0.5f;
+    float invx = cx > 0.0f ? 1.0f / cx : 0.0f;
+    float invy = cy > 0.0f ? 1.0f / cy : 0.0f;
+    Ctx ctx = {.image = image, .f = {amount, cx, cy, invx, invy}};
+    pj_parallel_rows(image->height, vignette_band, &ctx);
+}
+
+static void halation_mask_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float *mask = c->aux;
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
         float r = image->rgb[i * 3];
         float g = image->rgb[i * 3 + 1];
         float b = image->rgb[i * 3 + 2];
@@ -147,6 +201,30 @@ static void apply_halation(PjImage *image, float amount, unsigned radius)
         mask[i * 3 + 1] = h;
         mask[i * 3 + 2] = h;
     }
+}
+
+static void halation_add_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const float *mask = c->aux;
+    float amount = c->f[0];
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
+        float h = mask[i * 3] * amount;
+        image->rgb[i * 3] += h;
+        image->rgb[i * 3 + 1] += h * 0.22f;
+        image->rgb[i * 3 + 2] += h * 0.04f;
+    }
+}
+
+static void apply_halation(PjImage *image, float amount, unsigned radius)
+{
+    if (amount <= 0.0f || radius == 0) return;
+    size_t pixels = image->width * image->height;
+    float *mask = calloc(pixels * 3, sizeof *mask);
+    if (!mask) return;
+    Ctx ctx = {.image = image, .aux = mask, .f = {amount}};
+    pj_parallel_rows(image->height, halation_mask_band, &ctx);
     float diagonal = hypotf((float)image->width, (float)image->height);
     unsigned scaled_radius = (unsigned)lrintf((float)radius * diagonal / 800.0f);
     if (scaled_radius < 1) scaled_radius = 1;
@@ -154,22 +232,29 @@ static void apply_halation(PjImage *image, float amount, unsigned radius)
     box_blur(mask, image->width, image->height, scaled_radius);
     box_blur(mask, image->width, image->height, scaled_radius);
     box_blur(mask, image->width, image->height, scaled_radius);
-    for (size_t i = 0; i < pixels; ++i) {
-        float h = mask[i * 3] * amount;
-        image->rgb[i * 3] += h;
-        image->rgb[i * 3 + 1] += h * 0.22f;
-        image->rgb[i * 3 + 2] += h * 0.04f;
-    }
+    pj_parallel_rows(image->height, halation_add_band, &ctx);
     free(mask);
 }
 
 /* Exposure in stops on scene light, before any other stage. */
+static void gain_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    size_t w = c->image->width;
+    float gain = c->f[0];
+    for (size_t i = y0 * w * 3; i < y1 * w * 3; ++i) c->image->rgb[i] *= gain;
+}
+
+static void apply_gain(PjImage *image, float gain)
+{
+    Ctx ctx = {.image = image, .f = {gain}};
+    pj_parallel_rows(image->height, gain_band, &ctx);
+}
+
 static void apply_exposure(PjImage *image, float ev)
 {
     if (ev == 0.0f) return;
-    float gain = exp2f(ev);
-    for (size_t i = 0; i < image->width * image->height * 3; ++i)
-        image->rgb[i] *= gain;
+    apply_gain(image, exp2f(ev));
 }
 
 /*
@@ -181,14 +266,22 @@ static void apply_exposure(PjImage *image, float ev)
  * Display-referred input never reaches this stage, so 8-bit renders are
  * untouched.
  */
-static void apply_scene_shoulder(PjImage *image)
+static void shoulder_band(size_t y0, size_t y1, void *vctx)
 {
+    Ctx *c = vctx;
+    PjImage *image = c->image;
     const float knee = 0.75f;
-    for (size_t i = 0; i < image->width * image->height * 3; ++i) {
+    for (size_t i = y0 * image->width * 3; i < y1 * image->width * 3; ++i) {
         float x = image->rgb[i];
         if (x > knee)
             image->rgb[i] = knee + (1.0f - knee) * (1.0f - expf(-(x - knee) / (1.0f - knee)));
     }
+}
+
+static void apply_scene_shoulder(PjImage *image)
+{
+    Ctx ctx = {.image = image};
+    pj_parallel_rows(image->height, shoulder_band, &ctx);
 }
 
 /* A straight print from scene-linear input: the stop the pipeline opens
@@ -197,6 +290,7 @@ static void apply_scene_shoulder(PjImage *image)
 void pj_image_scene_to_display(PjImage *image, float ev)
 {
     if (!image || !image->scene_linear) return;
+    pj_srgb_tables_init();
     apply_exposure(image, ev + 1.0f);
     apply_scene_shoulder(image);
     image->scene_linear = false;
@@ -230,6 +324,7 @@ static float film_curve(float x, float contrast, float lift, float rolloff)
  * cool highlight response associated with a small on-camera xenon flash.
  */
 static float smooth_noise(uint64_t seed, float x, float y);
+static void weave_band(size_t y0, size_t y1, void *vctx);
 
 /*
  * Gate weave: the film jitters in the transport gate, so the whole frame
@@ -250,7 +345,20 @@ static void apply_gate_weave(PjImage *image, float amplitude, float period,
     size_t w = image->width, h = image->height;
     float *shifted = malloc(w * h * 3 * sizeof *shifted);
     if (!shifted) return;
-    for (size_t y = 0; y < h; ++y) {
+    Ctx ctx = {.image = image, .aux = shifted, .f = {dx, dy}};
+    pj_parallel_rows(h, weave_band, &ctx);
+    memcpy(image->rgb, shifted, w * h * 3 * sizeof *shifted);
+    free(shifted);
+}
+
+static void weave_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float *shifted = c->aux;
+    float dx = c->f[0], dy = c->f[1];
+    size_t w = image->width, h = image->height;
+    for (size_t y = y0; y < y1; ++y) {
         float sy = (float)y - dy;
         if (sy < 0.0f) sy = 0.0f;
         if (sy > (float)(h - 1)) sy = (float)(h - 1);
@@ -271,8 +379,6 @@ static void apply_gate_weave(PjImage *image, float amplitude, float period,
             }
         }
     }
-    memcpy(image->rgb, shifted, w * h * 3 * sizeof *shifted);
-    free(shifted);
 }
 
 /*
@@ -351,21 +457,17 @@ static void apply_flicker(PjImage *image, float amplitude_ev, uint64_t seed,
     float ev = amplitude_ev *
                smooth_noise(seed ^ UINT64_C(0xF11C4E01),
                             (float)frame / 3.0f, 0.5f);
-    float gain = exp2f(ev);
-    for (size_t i = 0; i < image->width * image->height * 3; ++i)
-        image->rgb[i] *= gain;
+    apply_gain(image, exp2f(ev));
 }
 
-static void apply_direct_flash(PjImage *image, const PjPreset *p, float strength)
+static void flash_band(size_t y0, size_t y1, void *vctx)
 {
-    if (p->flash_ev <= 0.0f || strength <= 0.0f) return;
-    float ambient = exp2f(p->flash_ambient_ev * strength);
-    float cx = ((float)image->width - 1.0f) * 0.5f;
-    float cy = ((float)image->height - 1.0f) * 0.5f;
-    float invx = cx > 0.0f ? 1.0f / cx : 0.0f;
-    float invy = cy > 0.0f ? 1.0f / cy : 0.0f;
-
-    for (size_t y = 0; y < image->height; ++y) {
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const PjPreset *p = c->preset;
+    float strength = c->f[0], ambient = c->f[1];
+    float cx = c->f[2], cy = c->f[3], invx = c->f[4], invy = c->f[5];
+    for (size_t y = y0; y < y1; ++y) {
         for (size_t x = 0; x < image->width; ++x) {
             float dx = ((float)x - cx) * invx;
             float dy = ((float)y - cy) * invy;
@@ -386,18 +488,48 @@ static void apply_direct_flash(PjImage *image, const PjPreset *p, float strength
     }
 }
 
+static void apply_direct_flash(PjImage *image, const PjPreset *p, float strength)
+{
+    if (p->flash_ev <= 0.0f || strength <= 0.0f) return;
+    float ambient = exp2f(p->flash_ambient_ev * strength);
+    float cx = ((float)image->width - 1.0f) * 0.5f;
+    float cy = ((float)image->height - 1.0f) * 0.5f;
+    float invx = cx > 0.0f ? 1.0f / cx : 0.0f;
+    float invy = cy > 0.0f ? 1.0f / cy : 0.0f;
+    Ctx ctx = {.image = image, .preset = p,
+               .f = {strength, ambient, cx, cy, invx, invy}};
+    pj_parallel_rows(image->height, flash_band, &ctx);
+}
+
+static void channel_gain_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
+        image->rgb[i * 3] *= c->f[0];
+        image->rgb[i * 3 + 1] *= c->f[1];
+        image->rgb[i * 3 + 2] *= c->f[2];
+    }
+}
+
 static void apply_input_balance(PjImage *image, const PjPreset *p, float strength)
 {
     float exposure = exp2f(p->exposure_ev * strength);
     float red_balance = exp2f(p->temperature * strength);
     float blue_balance = exp2f(-p->temperature * strength);
     float green_balance = exp2f(p->tint * strength);
+    Ctx ctx = {.image = image, .f = {exposure * red_balance,
+                                     exposure * green_balance,
+                                     exposure * blue_balance}};
+    pj_parallel_rows(image->height, channel_gain_band, &ctx);
+}
 
-    for (size_t i = 0; i < image->width * image->height; ++i) {
-        image->rgb[i * 3] *= exposure * red_balance;
-        image->rgb[i * 3 + 1] *= exposure * green_balance;
-        image->rgb[i * 3 + 2] *= exposure * blue_balance;
-    }
+static void tone_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    for (size_t i = y0 * image->width * 3; i < y1 * image->width * 3; ++i)
+        image->rgb[i] = film_curve(image->rgb[i], c->f[0], c->f[1], c->f[2]);
 }
 
 static void apply_builtin_tone(PjImage *image, const PjPreset *p, float strength)
@@ -405,9 +537,8 @@ static void apply_builtin_tone(PjImage *image, const PjPreset *p, float strength
     float contrast = mixf(1.0f, p->contrast, strength);
     float lift = p->black_lift * strength;
     float rolloff = mixf(1.0f, p->highlight_rolloff, strength);
-    for (size_t i = 0; i < image->width * image->height * 3; ++i) {
-        image->rgb[i] = film_curve(image->rgb[i], contrast, lift, rolloff);
-    }
+    Ctx ctx = {.image = image, .f = {contrast, lift, rolloff}};
+    pj_parallel_rows(image->height, tone_band, &ctx);
 }
 
 /*
@@ -445,16 +576,17 @@ static void apply_contrast_filter(PjImage *image, const char *name,
     if (strength < 1.0f)
         for (int c = 0; c < 3; ++c)
             gain[c] = 1.0f + (gain[c] - 1.0f) * strength;
-    float *px = pj_image_pixels(image);
-    size_t n = pj_image_width(image) * pj_image_height(image);
-    for (size_t i = 0; i < n; ++i)
-        for (int c = 0; c < 3; ++c)
-            px[i * 3 + c] *= gain[c];
+    Ctx ctx = {.image = image, .f = {gain[0], gain[1], gain[2]}};
+    pj_parallel_rows(image->height, channel_gain_band, &ctx);
 }
 
-static void apply_builtin_color(PjImage *image, const PjPreset *p, float strength)
+static void color_band(size_t y0, size_t y1, void *vctx)
 {
-    for (size_t i = 0; i < image->width * image->height; ++i) {
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const PjPreset *p = c->preset;
+    float strength = c->f[0];
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
         float in[3];
         for (size_t c = 0; c < 3; ++c)
             in[c] = linear_to_srgb(image->rgb[i * 3 + c]);
@@ -484,6 +616,12 @@ static void apply_builtin_color(PjImage *image, const PjPreset *p, float strengt
             image->rgb[i * 3 + c] = srgb_to_linear(value);
         }
     }
+}
+
+static void apply_builtin_color(PjImage *image, const PjPreset *p, float strength)
+{
+    Ctx ctx = {.image = image, .preset = p, .f = {strength}};
+    pj_parallel_rows(image->height, color_band, &ctx);
 }
 
 /*
@@ -544,6 +682,7 @@ static AgeProfile age_profile(const char *process)
                         {0.58f, 0.53f, 0.57f}, 0.20f, 0.22f};
 }
 
+static void develop_band(size_t y0, size_t y1, void *vctx);
 static void apply_develop(PjImage *image, float push, bool cross)
 {
     if (push == 0.0f && !cross) return;
@@ -551,7 +690,17 @@ static void apply_develop(PjImage *image, float push, bool cross)
     if (push > 2.0f) push = 2.0f;
     float contrast = 1.0f + 0.16f * push + (cross ? 0.22f : 0.0f);
     float sat = 1.0f + 0.06f * push + (cross ? 0.28f : 0.0f);
-    for (size_t i = 0; i < image->width * image->height; ++i) {
+    Ctx ctx = {.image = image, .f = {contrast, sat}, .flag = cross};
+    pj_parallel_rows(image->height, develop_band, &ctx);
+}
+
+static void develop_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float contrast = c->f[0], sat = c->f[1];
+    bool cross = c->flag;
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
         float display[3];
         for (size_t c = 0; c < 3; ++c)
             display[c] = linear_to_srgb(image->rgb[i * 3 + c]);
@@ -574,6 +723,7 @@ static void apply_develop(PjImage *image, float push, bool cross)
 }
 
 /* amount 0..1: age via the per-process dye-fade profile. */
+static void age_band(size_t y0, size_t y1, void *vctx);
 static void apply_age(PjImage *image, float amount, const char *process)
 {
     if (amount <= 0.0f) return;
@@ -585,7 +735,20 @@ static void apply_age(PjImage *image, float amount, const char *process)
     float keep[3];
     for (size_t c = 0; c < 3; ++c)
         keep[c] = 1.0f - prof.fade[c] * amount;
-    for (size_t i = 0; i < image->width * image->height; ++i) {
+    Ctx ctx = {.image = image,
+               .f = {fog, contrast, desat, keep[0], keep[1], keep[2],
+                     prof.fog_color[0], prof.fog_color[1], prof.fog_color[2]}};
+    pj_parallel_rows(image->height, age_band, &ctx);
+}
+
+static void age_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float fog = c->f[0], contrast = c->f[1], desat = c->f[2];
+    const float *keep = &c->f[3];
+    const float *fog_color = &c->f[6];
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
         float display[3];
         for (size_t c = 0; c < 3; ++c)
             display[c] = linear_to_srgb(image->rgb[i * 3 + c]);
@@ -596,17 +759,20 @@ static void apply_age(PjImage *image, float amount, const char *process)
              * toward the paper/base white, so value rises toward 1 */
             float value = 1.0f - (1.0f - display[c]) * keep[c];
             value = value + (luma - value) * desat;
-            value = value * (1.0f - fog) + prof.fog_color[c] * fog;
+            value = value * (1.0f - fog) + fog_color[c] * fog;
             value = 0.5f + (value - 0.5f) * contrast;
             image->rgb[i * 3 + c] = srgb_to_linear(clamp01(value));
         }
     }
 }
 
-static void apply_color_lut(PjImage *image, const PjLut3D *lut, float strength)
+static void lut_band(size_t y0, size_t y1, void *vctx)
 {
-    if (!lut) return;
-    for (size_t i = 0; i < image->width * image->height; ++i) {
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const PjLut3D *lut = c->lut;
+    float strength = c->f[0];
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
         float original[3];
         float mapped[3];
         for (size_t c = 0; c < 3; ++c) {
@@ -618,6 +784,13 @@ static void apply_color_lut(PjImage *image, const PjLut3D *lut, float strength)
             image->rgb[i * 3 + c] =
                 srgb_to_linear(mixf(original[c], mapped[c], strength));
     }
+}
+
+static void apply_color_lut(PjImage *image, const PjLut3D *lut, float strength)
+{
+    if (!lut) return;
+    Ctx ctx = {.image = image, .lut = lut, .f = {strength}};
+    pj_parallel_rows(image->height, lut_band, &ctx);
 }
 
 static uint64_t hash64(uint64_t x)
@@ -651,12 +824,13 @@ static float smooth_noise(uint64_t seed, float x, float y)
     return mixf(mixf(n00, n10, tx), mixf(n01, n11, tx), ty);
 }
 
-static void apply_grain(PjImage *image, float amount, float scale,
-                        float midtone_bias, float chroma, uint64_t seed)
+static void grain_band(size_t y0, size_t y1, void *vctx)
 {
-    if (amount <= 0.0f) return;
-    if (scale < 1.0f) scale = 1.0f;
-    for (size_t y = 0; y < image->height; ++y) {
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float amount = c->f[0], scale = c->f[1], midtone_bias = c->f[2], chroma = c->f[3];
+    uint64_t seed = c->seed;
+    for (size_t y = y0; y < y1; ++y) {
         for (size_t x = 0; x < image->width; ++x) {
             size_t i = (y * image->width + x) * 3;
             float luma = 0.2126f * image->rgb[i] +
@@ -687,6 +861,15 @@ static void apply_grain(PjImage *image, float amount, float scale,
     }
 }
 
+static void apply_grain(PjImage *image, float amount, float scale,
+                        float midtone_bias, float chroma, uint64_t seed)
+{
+    if (amount <= 0.0f) return;
+    if (scale < 1.0f) scale = 1.0f;
+    Ctx ctx = {.image = image, .f = {amount, scale, midtone_bias, chroma}, .seed = seed};
+    pj_parallel_rows(image->height, grain_band, &ctx);
+}
+
 /*
  * Development edge effects. Developer diffuses and exhausts locally, so
  * development rate depends on how much density is forming nearby. First-
@@ -708,15 +891,13 @@ static void apply_grain(PjImage *image, float amount, float scale,
  * ratio to all channels (silver has no color fringes); color stock works
  * per dye layer, which is also how DIR interimage effects behave.
  */
-static void apply_edge_effects(PjImage *image, float amount, bool mono)
+static void edge_density_band(size_t y0, size_t y1, void *vctx)
 {
-    if (amount <= 0.0f) return;
-    if (amount > 2.0f) amount = 2.0f;
-    size_t w = image->width, h = image->height, n = w * h;
-    float *dens = malloc(n * 3 * sizeof *dens);
-    float *avg = malloc(n * 3 * sizeof *avg);
-    if (!dens || !avg) { free(dens); free(avg); return; }
-    for (size_t i = 0; i < n; ++i) {
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float *dens = c->aux;
+    bool mono = c->flag;
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
         float *px = &image->rgb[i * 3];
         if (mono) {
             float y = 0.2126f * px[0] + 0.7152f * px[1] + 0.0722f * px[2];
@@ -726,17 +907,16 @@ static void apply_edge_effects(PjImage *image, float amount, bool mono)
             for (size_t c = 0; c < 3; ++c)
                 dens[i * 3 + c] = linear_to_srgb(px[c]);
     }
-    memcpy(avg, dens, n * 3 * sizeof *avg);
-    float diagonal = hypotf((float)w, (float)h);
-    const float diffusion_mm = 0.15f, frame_diagonal_mm = 43.27f;
-    unsigned radius = (unsigned)lrintf(diffusion_mm * diagonal /
-                                       frame_diagonal_mm);
-    if (radius < 1) radius = 1;
-    box_blur(avg, w, h, radius);
-    box_blur(avg, w, h, radius);
-    box_blur(avg, w, h, radius);
-    float g = 0.16f * amount;
-    for (size_t i = 0; i < n; ++i) {
+}
+
+static void edge_apply_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const float *dens = c->aux, *avg = c->aux2;
+    bool mono = c->flag;
+    float g = c->f[0];
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
         float *px = &image->rgb[i * 3];
         if (mono) {
             float d = dens[i * 3];
@@ -753,6 +933,29 @@ static void apply_edge_effects(PjImage *image, float amount, bool mono)
                 px[c] = srgb_to_linear(clamp01(d * ratio));
             }
     }
+}
+
+static void apply_edge_effects(PjImage *image, float amount, bool mono)
+{
+    if (amount <= 0.0f) return;
+    if (amount > 2.0f) amount = 2.0f;
+    size_t w = image->width, h = image->height, n = w * h;
+    float *dens = malloc(n * 3 * sizeof *dens);
+    float *avg = malloc(n * 3 * sizeof *avg);
+    if (!dens || !avg) { free(dens); free(avg); return; }
+    Ctx ctx = {.image = image, .aux = dens, .aux2 = avg, .flag = mono};
+    pj_parallel_rows(h, edge_density_band, &ctx);
+    memcpy(avg, dens, n * 3 * sizeof *avg);
+    float diagonal = hypotf((float)w, (float)h);
+    const float diffusion_mm = 0.15f, frame_diagonal_mm = 43.27f;
+    unsigned radius = (unsigned)lrintf(diffusion_mm * diagonal /
+                                       frame_diagonal_mm);
+    if (radius < 1) radius = 1;
+    box_blur(avg, w, h, radius);
+    box_blur(avg, w, h, radius);
+    box_blur(avg, w, h, radius);
+    ctx.f[0] = 0.16f * amount;
+    pj_parallel_rows(h, edge_apply_band, &ctx);
     free(dens);
     free(avg);
 }
@@ -776,6 +979,46 @@ static void apply_edge_effects(PjImage *image, float amount, bool mono)
 /* Separable Gaussian with fractional sigma for grain-sized kernels, where
  * integer box radii are far too coarse a control (radius 1 already
  * correlates neighbors at 0.9). Edges clamp. */
+typedef struct { float *rgb, *temp; const float *kernel; size_t w, h; int radius; } GaussCtx;
+
+static void gauss_h_band(size_t y0, size_t y1, void *vctx)
+{
+    GaussCtx *g = vctx;
+    size_t w = g->w;
+    int radius = g->radius;
+    for (size_t y = y0; y < y1; ++y)
+        for (size_t x = 0; x < w; ++x)
+            for (size_t c = 0; c < 3; ++c) {
+                float acc = 0.0f;
+                for (int k = -radius; k <= radius; ++k) {
+                    long xx = (long)x + k;
+                    if (xx < 0) xx = 0;
+                    if (xx >= (long)w) xx = (long)w - 1;
+                    acc += g->kernel[k + radius] * g->rgb[(y * w + (size_t)xx) * 3 + c];
+                }
+                g->temp[(y * w + x) * 3 + c] = acc;
+            }
+}
+
+static void gauss_v_band(size_t y0, size_t y1, void *vctx)
+{
+    GaussCtx *g = vctx;
+    size_t w = g->w, h = g->h;
+    int radius = g->radius;
+    for (size_t y = y0; y < y1; ++y)
+        for (size_t x = 0; x < w; ++x)
+            for (size_t c = 0; c < 3; ++c) {
+                float acc = 0.0f;
+                for (int k = -radius; k <= radius; ++k) {
+                    long yy = (long)y + k;
+                    if (yy < 0) yy = 0;
+                    if (yy >= (long)h) yy = (long)h - 1;
+                    acc += g->kernel[k + radius] * g->temp[((size_t)yy * w + x) * 3 + c];
+                }
+                g->rgb[(y * w + x) * 3 + c] = acc;
+            }
+}
+
 static void gaussian_blur_small(float *rgb, size_t w, size_t h, float sigma)
 {
     if (sigma < 0.05f || w == 0 || h == 0) return;
@@ -790,71 +1033,80 @@ static void gaussian_blur_small(float *rgb, size_t w, size_t h, float sigma)
     for (int k = 0; k <= 2 * radius; ++k) kernel[k] /= total;
     float *temp = malloc(w * h * 3 * sizeof *temp);
     if (!temp) return;
-    for (size_t y = 0; y < h; ++y)
-        for (size_t x = 0; x < w; ++x)
-            for (size_t c = 0; c < 3; ++c) {
-                float acc = 0.0f;
-                for (int k = -radius; k <= radius; ++k) {
-                    long xx = (long)x + k;
-                    if (xx < 0) xx = 0;
-                    if (xx >= (long)w) xx = (long)w - 1;
-                    acc += kernel[k + radius] * rgb[(y * w + (size_t)xx) * 3 + c];
-                }
-                temp[(y * w + x) * 3 + c] = acc;
-            }
-    for (size_t y = 0; y < h; ++y)
-        for (size_t x = 0; x < w; ++x)
-            for (size_t c = 0; c < 3; ++c) {
-                float acc = 0.0f;
-                for (int k = -radius; k <= radius; ++k) {
-                    long yy = (long)y + k;
-                    if (yy < 0) yy = 0;
-                    if (yy >= (long)h) yy = (long)h - 1;
-                    acc += kernel[k + radius] * temp[((size_t)yy * w + x) * 3 + c];
-                }
-                rgb[(y * w + x) * 3 + c] = acc;
-            }
+    GaussCtx g = {rgb, temp, kernel, w, h, radius};
+    pj_parallel_rows(h, gauss_h_band, &g);
+    pj_parallel_rows(h, gauss_v_band, &g);
     free(temp);
+}
+
+typedef struct { float *field; size_t w; uint64_t seed; float inv; } FieldCtx;
+
+static void field_noise_band(size_t y0, size_t y1, void *vctx)
+{
+    FieldCtx *f = vctx;
+    size_t w = f->w;
+    for (size_t y = y0; y < y1; ++y)
+        for (size_t x = 0; x < w; ++x)
+            for (unsigned c = 0; c < 3; ++c)
+                f->field[(y * w + x) * 3 + c] =
+                    0.5f * (signed_noise(f->seed, x, y, c) +
+                            signed_noise(f->seed ^ UINT64_C(0xA5A5F00DCAFE1234),
+                                         x, y, c));
+}
+
+static void field_scale_band(size_t y0, size_t y1, void *vctx)
+{
+    FieldCtx *f = vctx;
+    for (size_t i = y0 * f->w * 3; i < y1 * f->w * 3; ++i) f->field[i] *= f->inv;
 }
 
 static void fill_grain_field(float *field, size_t w, size_t h, uint64_t seed,
                              float sigma)
 {
     size_t n = w * h * 3;
-    for (size_t y = 0; y < h; ++y)
-        for (size_t x = 0; x < w; ++x)
-            for (unsigned c = 0; c < 3; ++c)
-                field[(y * w + x) * 3 + c] =
-                    0.5f * (signed_noise(seed, x, y, c) +
-                            signed_noise(seed ^ UINT64_C(0xA5A5F00DCAFE1234),
-                                         x, y, c));
+    FieldCtx f = {field, w, seed, 0.0f};
+    pj_parallel_rows(h, field_noise_band, &f);
     gaussian_blur_small(field, w, h, sigma);
+    /* the RMS is a reduction: serial, in order, so the result is the
+     * same at any thread count */
     double sum2 = 0.0;
     for (size_t i = 0; i < n; ++i) sum2 += (double)field[i] * field[i];
-    float inv = sum2 > 0.0 ? (float)(1.0 / sqrt(sum2 / (double)n)) : 0.0f;
-    for (size_t i = 0; i < n; ++i) field[i] *= inv;
+    f.inv = sum2 > 0.0 ? (float)(1.0 / sqrt(sum2 / (double)n)) : 0.0f;
+    pj_parallel_rows(h, field_scale_band, &f);
 }
 
 /* k = 1: one shared field; k = 0: independent layers. Unit variance kept. */
-static void couple_layers(float *field, size_t pixels, float k)
+typedef struct { float *field; float k, norm; } CoupleCtx;
+
+/* bands over pixels, not rows: the field has no geometry here */
+static void couple_band(size_t p0, size_t p1, void *vctx)
 {
+    CoupleCtx *cc = vctx;
+    float *field = cc->field, k = cc->k, norm = cc->norm;
     if (k >= 1.0f) {
-        for (size_t i = 0; i < pixels; ++i) {
+        for (size_t i = p0; i < p1; ++i) {
             float m = (field[i * 3] + field[i * 3 + 1] + field[i * 3 + 2]) /
                       sqrtf(3.0f);
             field[i * 3] = field[i * 3 + 1] = field[i * 3 + 2] = m;
         }
         return;
     }
-    if (k <= 0.0f) return;
-    float norm = 1.0f / sqrtf((1.0f - k) * (1.0f - k) +
-                              (2.0f * k - k * k) / 3.0f);
-    for (size_t i = 0; i < pixels; ++i) {
+    for (size_t i = p0; i < p1; ++i) {
         float *f = &field[i * 3];
         float m = (f[0] + f[1] + f[2]) / 3.0f;
         for (size_t c = 0; c < 3; ++c)
             f[c] = ((1.0f - k) * f[c] + k * m) * norm;
     }
+}
+
+static void couple_layers(float *field, size_t pixels, float k)
+{
+    if (k <= 0.0f) return;
+    CoupleCtx cc = {field, k, 0.0f};
+    if (k < 1.0f)
+        cc.norm = 1.0f / sqrtf((1.0f - k) * (1.0f - k) +
+                               (2.0f * k - k * k) / 3.0f);
+    pj_parallel_rows(pixels, couple_band, &cc);
 }
 
 static float classic_grain_rms(float scale, float midtone_bias)
@@ -870,6 +1122,56 @@ static float classic_grain_rms(float scale, float midtone_bias)
     float l = srgb_to_linear(0.5f);
     return mixf(1.0f, 4.0f * l * (1.0f - l), clamp01(midtone_bias)) *
            (float)sqrt(sum2 / 4096.0);
+}
+
+static void silver_coarse_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    float *coarse = c->aux;
+    bool mono = c->flag;
+    float amplitude = c->f[0], exposure_power = c->f[4];
+    const float *weight = &c->f[1];
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
+        const float *px = &image->rgb[i * 3];
+        float y = mono ? linear_to_srgb(0.2126f * px[0] + 0.7152f * px[1] +
+                                        0.0722f * px[2]) : 0.0f;
+        for (size_t c = 0; c < 3; ++c) {
+            float u = mono ? y : linear_to_srgb(px[c]);
+            float t = powf(clamp01(u), exposure_power);
+            float shape = powf(4.0f * u * (1.0f - u), 0.75f);
+            coarse[i * 3 + c] *= amplitude * weight[c] * shape *
+                                 sqrtf(1.0f - t);
+        }
+    }
+}
+
+static void silver_fine_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const float *coarse = c->aux, *fine = c->aux2;
+    bool mono = c->flag;
+    float amplitude = c->f[0], exposure_power = c->f[4];
+    const float *weight = &c->f[1];
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
+        float *px = &image->rgb[i * 3];
+        float y = mono ? linear_to_srgb(0.2126f * px[0] + 0.7152f * px[1] +
+                                        0.0722f * px[2]) : 0.0f;
+        float display[3];
+        for (size_t c = 0; c < 3; ++c) {
+            display[c] = linear_to_srgb(px[c]);
+            float u = mono ? y : display[c];
+            float t = powf(clamp01(u), exposure_power);
+            float shape = powf(4.0f * u * (1.0f - u), 0.75f);
+            float grain = coarse[i * 3 + c] +
+                          fine[i * 3 + c] * amplitude * weight[c] * shape *
+                          sqrtf(t);
+            display[c] += grain;
+        }
+        for (size_t c = 0; c < 3; ++c)
+            px[c] = srgb_to_linear(clamp01(display[c]));
+    }
 }
 
 static void apply_silver_grain(PjImage *image, float amount, float scale,
@@ -898,42 +1200,17 @@ static void apply_silver_grain(PjImage *image, float amount, float scale,
     if (!coarse) return;
     fill_grain_field(coarse, w, h, seed ^ UINT64_C(0xC0A45E6A1B), coarse_sigma);
     couple_layers(coarse, n, k);
+    Ctx ctx = {.image = image, .aux = coarse, .flag = mono,
+               .f = {amplitude, weight[0], weight[1], weight[2], exposure_power}};
     /* coarse contribution first, from the untouched image; frees one
      * field's worth of memory before the fine field exists */
-    for (size_t i = 0; i < n; ++i) {
-        const float *px = &image->rgb[i * 3];
-        float y = mono ? linear_to_srgb(0.2126f * px[0] + 0.7152f * px[1] +
-                                        0.0722f * px[2]) : 0.0f;
-        for (size_t c = 0; c < 3; ++c) {
-            float u = mono ? y : linear_to_srgb(px[c]);
-            float t = powf(clamp01(u), exposure_power);
-            float shape = powf(4.0f * u * (1.0f - u), 0.75f);
-            coarse[i * 3 + c] *= amplitude * weight[c] * shape *
-                                 sqrtf(1.0f - t);
-        }
-    }
+    pj_parallel_rows(h, silver_coarse_band, &ctx);
     float *fine = malloc(n * 3 * sizeof *fine);
     if (!fine) { free(coarse); return; }
     fill_grain_field(fine, w, h, seed ^ UINT64_C(0xF1AE6A1B), fine_sigma);
     couple_layers(fine, n, k);
-    for (size_t i = 0; i < n; ++i) {
-        float *px = &image->rgb[i * 3];
-        float y = mono ? linear_to_srgb(0.2126f * px[0] + 0.7152f * px[1] +
-                                        0.0722f * px[2]) : 0.0f;
-        float display[3];
-        for (size_t c = 0; c < 3; ++c) {
-            display[c] = linear_to_srgb(px[c]);
-            float u = mono ? y : display[c];
-            float t = powf(clamp01(u), exposure_power);
-            float shape = powf(4.0f * u * (1.0f - u), 0.75f);
-            float grain = coarse[i * 3 + c] +
-                          fine[i * 3 + c] * amplitude * weight[c] * shape *
-                          sqrtf(t);
-            display[c] += grain;
-        }
-        for (size_t c = 0; c < 3; ++c)
-            px[c] = srgb_to_linear(clamp01(display[c]));
-    }
+    ctx.aux2 = fine;
+    pj_parallel_rows(h, silver_fine_band, &ctx);
     free(fine);
     free(coarse);
 }
@@ -1016,6 +1293,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         pj_set_error(error, "unknown preset '%s'", preset_name ? preset_name : "");
         return NULL;
     }
+    pj_srgb_tables_init();
     float strength = options ? options->strength : 1.0f;
     uint64_t seed = options ? options->seed : UINT64_C(0x504f4c414a554943);
     const PjLut3D *lut = options ? options->color_lut : NULL;

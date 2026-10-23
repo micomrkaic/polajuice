@@ -15,18 +15,6 @@ static float clamp01(float x)
     return x;
 }
 
-static float srgb_to_linear(float x)
-{
-    return x <= 0.04045f ? x / 12.92f
-                         : powf((x + 0.055f) / 1.055f, 2.4f);
-}
-
-static float linear_to_srgb(float x)
-{
-    x = clamp01(x);
-    return x <= 0.0031308f ? 12.92f * x
-                           : 1.055f * powf(x, 1.0f / 2.4f) - 0.055f;
-}
 
 void pj_set_error(PjError *error, const char *format, ...)
 {
@@ -36,6 +24,60 @@ void pj_set_error(PjError *error, const char *format, ...)
     (void)vsnprintf(error->message, sizeof error->message, format, args);
     va_end(args);
 }
+
+/* ---- sRGB transfer tables ---------------------------------------------
+ * The pipeline moves between linear and display space in five or six
+ * stages per render, 36M samples each on a 12 MP frame; powf there was
+ * the single largest cost. Both directions are tabulated on 8192
+ * uniform cells with linear interpolation. The encode curve is steep
+ * only below its linear segment (0.0031308), which the first 25 cells
+ * cover exactly; past the knee the interpolation error is under 2e-5,
+ * a hundredth of an 8-bit level. Tables are filled once, before any
+ * thread runs. */
+#define PJ_SRGB_CELLS 8192
+static float encode_table[PJ_SRGB_CELLS + 1];
+static float decode_table[PJ_SRGB_CELLS + 1];
+static float decode8_table[256];
+static int tables_ready = 0;
+
+static float srgb_encode_exact(float x)
+{
+    return x <= 0.0031308f ? 12.92f * x
+                           : 1.055f * powf(x, 1.0f / 2.4f) - 0.055f;
+}
+
+static float srgb_decode_exact(float x)
+{
+    return x <= 0.04045f ? x / 12.92f
+                         : powf((x + 0.055f) / 1.055f, 2.4f);
+}
+
+void pj_srgb_tables_init(void)
+{
+    if (tables_ready) return;
+    for (int i = 0; i <= PJ_SRGB_CELLS; ++i) {
+        float x = (float)i / (float)PJ_SRGB_CELLS;
+        encode_table[i] = srgb_encode_exact(x);
+        decode_table[i] = srgb_decode_exact(x);
+    }
+    for (int i = 0; i < 256; ++i)
+        decode8_table[i] = srgb_decode_exact((float)i / 255.0f);
+    tables_ready = 1;
+}
+
+static float table_lookup(const float *table, float x)
+{
+    if (!(x > 0.0f)) return 0.0f;      /* also catches NaN */
+    if (x >= 1.0f) return table[PJ_SRGB_CELLS];
+    float pos = x * (float)PJ_SRGB_CELLS;
+    int i = (int)pos;
+    float t = pos - (float)i;
+    return table[i] + (table[i + 1] - table[i]) * t;
+}
+
+float pj_srgb_encode(float linear) { return table_lookup(encode_table, linear); }
+float pj_srgb_decode(float srgb) { return table_lookup(decode_table, srgb); }
+float pj_srgb_decode8(unsigned char v) { return decode8_table[v]; }
 
 PjImage *pj_image_new(size_t width, size_t height, PjError *error)
 {
@@ -151,8 +193,9 @@ PjImage *pj_image_load_ppm(const char *path, PjError *error)
     }
     fclose(file);
 
+    pj_srgb_tables_init();
     for (size_t i = 0; i < bytes; ++i)
-        image->rgb[i] = srgb_to_linear((float)encoded[i] / 255.0f);
+        image->rgb[i] = pj_srgb_decode8(encoded[i]);
     free(encoded);
     return image;
 }
@@ -181,8 +224,9 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
         pj_set_error(error, "could not allocate output buffer");
         return false;
     }
+    pj_srgb_tables_init();
     for (size_t i = 0; i < samples; ++i)
-        encoded[i] = (unsigned char)lrintf(255.0f * linear_to_srgb(image->rgb[i]));
+        encoded[i] = (unsigned char)lrintf(255.0f * pj_srgb_encode(clamp01(image->rgb[i])));
 
     bool ok = fwrite(encoded, 1, samples, file) == samples && fclose(file) == 0;
     free(encoded);
@@ -190,7 +234,7 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
     return ok;
 }
 
-const char *pj_version_string(void) { return "1.17.1"; }
+const char *pj_version_string(void) { return "1.18.0"; }
 
 PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error)
 {

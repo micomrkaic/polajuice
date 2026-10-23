@@ -1,0 +1,22 @@
+1.18.0: threads and the table - the same pixels, faster
+
+Every image stage now runs in row bands on one thread per core (POSIX
+threads; POLAJUICE_THREADS=N overrides, 1 = serial; the wasm build is
+serial). A band computes exactly what the serial loop computed for
+those rows, in the same order, so output is bit-identical at any
+thread count: scripts/test_threads.sh renders at 1, 2 and 5 threads
+and compares bytes, and the wasm engine still matches the native CLI
+byte for byte. Reductions (the grain field RMS) stay serial.
+
+The sRGB transfer, crossed five or six times per render, goes through
+8192-cell interpolated tables instead of powf: error under 2e-5, 8-bit
+input decoded exactly. The vertical box-blur pass, half the render
+time on a 12 MP frame, now sweeps rows while keeping each column's
+running sum and update order; the horizontal pass handles the three
+channels in one sweep. Both bit-identical to before. -O3 by default.
+
+Against 1.17.1, a PNG render differs by at most one 8-bit level on a
+few thousandths of a percent of samples (the table); tests/ref/ holds
+five 1.17.1 renders and test_core requires every camera to reproduce
+them within one level on under 0.1% of samples. Table accuracy and
+the 8-bit round trip are asserted directly.

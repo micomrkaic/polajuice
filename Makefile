@@ -1,15 +1,15 @@
 CC ?= cc
 AR ?= ar
-CPPFLAGS ?= -Iinclude -Isrc/cli -Ithird_party
-CFLAGS ?= -O2 -g
-CFLAGS += -std=c17 -Wall -Wextra -Wpedantic
+CPPFLAGS ?= -Iinclude -Isrc/cli -Isrc/core -Ithird_party
+CFLAGS ?= -O3 -g
+CFLAGS += -std=c17 -Wall -Wextra -Wpedantic -pthread
 # Auto header dependencies (picked up by the built-in .c -> .o rule).
 # Without them, editing internal.h leaves stale objects compiled against a
 # different PjPreset layout, which manifests as garbage at runtime.
 CFLAGS += -MMD -MP
-LDLIBS += -lm
+LDLIBS += -lm -pthread
 
-CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/rawdec.c src/core/stb_impl.c
+CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/rawdec.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
 ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/cli/filmlib.o src/movie/superjuice.o tests/test_core.o
 
@@ -36,6 +36,7 @@ check: tests/test_core
 	./tests/test_core
 	sh scripts/test_compat.sh
 	sh scripts/test_movie.sh
+	sh scripts/test_threads.sh
 
 # WebAssembly build via wasi-sdk (auto-downloaded to third_party/ on
 # first run; see docs/WEB.md). 'make' builds native; 'make wasm' the

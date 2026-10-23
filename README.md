@@ -418,6 +418,22 @@ calibration data. Exact color emulation should use a reference 3D LUT. This is
 the standard approach used by G'MIC and RawTherapee because a small collection
 of saturation and white-balance sliders cannot describe film color adequately.
 
+## Speed
+
+Every image stage runs in row bands on one thread per core (POSIX
+threads; `POLAJUICE_THREADS=N` overrides, 1 = serial). A band computes
+exactly what the serial loop computed for those rows, in the same
+order, so the output is bit-identical at any thread count - the test
+suite renders at 1, 2 and 5 threads and compares bytes, and the wasm
+engine, which has no threads, matches the native CLI byte for byte.
+The sRGB transfer, which the pipeline crosses five or six times per
+render, goes through 8192-cell interpolated tables instead of `powf`
+(error under 2e-5, a hundredth of an 8-bit level; 8-bit input decodes
+exactly). Against 1.17.1 a PNG render differs by at most one level on
+a few thousandths of a percent of samples; JPEG output can show larger
+local differences because a one-level change perturbs a DCT block.
+The references in `tests/ref/` were rendered by 1.17.1 and pin this.
+
 ## Design principles
 
 - Deterministic output for a given seed, independent of traversal order.

@@ -32,17 +32,11 @@ static float clamp01f(float x)
     return x;
 }
 
-static float io_srgb_to_linear(float x)
-{
-    return x <= 0.04045f ? x / 12.92f
-                         : powf((x + 0.055f) / 1.055f, 2.4f);
-}
-
+/* 8-bit decode is exact (256 entries); encode goes through the shared
+ * interpolated table, see image.c */
 static float io_linear_to_srgb(float x)
 {
-    x = clamp01f(x);
-    return x <= 0.0031308f ? 12.92f * x
-                           : 1.055f * powf(x, 1.0f / 2.4f) - 0.055f;
+    return pj_srgb_encode(clamp01f(x));
 }
 
 typedef enum { PJ_FMT_UNKNOWN, PJ_FMT_PPM, PJ_FMT_PNG, PJ_FMT_JPEG, PJ_FMT_RAW } PjFormat;
@@ -193,8 +187,9 @@ static PjImage *load_stb(const char *path, PjError *error)
         return NULL;
     }
     size_t samples = (size_t)width * (size_t)height * 3;
+    pj_srgb_tables_init();
     for (size_t i = 0; i < samples; ++i)
-        image->rgb[i] = io_srgb_to_linear((float)pixels[i] / 255.0f);
+        image->rgb[i] = pj_srgb_decode8(pixels[i]);
     stbi_image_free(pixels);
     return image;
 }
@@ -247,6 +242,7 @@ bool pj_image_save(const PjImage *image, const char *path, PjError *error)
     }
 
     size_t samples = image->width * image->height * 3;
+    pj_srgb_tables_init();
     unsigned char *encoded = malloc(samples);
     if (!encoded) {
         pj_set_error(error, "could not allocate output buffer");

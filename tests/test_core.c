@@ -1,8 +1,10 @@
 #include "polajuice.h"
+#include "internal.h"
 
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void fill_test_pattern(PjImage *image)
@@ -722,6 +724,63 @@ int main(void)
         for (int f = 0; f < 5; ++f) pj_image_free(decoded[f]);
         /* the door refuses what it does not understand */
         assert(!pj_image_load("tests/test_core.c", &error));
+    }
+
+    /* 1.18: the sRGB transfer runs through interpolated tables. They
+     * must sit within 2e-5 of the exact curve everywhere, decode 8-bit
+     * values exactly, and reproduce the 1.17.1 renders in tests/ref/
+     * (made with powf) to within one 8-bit level on a sliver of
+     * pixels: the references pin both the tables and the threaded
+     * stages, which are required to be bit-identical to the serial
+     * loops. */
+    {
+        float worst_e = 0.0f, worst_d = 0.0f;
+        for (int i = 0; i <= 200000; ++i) {
+            float x = (float)i / 200000.0f;
+            float e_exact = x <= 0.0031308f ? 12.92f * x
+                          : 1.055f * powf(x, 1.0f / 2.4f) - 0.055f;
+            float d_exact = x <= 0.04045f ? x / 12.92f
+                          : powf((x + 0.055f) / 1.055f, 2.4f);
+            worst_e = fmaxf(worst_e, fabsf(pj_srgb_encode(x) - e_exact));
+            worst_d = fmaxf(worst_d, fabsf(pj_srgb_decode(x) - d_exact));
+        }
+        assert(worst_e < 2e-5f);
+        assert(worst_d < 2e-5f);
+        for (int v = 0; v < 256; ++v) {
+            float back = 255.0f * pj_srgb_encode(pj_srgb_decode8((unsigned char)v));
+            assert((int)lrintf(back) == v);
+        }
+        const char *cams[5] = {"35mm-negative", "bw-35", "super8",
+                               "polaroid-600", "disposable-flash"};
+        PjImage *tiny = pj_image_load("tests/raw/linear16.png", &error);
+        assert(tiny);
+        for (int k = 0; k < 5; ++k) {
+            char refpath[128];
+            snprintf(refpath, sizeof refpath, "tests/ref/%s.png", cams[k]);
+            PjImage *ref = pj_image_load(refpath, &error);
+            assert(ref);
+            PjRenderOptions ro = {.seed = 7, .strength = 1.0f,
+                                  .grain_model = "silver", .edge = 1.0f};
+            PjImage *out = pj_render(tiny, cams[k], &ro, &error);
+            assert(out);
+            assert(pj_image_width(out) == pj_image_width(ref));
+            assert(pj_image_height(out) == pj_image_height(ref));
+            const float *a = pj_image_pixels_const(ref), *b = pj_image_pixels_const(out);
+            size_t n = pj_image_width(out) * pj_image_height(out) * 3, off = 0;
+            int worst = 0;
+            for (size_t i = 0; i < n; ++i) {
+                int la = (int)lrintf(255.0f * pj_srgb_encode(a[i]));
+                int lb = (int)lrintf(255.0f * pj_srgb_encode(b[i]));
+                int d = abs(la - lb);
+                if (d) ++off;
+                if (d > worst) worst = d;
+            }
+            assert(worst <= 1);
+            assert(off * 1000 <= n);            /* under 0.1% of samples */
+            pj_image_free(out);
+            pj_image_free(ref);
+        }
+        pj_image_free(tiny);
     }
 
     pj_image_free(instant);
