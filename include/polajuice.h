@@ -11,7 +11,7 @@ extern "C" {
 
 #define PJ_VERSION_MAJOR 1
 #define PJ_VERSION_MINOR 18
-#define PJ_VERSION_PATCH 2
+#define PJ_VERSION_PATCH 3
 
 typedef struct PjImage PjImage;
 typedef struct PjLut3D PjLut3D;
@@ -173,6 +173,8 @@ PjImage *pj_render(const PjImage *input,
                    PjError *error);
 
 const char *pj_version_string(void);
+/* Threads the pipeline will use (cores, or POLAJUICE_THREADS). */
+unsigned pj_thread_count(void);
 
 #ifdef __cplusplus
 }

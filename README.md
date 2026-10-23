@@ -433,6 +433,7 @@ exactly). Against 1.17.1 a PNG render differs by at most one level on
 a few thousandths of a percent of samples; JPEG output can show larger
 local differences because a one-level change perturbs a DCT block.
 The references in `tests/ref/` were rendered by 1.17.1 and pin this.
+`POLAJUICE_PROFILE=1` prints every stage's wall time to stderr.
 Raw decoding runs tile-parallel with banded conversion passes, and
 JPEG output goes through polajuice's own band-parallel baseline
 encoder (stb's arithmetic, so the same pixels; restart markers join

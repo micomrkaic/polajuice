@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <strings.h>
 #include <sys/stat.h>
 
@@ -381,6 +382,13 @@ static int apply(int argc, char **argv)
     if (!options.film_process)
         options.film_process = pj_preset_primary_process(camera);
 
+    const char *prof = getenv("POLAJUICE_PROFILE");
+    bool profiling = prof && *prof && *prof != '0';
+    struct timespec t0, t1;
+    if (profiling) {
+        timespec_get(&t0, TIME_UTC);
+        fprintf(stderr, "polajuice profile (%u threads)\n", pj_thread_count());
+    }
     PjImage *source = linear_input ? pj_image_load_linear(input, &error)
                                    : pj_image_load(input, &error);
     if (!source) {
@@ -388,12 +396,23 @@ static int apply(int argc, char **argv)
         pj_lut3d_free(print_lut);
         return fail(&error);
     }
+    if (profiling) {
+        timespec_get(&t1, TIME_UTC);
+        fprintf(stderr, "  %-22s %6.1f ms\n", "load (decode)",
+                ((double)t1.tv_sec - (double)t0.tv_sec) * 1000.0 + ((double)t1.tv_nsec - (double)t0.tv_nsec) / 1e6);
+    }
     PjImage *result = pj_render(source, camera, &options, &error);
     pj_image_free(source);
     pj_lut3d_free(lut);
     pj_lut3d_free(print_lut);
     if (!result) return fail(&error);
+    if (profiling) timespec_get(&t0, TIME_UTC);
     bool saved = pj_image_save(result, output, &error);
+    if (profiling) {
+        timespec_get(&t1, TIME_UTC);
+        fprintf(stderr, "  %-22s %6.1f ms\n", "save (encode)",
+                ((double)t1.tv_sec - (double)t0.tv_sec) * 1000.0 + ((double)t1.tv_nsec - (double)t0.tv_nsec) / 1e6);
+    }
     pj_image_free(result);
     return saved ? EXIT_SUCCESS : fail(&error);
 }

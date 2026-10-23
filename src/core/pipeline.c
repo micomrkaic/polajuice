@@ -1,8 +1,37 @@
 #include "internal.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+/* POLAJUICE_PROFILE=1 prints the wall time of every stage to stderr,
+ * so a slow render can be read stage by stage on the machine that is
+ * slow. Off, the marks cost one getenv per render. */
+static int profiling = -1;
+static struct timespec profile_last;
+
+static double now_seconds(void)
+{
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    return (double)ts.tv_sec + (double)ts.tv_nsec * 1e-9;
+}
+
+static void stage_mark(const char *name)
+{
+    if (profiling < 0) {
+        const char *env = getenv("POLAJUICE_PROFILE");
+        profiling = env && *env && *env != '0';
+    }
+    if (!profiling) return;
+    double t = now_seconds();
+    double prev = (double)profile_last.tv_sec + (double)profile_last.tv_nsec * 1e-9;
+    if (name) fprintf(stderr, "  %-22s %6.1f ms\n", name, (t - prev) * 1000.0);
+    profile_last.tv_sec = (time_t)t;
+    profile_last.tv_nsec = (long)((t - (double)profile_last.tv_sec) * 1e9);
+}
 
 static float clamp01(float x)
 {
@@ -1351,6 +1380,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     const PjLut3D *lut = options ? options->color_lut : NULL;
     strength = clamp01(strength);
 
+    stage_mark(NULL);
     PjImage *image;
     if (preset->instant_frame) {
         double img_w = preset->frame_image_w_mm > 0 ? preset->frame_image_w_mm : 78.94;
@@ -1381,26 +1411,33 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         if (image->scene_linear) ev += 1.0f;   /* raw opens a stop up */
         apply_exposure(image, ev);
     }
+    stage_mark("crop+clone+exposure");
     apply_contrast_filter(image,
                           options ? options->contrast_filter : NULL,
                           strength);
     apply_direct_flash(image, preset, strength);
+    stage_mark("filter+flash");
     apply_softness(image, preset->softness * strength);
+    stage_mark("softness");
     apply_vignette(image, preset->vignette * strength);
+    stage_mark("vignette");
     {
         float h = options ? options->halation : 0.0f;
         float scale = h == 0.0f ? 1.0f : (h < 0.0f ? 0.0f : h);
         apply_halation(image, preset->halation * strength * scale,
                        preset->halation_radius);
     }
+    stage_mark("halation");
     if (image->scene_linear) apply_scene_shoulder(image);
     apply_input_balance(image, preset, strength);
+    stage_mark("shoulder+balance");
     if (lut)
         apply_color_lut(image, lut, strength);
     else {
         apply_builtin_tone(image, preset, strength);
         apply_builtin_color(image, preset, strength);
     }
+    stage_mark(lut ? "film LUT" : "tone+color");
     {
         const char *process = options ? options->film_process : NULL;
         bool mono = preset->monochrome ||
@@ -1421,6 +1458,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
 
         /* the film is developed: edge effects, then (silver) its grain */
         apply_edge_effects(image, edge, mono);
+        stage_mark("edge");
         if (silver) {
             /* develop's contrast gain already amplifies grain formed
              * before it, so push adds less here than in classic */
@@ -1433,12 +1471,14 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
                                preset->grain_midtone_bias,
                                preset->grain_chroma, mono, push, grain_seed);
         }
+        stage_mark("silver grain");
         /* optional print/scan stock, chained after the film transform */
         if (options && options->print_lut)
             apply_color_lut(image, options->print_lut, strength);
         apply_develop(image, push, cross);
         float age = preset->fade * strength + (options ? options->age : 0.0f);
         apply_age(image, age, process);
+        stage_mark("print+develop+age");
         if (!silver) {
             /* pushed development coarsens grain; pulling calms it */
             float grain_gain = 1.0f + 0.45f * fmaxf(0.0f, push)
@@ -1451,6 +1491,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         }
     }
 
+    stage_mark("classic grain");
     if (preset->instant_frame) {
         PjImage *framed = instant_frame(image, preset, error);
         pj_image_free(image);

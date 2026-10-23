@@ -80,7 +80,6 @@ void pj_set_error(PjError *error, const char *format, ...);
  * bit-identical to the serial loop at any thread count */
 typedef void (*PjRowFn)(size_t y0, size_t y1, void *ctx);
 void pj_parallel_rows(size_t rows, PjRowFn fn, void *ctx);
-unsigned pj_thread_count(void);
 
 /* image.c: the sRGB transfer through 8192-cell tables with linear
  * interpolation (error under 2e-5, a hundredth of an 8-bit level)

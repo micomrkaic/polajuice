@@ -1,0 +1,7 @@
+1.18.3: POLAJUICE_PROFILE - read a slow render stage by stage
+
+POLAJUICE_PROFILE=1 prints the wall time of load, every pipeline
+stage and save to stderr, with the thread count, so a render that is
+slow on one machine can be diagnosed on that machine rather than
+guessed at from a sandbox. Off, it costs one getenv per render.
+pj_thread_count() joins the public API.
