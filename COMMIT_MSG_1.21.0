@@ -1,0 +1,39 @@
+1.21.0: the format crop switch, pushes to +4 and pulls to -3
+
+Every camera with a format of its own (the 126 square, the 1.03:1
+instant print, the Super 8 and Academy gates) used to cut that format
+from the middle of the input, losing the edges of a 3:2 or 4:3 frame
+with no way around it. --crop full keeps the whole input at its own
+aspect; an instant camera then puts its border around the full frame.
+--crop camera is the default and renders as before. The page has a
+Format control in the camera group, labelled with the camera's format
+and disabled for cameras that never cropped; the recipe carries it as
+crop=. CROP= in super8ify.
+
+--develop now takes push+N and pull-N for any stop count from -3 to
++4, fractions included (push+1.5), plus cross+N for a pushed cross
+process; pj_develop_parse/pj_develop_format in the core are the one
+reader and writer of that text for the CLI, superjuice, the recipe
+reader, the server and the wasm. Within -1..+2 the response is the
+linear one of 1.20 and renders byte-identically; each stop beyond
+counts 0.6 of one (push_effective in the pipeline, shared by the
+development stage and both grain models), so a third and fourth stop
+of push buy less contrast than the first two while the grain keeps
+coarsening. The page's Developing list runs pull -3 .. push +4 and
+cross, cross +1, cross +2; a fractional stop read from a recipe is
+added to the list.
+
+The strip shows the decoder's reason in place of a thumbnail the server
+could not make (a raw the decoder refuses), rather than a broken icon.
+
+Tests: core (develop text round trips including refusals, monotone and
+diminishing push response, the crop switch on super8, polaroid-600 and
+a no-crop camera, the recipe keys), compat (crop=full and
+develop=push+3.5 round-trip through the recipe, out-of-range refused),
+serve (crop and develop through the query, format labels in the camera
+list), wasm (push+4, push+5 refused, crop=full in the embedded recipe,
+format labels), page (the Format control follows the camera; the
+recipe and CLI line carry the new keys).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

@@ -86,6 +86,9 @@
   .thumbs figure, .samplestrip figure { margin:0; cursor:pointer; text-align:center; }
   .thumbs img, .samplestrip img { height:3.6rem; display:block; border:2px solid transparent; }
   .thumbs figure.on img { border-color:var(--accent); }
+  .thumbs .broken { height:3.6rem; width:5.4rem; box-sizing:border-box; padding:0.25rem;
+    border:2px solid var(--muted); color:var(--muted); font-size:0.58rem; line-height:1.15;
+    overflow:hidden; text-align:left; background:#fff; }
   .thumbs figcaption, .samplestrip figcaption { font-size:0.62rem; color:var(--muted);
     max-width:6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .samplestrip { display:flex; gap:0.4rem; align-items:flex-end; }
@@ -137,6 +140,17 @@ white.">Halation <span class="val" id="halval">1.0</span></label>
       <select id="camera"></select>
     </div>
     <div class="field">
+      <label for="crop" title="Whether to cut the camera's own format from the middle of the picture
+(the square of a 126 cartridge, the 1.03:1 instant print, the Super 8 gate)
+or keep the whole input frame at its own aspect. An instant camera then
+puts its border around the full frame. Cameras without a format crop are
+the same either way.">Format <span class="val" id="cropval"></span></label>
+      <select id="crop">
+        <option value="camera">the camera's format</option>
+        <option value="full">full frame — keep the whole picture</option>
+      </select>
+    </div>
+    <div class="field">
       <label for="filter" title="Lens contrast filter, applied to the light before the film.
 Orange or red with black-and-white film darkens skies and dramatizes clouds;
 green lightens foliage. On color stock: a period-correct strong cast.">Filter</label>
@@ -174,12 +188,21 @@ green lightens foliage. On color stock: a period-correct strong cast.">Filter</l
     <summary>Development</summary>
     <div class="field">
       <label for="develop">Developing</label>
-      <select id="develop">
+      <select id="develop" title="Push for contrast and grain, pull to soften. Within -1..+2 the
+response is linear; each stop beyond counts 0.6 (the developer has
+little left to bring up). Cross is E-6 slide film in C-41 chemistry;
+cross +N pushes it as well.">
+        <option value="pull-3">pull -3 stops</option>
+        <option value="pull-2">pull -2 stops</option>
+        <option value="pull-1">pull -1 stop</option>
         <option value="normal">normal</option>
         <option value="push+1">push +1 stop</option>
         <option value="push+2">push +2 stops</option>
-        <option value="pull-1">pull -1 stop</option>
+        <option value="push+3">push +3 stops</option>
+        <option value="push+4">push +4 stops</option>
         <option value="cross">cross-process (E-6 in C-41)</option>
+        <option value="cross+1">cross-process, push +1</option>
+        <option value="cross+2">cross-process, push +2</option>
       </select>
     </div>
     <div class="field">
@@ -312,7 +335,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.20.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.21.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -391,7 +414,8 @@ function recipeFromControls() {
     develop: $("develop").value, age: String(parseFloat($("age").value)),
     grain: $("grain").value, edge: String(parseFloat($("edge").value)),
     ev: String(parseFloat($("ev").value)), halation: String(parseFloat($("halation").value)),
-    seed: String(parseInt($("seed").value, 10) || 0) };
+    seed: String(parseInt($("seed").value, 10) || 0),
+    crop: $("crop").value === "full" ? "full" : "camera" };
 }
 
 function cliLine(r) {
@@ -409,6 +433,7 @@ function cliLine(r) {
   if (r.ev && parseFloat(r.ev) !== 0) parts.push("--ev", r.ev);
   if (r.halation !== undefined && parseFloat(r.halation) !== 1) parts.push("--halation", r.halation);
   if (r.seed !== undefined) parts.push("--seed", r.seed);
+  if (r.crop === "full") parts.push("--crop", "full");
   return parts.join(" ");
 }
 
@@ -416,7 +441,7 @@ function recipeText(r) {
   return ["# polajuice recipe 1", `camera=${r.camera}`, `film=${r.film}`, `print=${r.print}`,
           `filter=${r.filter}`, `strength=${r.strength}`, `develop=${r.develop}`,
           `age=${r.age}`, `grain=${r.grain}`, `edge=${r.edge}`, `ev=${r.ev}`,
-          `halation=${r.halation}`, `seed=${r.seed}`, ""].join("\n");
+          `halation=${r.halation}`, `seed=${r.seed}`, `crop=${r.crop || "camera"}`, ""].join("\n");
 }
 
 function showRecipe(text) {
@@ -454,7 +479,16 @@ function applyRecipe(r) {
   }
   if (r.filter !== undefined) $("filter").value = r.filter === "none" ? "" : r.filter;
   if (r.strength !== undefined) $("strength").value = r.strength;
-  if (r.develop !== undefined) $("develop").value = r.develop;
+  if (r.develop !== undefined) {
+    const sel = $("develop");
+    if ([...sel.options].some(o => o.value === r.develop) || !sel.options.length) sel.value = r.develop;
+    else {
+      /* a fractional or out-of-list stop count: add it as a choice */
+      sel.add(new Option(r.develop, r.develop));
+      sel.value = r.develop;
+    }
+  }
+  if (r.crop !== undefined) $("crop").value = r.crop === "full" ? "full" : "camera";
   if (r.age !== undefined) $("age").value = r.age;
   if (r.grain !== undefined) $("grain").value = r.grain;
   if (r.edge !== undefined) $("edge").value = r.edge;
@@ -564,6 +598,9 @@ async function boot() {
     $("develop").disabled = cam.instant;
     if (cam.instant) $("develop").value = "normal";
     $("edge").disabled = cam.instant;
+    /* the format choice only means something for cameras that crop */
+    $("crop").disabled = !cam.format;
+    $("cropval").textContent = cam.format ? cam.format : "no crop";
     rebuildFilmSelect();
   }
   /* one handler per element and event: the camera's change does the
@@ -743,7 +780,7 @@ async function render(maxDim) {
       edge: parseFloat($("edge").value),
       ev: parseFloat($("ev").value),
       halation: parseFloat($("halation").value),
-      printStem });
+      printStem, crop: $("crop").value === "full" ? "full" : "camera" });
     const secs = ((performance.now() - t0) / 1000).toFixed(secs_digits(performance.now() - t0));
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine") +
               (eng.native ? "" : (engine.native ? " (wasm, custom cube)" : "")));
@@ -829,6 +866,23 @@ function refreshThumbs() {
     const cap = document.createElement("figcaption");
     cap.textContent = im.name;
     fig.append(img, cap);
+    /* a thumbnail the server could not make (a raw the decoder refuses,
+     * say): show the decoder's reason in its place, not a broken icon */
+    img.addEventListener("error", async () => {
+      const note = document.createElement("div");
+      note.className = "broken";
+      note.textContent = "cannot decode";
+      try {
+        if (im.thumb && engine && engine.native) {
+          const r = await fetch(im.thumb, { cache: "no-store" });
+          const j = await r.json();
+          if (j && j.error) note.textContent = j.error.replace(/^polajuice: /, "");
+        }
+      } catch (e) { /* keep the generic note */ }
+      note.title = note.textContent;
+      im.error = note.textContent;
+      if (img.parentNode === fig) fig.replaceChild(note, img);
+    });
     fig.addEventListener("click", () => selectImage(i));
     box.append(fig);
   });
@@ -908,7 +962,7 @@ $("file").addEventListener("change", e => { for (const f of e.target.files || []
   }));
 for (const id of ["strength", "age", "edge", "ev", "halation"])
   $(id).addEventListener("input", onControlChange);
-for (const id of ["filter", "print", "develop", "grain", "seed"])
+for (const id of ["filter", "print", "develop", "grain", "seed", "crop"])
   $(id).addEventListener("change", onControlChange);
 
 $("render").addEventListener("click", async () => {

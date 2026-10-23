@@ -31,10 +31,14 @@ typedef struct {
     float age;   /* 0..1 storage-degradation axis: base fog, contrast decay,
                     desaturation, warm-magenta drift. Orthogonal to camera
                     and film; applies after the color stage. */
-    float push;  /* development push/pull in stops, -1..+2: contrast and
-                    grain rise with push, soften with pull. Chemistry, so
-                    it applies after the color stage and survives LUTs.
-                    Ignored for instant cameras (no user development). */
+    float push;  /* development push/pull in stops, PJ_PUSH_MIN..PJ_PUSH_MAX
+                    (-3..+4): contrast and grain rise with push, soften
+                    with pull. Within -1..+2 the response is linear, as
+                    through 1.20; each further stop counts 0.6 (contrast
+                    gains saturate, grain keeps coarsening less than
+                    linearly). Chemistry, so it applies after the color
+                    stage and survives LUTs. Ignored for instant cameras
+                    (no user development). Fractional stops are fine. */
     bool cross_process;  /* E-6-in-C-41 style cross development: high
                     contrast, green-yellow highlights, crossed curves.
                     Also ignored for instant cameras. */
@@ -95,7 +99,30 @@ typedef struct {
                     (border, fringe and Eberhard effects). Nonlinear and
                     asymmetric, unlike an unsharp mask; uniform areas are
                     untouched. Ignored for instant cameras. */
+    int crop;       /* PJ_CROP_CAMERA (0): the camera's own format - the
+                    square of the 126 cartridge, the 1.03:1 instant print,
+                    the Super 8 gate - cut from the middle of the input,
+                    as always. PJ_CROP_FULL: keep the whole input frame at
+                    its own aspect; an instant camera then puts its
+                    border around the full frame. Cameras without a
+                    format crop render the same either way. */
 } PjRenderOptions;
+
+#define PJ_CROP_CAMERA 0
+#define PJ_CROP_FULL 1
+/* "camera" or "full" -> PJ_CROP_*; -1 for anything else. */
+int pj_crop_parse(const char *name);
+const char *pj_crop_name(int crop);
+
+#define PJ_PUSH_MIN (-3.0f)
+#define PJ_PUSH_MAX (4.0f)
+/* Development mode text <-> options: "normal", "cross", "push+N",
+ * "pull-N", "cross+N", "cross-N" (N in stops, fractional allowed, within
+ * PJ_PUSH_MIN..PJ_PUSH_MAX). pj_develop_parse returns false and leaves
+ * the outputs alone for anything else; pj_develop_format writes the
+ * shortest text that reads back to the same values. */
+bool pj_develop_parse(const char *text, float *push, bool *cross);
+void pj_develop_format(float push, bool cross, char *buf, size_t size);
 
 PjImage *pj_image_new(size_t width, size_t height, PjError *error);
 
@@ -154,6 +181,10 @@ char *pj_preset_traits(const char *name, char *buffer, size_t size);
 /* True for integral/peel-apart instant cameras, whose development is
  * inside the film unit: push/pull and cross-processing do not apply. */
 bool pj_preset_is_instant(const char *name);
+/* The camera's format crop as a short label ("square", "1.03:1 instant
+ * print", "1.36:1 gate"), or NULL when the camera keeps the input's
+ * frame - the cameras PjRenderOptions.crop makes a difference to. */
+const char *pj_preset_format(const char *name);
 /* Film-process compatibility. Process tokens: "slide", "negative", "bw",
  * "integral", "pack". A sealed-process camera (autochrome,
  * technicolor-3strip) accepts none. pj_preset_film_processes writes a

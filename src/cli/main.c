@@ -50,9 +50,14 @@ static void usage(FILE *stream)
         "                          formats by extension: .ppm .png .jpg .jpeg\n"
         "                          (input also .nef .dng, or --linear)\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
-        "      --develop MODE      development: normal (default), push+1,\n"
-        "                          push+2, pull-1, or cross (E-6 in C-41);\n"
-        "                          not applicable to instant cameras\n"
+        "      --develop MODE      development: normal (default), push+N or\n"
+        "                          pull-N stops (-3..+4, halves allowed:\n"
+        "                          push+1.5), cross (E-6 in C-41), or\n"
+        "                          cross+N; not applicable to instant cameras\n"
+        "      --crop MODE         camera (default): the camera's own format\n"
+        "                          cut from the middle (square, instant\n"
+        "                          print, Super 8 gate); full: keep the whole\n"
+        "                          input frame at its own aspect\n"
         "      --age NUMBER        storage aging from 0 (fresh) to 1\n"
         "                          (fog, faded contrast, magenta drift)\n"
         "      --grain MODEL       classic (default) or silver: grain formed\n"
@@ -232,14 +237,17 @@ static int apply(int argc, char **argv)
             print_request = argv[++i];
         else if (!strcmp(argv[i], "--develop") && i + 1 < argc) {
             const char *dev = argv[++i];
-            if (!strcmp(dev, "normal")) { /* defaults */ }
-            else if (!strcmp(dev, "push+1")) options.push = 1.0f;
-            else if (!strcmp(dev, "push+2")) options.push = 2.0f;
-            else if (!strcmp(dev, "pull-1")) options.push = -1.0f;
-            else if (!strcmp(dev, "cross")) options.cross_process = true;
-            else {
+            if (!pj_develop_parse(dev, &options.push, &options.cross_process)) {
                 fprintf(stderr, "invalid develop mode '%s' "
-                        "(normal, push+1, push+2, pull-1, cross)\n", dev);
+                        "(normal, push+N, pull-N, cross, cross+N; N in %g..%g stops)\n",
+                        dev, (double)PJ_PUSH_MIN, (double)PJ_PUSH_MAX);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (!strcmp(argv[i], "--crop") && i + 1 < argc) {
+            options.crop = pj_crop_parse(argv[++i]);
+            if (options.crop < 0) {
+                fprintf(stderr, "invalid crop mode '%s' (camera, full)\n", argv[i]);
                 return EXIT_FAILURE;
             }
         }

@@ -11,7 +11,7 @@
  *   polajuice.wasm --version
  *   polajuice.wasm render IN CAMERA FILM|- PROCESS|- FILMSTEM|- PRINT|-
  *                         FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT
- *                         GRAIN EDGE EV HALATION PRINTSTEM|-
+ *                         GRAIN EDGE EV HALATION PRINTSTEM|- CROP
  *   polajuice.wasm develop IN MAX_DIM OUT
  *       the straight print of a raw (.nef/.dng) input: scene-linear
  *       decode, a stop up, shoulder, JPEG - what the page shows as the
@@ -46,20 +46,22 @@ static int list_cameras(void)
                     if (n > 0) used += (size_t)n;
                 }
         }
-        printf("%s\t%s\t%s\t%s\t%s\t%s\n", name, film ? film : "",
+        const char *format = pj_preset_format(name);
+        printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, film ? film : "",
                pj_preset_description(name),
                pj_preset_traits(name, traits, sizeof traits),
-               pj_preset_is_instant(name) ? "instant" : "film", tokens);
+               pj_preset_is_instant(name) ? "instant" : "film", tokens,
+               format ? format : "");
     }
     return 0;
 }
 
 static int render(int argc, char **argv)
 {
-    if (argc != 20) {
+    if (argc != 21) {
         fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- FILMSTEM|- "
                         "PRINT|- FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM "
-                        "OUT GRAIN EDGE EV HALATION PRINTSTEM|-\n");
+                        "OUT GRAIN EDGE EV HALATION PRINTSTEM|- CROP\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
@@ -153,10 +155,17 @@ static int render(int argc, char **argv)
                                .ev = ev,
                                .halation = halation == 0.0f ? PJ_HALATION_OFF
                                                             : halation};
-    if (!strcmp(dev, "push+1")) options.push = 1.0f;
-    else if (!strcmp(dev, "push+2")) options.push = 2.0f;
-    else if (!strcmp(dev, "pull-1")) options.push = -1.0f;
-    else if (!strcmp(dev, "cross")) options.cross_process = true;
+    if (!pj_develop_parse(dev, &options.push, &options.cross_process)) {
+        pj_image_free(image); pj_lut3d_free(lut); pj_lut3d_free(print_lut);
+        fprintf(stderr, "unknown develop mode '%s'\n", dev);
+        return 1;
+    }
+    options.crop = pj_crop_parse(argv[20]);
+    if (options.crop < 0) {
+        pj_image_free(image); pj_lut3d_free(lut); pj_lut3d_free(print_lut);
+        fprintf(stderr, "unknown crop mode '%s'\n", argv[20]);
+        return 1;
+    }
     PjImage *result = pj_render(image, camera, &options, &error);
     pj_image_free(image);
     pj_lut3d_free(lut);

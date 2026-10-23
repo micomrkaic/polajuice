@@ -29,6 +29,11 @@ curl -s -o "$TMP/dev.jpg" "http://127.0.0.1:$PORT/api/develop?name=tiny.dng&max=
 curl -s -o "$TMP/srv.jpg" -X POST "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=super8&film=none&ev=-0.5&halation=1.5&grain=silver&edge=1&seed=7&filter=orange"
 ./polajuice apply "$TMP/dir/cat.jpg" -c super8 --no-film --ev -0.5 --halation 1.5 --grain silver --edge 1 --seed 7 --filter orange -o "$TMP/cli.jpg" >/dev/null 2>&1
 cmp -s "$TMP/srv.jpg" "$TMP/cli.jpg" || { echo "test_serve: served render differs from the CLI"; exit 1; }
+# crop and the extended development reach the engine (url-encoded '+')
+curl -s -o "$TMP/srv2.jpg" -X POST "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=super8&film=none&crop=full&develop=push%2B3&seed=7"
+./polajuice apply "$TMP/dir/cat.jpg" -c super8 --no-film --crop full --develop push+3 --seed 7 -o "$TMP/cli2.jpg" >/dev/null 2>&1
+cmp -s "$TMP/srv2.jpg" "$TMP/cli2.jpg" || { echo "test_serve: crop/develop render differs from the CLI"; exit 1; }
+curl -s "http://127.0.0.1:$PORT/api/cameras" | grep -q '"format":"1.36:1 gate"' || { echo "test_serve: camera list lacks the format label"; exit 1; }
 # a dropped image travels in the body
 curl -s -o "$TMP/body.jpg" -X POST --data-binary "@$TMP/dir/cat.jpg" "http://127.0.0.1:$PORT/api/render?ext=jpg&camera=super8&film=none&ev=-0.5&halation=1.5&grain=silver&edge=1&seed=7&filter=orange"
 cmp -s "$TMP/body.jpg" "$TMP/cli.jpg" || { echo "test_serve: body render differs"; exit 1; }

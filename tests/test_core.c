@@ -783,6 +783,120 @@ int main(void)
         pj_image_free(tiny);
     }
 
+    /* 1.21: development text round-trips, the extended push range, and
+     * the format crop switch. */
+    {
+        struct { const char *text; float push; bool cross; bool ok; } cases[] = {
+            {"normal", 0, false, true}, {"push+1", 1, false, true},
+            {"push+2", 2, false, true}, {"pull-1", -1, false, true},
+            {"cross", 0, true, true}, {"push+4", 4, false, true},
+            {"pull-3", -3, false, true}, {"push+1.5", 1.5f, false, true},
+            {"cross+2", 2, true, true}, {"cross-1", -1, true, true},
+            {"pull1", -1, false, true}, {"push2", 2, false, true},
+            {"push+5", 0, false, false}, {"pull-4", 0, false, false},
+            {"push-1", 0, false, false}, {"push", 0, false, false},
+            {"fast", 0, false, false}, {"", 0, false, false},
+        };
+        for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+            float push = 99.0f; bool cross = true;
+            bool ok = pj_develop_parse(cases[i].text, &push, &cross);
+            assert(ok == cases[i].ok);
+            if (!ok) continue;
+            assert(fabsf(push - cases[i].push) < 1e-6f && cross == cases[i].cross);
+            char text[48];
+            pj_develop_format(push, cross, text, sizeof text);
+            float push2; bool cross2;
+            assert(pj_develop_parse(text, &push2, &cross2));
+            assert(push2 == push && cross2 == cross);
+        }
+        assert(pj_crop_parse("camera") == PJ_CROP_CAMERA);
+        assert(pj_crop_parse("") == PJ_CROP_CAMERA);
+        assert(pj_crop_parse("full") == PJ_CROP_FULL);
+        assert(pj_crop_parse("square") < 0);
+        assert(!strcmp(pj_crop_name(PJ_CROP_FULL), "full"));
+
+        /* contrast keeps rising past +2 and keeps falling below -1, but
+         * each further stop buys less than the one before */
+        PjImage *card = pj_image_new(48, 48, &error);
+        assert(card);
+        fill_test_pattern(card);
+        float spread[7];
+        const float stops[7] = {-3, -2, -1, 0, 2, 3, 4};
+        for (int i = 0; i < 7; ++i) {
+            PjRenderOptions o = {.seed = 1, .strength = 1.0f, .push = stops[i]};
+            PjImage *out = pj_render(card, "35mm-negative", &o, &error);
+            assert(out);
+            /* two midtones that stay in range at every stop */
+            spread[i] = luma_at(out, 22, 22) - luma_at(out, 10, 10);
+            pj_image_free(out);
+        }
+        for (int i = 1; i < 7; ++i) assert(spread[i] > spread[i - 1]);
+        /* a stop beyond +2 buys less than a stop within 0..+2; a stop
+         * below -1 takes less than the stop from 0 to -1 */
+        assert(spread[5] - spread[4] < (spread[4] - spread[3]) / 2.0f);
+        assert(spread[6] - spread[5] < (spread[4] - spread[3]) / 2.0f);
+        assert(spread[2] - spread[1] < spread[3] - spread[2]);
+        assert(spread[1] - spread[0] < spread[3] - spread[2]);
+        /* within the old range nothing moved: +2 is +2 */
+        {
+            PjRenderOptions o = {.seed = 1, .strength = 1.0f, .push = 2.0f};
+            PjRenderOptions q = {.seed = 1, .strength = 1.0f, .push = 2.0f, .crop = PJ_CROP_CAMERA};
+            PjImage *a = pj_render(card, "35mm-negative", &o, &error);
+            PjImage *b = pj_render(card, "35mm-negative", &q, &error);
+            assert(a && b);
+            assert(!memcmp(pj_image_pixels(a), pj_image_pixels(b), 48 * 48 * 3 * sizeof(float)));
+            pj_image_free(a); pj_image_free(b);
+        }
+
+        /* crop: the camera's format cuts, full keeps the input's frame;
+         * the instant border then wraps the whole frame */
+        PjImage *wide = pj_image_new(64, 40, &error);
+        assert(wide);
+        fill_test_pattern(wide);
+        assert(pj_preset_format("super8") != NULL);
+        assert(pj_preset_format("35mm-negative") == NULL);
+        assert(pj_preset_format("polaroid-600") != NULL);
+        {
+            PjRenderOptions cam = {.seed = 1, .strength = 1.0f};
+            PjRenderOptions full = {.seed = 1, .strength = 1.0f, .crop = PJ_CROP_FULL};
+            PjImage *a = pj_render(wide, "super8", &cam, &error);
+            PjImage *b = pj_render(wide, "super8", &full, &error);
+            assert(a && b);
+            assert(pj_image_width(a) < 64 && pj_image_height(a) == 40);   /* 1.36:1 from 1.6:1 */
+            assert(pj_image_width(b) == 64 && pj_image_height(b) == 40);
+            pj_image_free(a); pj_image_free(b);
+            a = pj_render(wide, "polaroid-600", &cam, &error);
+            b = pj_render(wide, "polaroid-600", &full, &error);
+            assert(a && b);
+            /* the camera's print is near square plus its border; the full
+             * frame keeps 64:40 inside the border, so it comes out wider */
+            assert(pj_image_width(b) > pj_image_width(a));
+            assert((double)pj_image_width(b) / pj_image_height(b) >
+                   (double)pj_image_width(a) / pj_image_height(a));
+            pj_image_free(a); pj_image_free(b);
+            /* a camera without a format crop is the same either way */
+            a = pj_render(wide, "35mm-negative", &cam, &error);
+            b = pj_render(wide, "35mm-negative", &full, &error);
+            assert(a && b);
+            assert(!memcmp(pj_image_pixels(a), pj_image_pixels(b), 64 * 40 * 3 * sizeof(float)));
+            pj_image_free(a); pj_image_free(b);
+        }
+        /* the recipe carries the crop and the new develop text */
+        {
+            PjRenderOptions o = {.seed = 3, .strength = 1.0f, .push = 3.0f, .crop = PJ_CROP_FULL};
+            char text[1024];
+            pj_recipe_format("super8", "none", NULL, &o, text, sizeof text);
+            assert(strstr(text, "\ndevelop=push+3\n"));
+            assert(strstr(text, "\ncrop=full\n"));
+            o.push = -2.5f; o.cross_process = true; o.crop = PJ_CROP_CAMERA;
+            pj_recipe_format("super8", "none", NULL, &o, text, sizeof text);
+            assert(strstr(text, "\ndevelop=cross-2.5\n"));
+            assert(strstr(text, "\ncrop=camera\n"));
+        }
+        pj_image_free(wide);
+        pj_image_free(card);
+    }
+
     pj_image_free(instant);
     pj_image_free(flashed);
     pj_image_free(flat);

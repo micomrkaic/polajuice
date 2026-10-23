@@ -18,6 +18,7 @@ render. `key=value` sources into a shell, which is why it is not JSON.
     ev=-0.5
     halation=1.5
     seed=7
+    crop=camera
 
 | key | values |
 |---|---|
@@ -26,13 +27,14 @@ render. `key=value` sources into a shell, which is why it is not JSON.
 | print | a print-stock stem or `none` |
 | filter | `none`, `yellow`, `orange`, `red`, `green`, `blue` |
 | strength | 0..1 |
-| develop | `normal`, `push+1`, `push+2`, `pull-1`, `cross` |
+| develop | `normal`, `push+N`, `pull-N` (N stops, -3..+4, fractions allowed: `push+1.5`), `cross`, `cross+N` |
 | age | 0..1 |
 | grain | `classic`, `silver` |
 | edge | 0..2 |
 | ev | -4..4 |
 | halation | 0..2 (0 off, 1 the camera's own) |
 | seed | integer |
+| crop | `camera` (the camera's own format cut from the middle) or `full` (keep the whole input frame; an instant camera borders the full frame) |
 
 Every key is optional: a partial recipe sets what it names and leaves
 the rest to the defaults, or to flags.

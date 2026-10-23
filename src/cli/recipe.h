@@ -7,11 +7,12 @@
  * optional, so a partial recipe can set a few keys and leave the rest
  * to the defaults or to flags. */
 typedef struct {
-    char camera[64], film[128], print[128], filter[32], develop[16], grain[16];
+    char camera[64], film[128], print[128], filter[32], develop[32], grain[16];
     float strength, age, edge, ev, halation;
     unsigned long long seed;
+    int crop;
     bool has_camera, has_film, has_print, has_filter, has_develop, has_grain;
-    bool has_strength, has_age, has_edge, has_ev, has_halation, has_seed;
+    bool has_strength, has_age, has_edge, has_ev, has_halation, has_seed, has_crop;
 } Recipe;
 
 bool recipe_load(const char *path, Recipe *r, const char *tool);

@@ -89,6 +89,11 @@ bool recipe_load(const char *path, Recipe *r, const char *tool)
         else if (!strcmp(key, "print")) { snprintf(r->print, sizeof r->print, "%s", val); r->has_print = *val != 0; }
         else if (!strcmp(key, "filter")) { snprintf(r->filter, sizeof r->filter, "%s", val); r->has_filter = *val != 0; }
         else if (!strcmp(key, "develop")) { snprintf(r->develop, sizeof r->develop, "%s", val); r->has_develop = *val != 0; }
+        else if (!strcmp(key, "crop")) {
+            r->crop = pj_crop_parse(val);
+            if (r->crop < 0) { fprintf(stderr, "%s: recipe: unknown crop '%s'\n", tool, val); ok = false; }
+            else r->has_crop = true;
+        }
         else if (!strcmp(key, "grain")) { snprintf(r->grain, sizeof r->grain, "%s", val); r->has_grain = *val != 0; }
         else if (!strcmp(key, "strength")) { ok = parse_float(val, 0, 1, &r->strength, key, tool) && ok; r->has_strength = true; }
         else if (!strcmp(key, "age")) { ok = parse_float(val, 0, 1, &r->age, key, tool) && ok; r->has_age = true; }
@@ -126,14 +131,12 @@ bool recipe_apply(const Recipe *r, PjRenderOptions *o, const char **camera,
         o->contrast_filter = strcmp(r->filter, "none") ? r->filter : NULL;
     }
     if (r->has_develop) {
-        o->push = 0.0f; o->cross_process = false;
-        if (!strcmp(r->develop, "normal")) { }
-        else if (!strcmp(r->develop, "push+1")) o->push = 1.0f;
-        else if (!strcmp(r->develop, "push+2")) o->push = 2.0f;
-        else if (!strcmp(r->develop, "pull-1")) o->push = -1.0f;
-        else if (!strcmp(r->develop, "cross")) o->cross_process = true;
-        else { fprintf(stderr, "%s: recipe: unknown develop '%s'\n", tool, r->develop); return false; }
+        if (!pj_develop_parse(r->develop, &o->push, &o->cross_process)) {
+            fprintf(stderr, "%s: recipe: unknown develop '%s'\n", tool, r->develop);
+            return false;
+        }
     }
+    if (r->has_crop) o->crop = r->crop;
     if (r->has_grain) {
         if (!pj_grain_model_known(r->grain)) {
             fprintf(stderr, "%s: recipe: unknown grain model '%s'\n", tool, r->grain);

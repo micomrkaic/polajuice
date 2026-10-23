@@ -105,6 +105,20 @@ cmp -s "$R1" "$R4" && { echo "test_compat: flag after --recipe did not override"
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$IN" -o "$R4" >/dev/null 2>&1 && {
     echo "test_compat: a recipe-less file was accepted as a recipe"; exit 1; }
 echo "recipes: save, replay from file and JPEG byte-identical, flags override, inspect shows"
+# 1.21: the format crop and extended development ride in the recipe
+R5="$LIB/r5.jpg"; R6="$LIB/r6.jpg"
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c super8 --no-film --crop full \
+    --develop push+3.5 -o "$R5" --save-recipe "$LIB/look2.recipe" >/dev/null 2>&1 || {
+    echo "test_compat: --crop full / --develop push+3.5 refused"; exit 1; }
+grep -q '^crop=full$' "$LIB/look2.recipe" || { echo "test_compat: recipe lacks crop=full"; exit 1; }
+grep -q '^develop=push+3.5$' "$LIB/look2.recipe" || { echo "test_compat: recipe lacks develop=push+3.5"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$R5" -o "$R6" >/dev/null 2>&1
+cmp -s "$R5" "$R6" || { echo "test_compat: crop/develop replay differs"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c super8 --no-film --develop push+5 -o "$R6" >/dev/null 2>&1 && {
+    echo "test_compat: push+5 was accepted"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c super8 --no-film --crop sideways -o "$R6" >/dev/null 2>&1 && {
+    echo "test_compat: crop=sideways was accepted"; exit 1; }
+echo "recipes: crop=full and develop=push+3.5 round-trip; out-of-range values refused"
 
 rm -f "$IN" "$OUT"
 echo "compatibility matrix tests passed (37 cells + override)"

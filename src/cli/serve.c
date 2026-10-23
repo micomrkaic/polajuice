@@ -332,11 +332,16 @@ static void handle_cameras(int fd)
         json_escape(pj_preset_description(name), desc, sizeof desc);
         json_escape(traits, tesc, sizeof tesc);
         if (k + 2600 >= size) { size *= 2; json = realloc(json, size); }
+        const char *format = pj_preset_format(name);
+        char fmtesc[100];
+        json_escape(format ? format : "", fmtesc, sizeof fmtesc);
         k += (size_t)snprintf(json + k, size - k,
                               "%s{\"name\":\"%s\",\"film\":%s%s%s,\"description\":\"%s\","
-                              "\"traits\":\"%s\",\"instant\":%s,\"processes\":[%s]}",
+                              "\"traits\":\"%s\",\"instant\":%s,\"processes\":[%s],"
+                              "\"format\":%s%s%s}",
                               i ? "," : "", nesc, film ? "\"" : "", film ? fesc : "null", film ? "\"" : "",
-                              desc, tesc, pj_preset_is_instant(name) ? "true" : "false", procs);
+                              desc, tesc, pj_preset_is_instant(name) ? "true" : "false", procs,
+                              format ? "\"" : "", format ? fmtesc : "null", format ? "\"" : "");
     }
     snprintf(json + k, size - k, "]");
     respond_json(fd, json);

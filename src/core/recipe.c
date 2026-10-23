@@ -10,6 +10,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* a float with the fewest digits that round-trips the values the
@@ -20,15 +21,66 @@ static void put_num(char *out, size_t size, float v)
     else snprintf(out, size, "%.4g", (double)v);
 }
 
+int pj_crop_parse(const char *name)
+{
+    if (!name || !*name || !strcmp(name, "camera")) return PJ_CROP_CAMERA;
+    if (!strcmp(name, "full")) return PJ_CROP_FULL;
+    return -1;
+}
+
+const char *pj_crop_name(int crop)
+{
+    return crop == PJ_CROP_FULL ? "full" : "camera";
+}
+
+bool pj_develop_parse(const char *text, float *push, bool *cross)
+{
+    if (!text) return false;
+    const char *p = text;
+    bool x = false;
+    int sign = 0;
+    if (!strncmp(p, "normal", 6)) { p += 6; }
+    else if (!strncmp(p, "cross", 5)) { p += 5; x = true; }
+    else if (!strncmp(p, "push", 4)) { p += 4; sign = 1; }
+    else if (!strncmp(p, "pull", 4)) { p += 4; sign = -1; }
+    else return false;
+    float stops = 0.0f;
+    if (*p) {
+        /* a signed number: push+1, pull-1, cross+1.5; push and pull also
+         * take the bare magnitude (push1 == push+1, pull1 == pull-1) */
+        if (sign == 0 && *p != '+' && *p != '-') return false;
+        char *end = NULL;
+        float v = strtof(p, &end);
+        if (!end || end == p || *end) return false;
+        if (sign > 0 && *p == '-') return false;    /* push-1 is a contradiction */
+        if (sign < 0) {
+            if (*p == '+') return false;
+            if (*p != '-') v = -v;                   /* pull1 means a stop down */
+        }
+        stops = v;
+        if (stops < PJ_PUSH_MIN || stops > PJ_PUSH_MAX) return false;
+    } else if (sign != 0) return false;        /* "push" alone says nothing */
+    *push = stops;
+    *cross = x;
+    return true;
+}
+
+void pj_develop_format(float push, bool cross, char *buf, size_t size)
+{
+    if (push == 0.0f) { snprintf(buf, size, "%s", cross ? "cross" : "normal"); return; }
+    char num[32];
+    if (fabsf(push - roundf(push)) < 1e-6f) snprintf(num, sizeof num, "%.0f", (double)fabsf(push));
+    else snprintf(num, sizeof num, "%.4g", (double)fabsf(push));
+    snprintf(buf, size, "%s%c%s", cross ? "cross" : push > 0.0f ? "push" : "pull",
+             push > 0.0f ? '+' : '-', num);
+}
+
 size_t pj_recipe_format(const char *camera, const char *film,
                         const char *print, const PjRenderOptions *o,
                         char *buf, size_t size)
 {
-    const char *develop = "normal";
-    if (o->cross_process) develop = "cross";
-    else if (o->push >= 2.0f) develop = "push+2";
-    else if (o->push >= 1.0f) develop = "push+1";
-    else if (o->push <= -1.0f) develop = "pull-1";
+    char develop[48];
+    pj_develop_format(o->push, o->cross_process, develop, sizeof develop);
     float halation = o->halation == 0.0f ? 1.0f : (o->halation < 0.0f ? 0.0f : o->halation);
     char strength[32], age[32], edge[32], ev[32], hal[32];
     put_num(strength, sizeof strength, o->strength);
@@ -49,7 +101,8 @@ size_t pj_recipe_format(const char *camera, const char *film,
                      "edge=%s\n"
                      "ev=%s\n"
                      "halation=%s\n"
-                     "seed=%llu\n",
+                     "seed=%llu\n"
+                     "crop=%s\n",
                      camera ? camera : "",
                      film && *film ? film : "none",
                      print && *print ? print : "none",
@@ -58,7 +111,8 @@ size_t pj_recipe_format(const char *camera, const char *film,
                      strength, develop, age,
                      o->grain_model && *o->grain_model ? o->grain_model : "classic",
                      edge, ev, hal,
-                     (unsigned long long)o->seed);
+                     (unsigned long long)o->seed,
+                     pj_crop_name(o->crop));
     return n < 0 ? 0 : (size_t)n;
 }
 

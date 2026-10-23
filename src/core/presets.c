@@ -350,6 +350,25 @@ bool pj_preset_is_instant(const char *name)
     return preset && preset->instant_frame;
 }
 
+const char *pj_preset_format(const char *name)
+{
+    const PjPreset *p = pj_find_preset(name);
+    if (!p) return NULL;
+    static char label[48];
+    if (p->instant_frame) {
+        double w = p->frame_image_w_mm > 0 ? p->frame_image_w_mm : 78.94;
+        double h = p->frame_image_h_mm > 0 ? p->frame_image_h_mm : 76.80;
+        snprintf(label, sizeof label, "%.2f:1 instant print", w / h);
+        return label;
+    }
+    if (p->square_crop) return "square";
+    if (p->crop_aspect > 0.0f) {
+        snprintf(label, sizeof label, "%.2f:1 gate", (double)p->crop_aspect);
+        return label;
+    }
+    return NULL;
+}
+
 const char *pj_preset_default_film(const char *name)
 {
     const PjPreset *preset = pj_find_preset(name);

@@ -53,8 +53,8 @@ One command, movie in, vintage movie out:
 superjuice drives FFmpeg itself (decoding, H.264 encoding at `--crf 18`
 by default, audio passthrough); it needs `ffmpeg` on PATH and tells you
 so if it is missing. All the stills options apply: `-f` for the film,
-`--develop`, `--age`, `--grain`, `--edge`, `--strength`, `--seed`, `-o`
-for an explicit output path. For custom pipelines (different codecs, filters, no
+`--develop`, `--crop`, `--age`, `--grain`, `--edge`, `--strength`,
+`--seed`, `-o` for an explicit output path. For custom pipelines (different codecs, filters, no
 re-encode of your choosing), plumbing mode remains: with no input file,
 superjuice reads YUV4MPEG2 on stdin and writes it on stdout, and the
 engine itself stays dependency-free:
@@ -376,12 +376,26 @@ removed) shot in an ordinary 35mm body; it lives in the camera list
 because halation is an optical rendering trait, and it accepts C-41
 negative films accordingly.
 
-Development is its own axis too: `--develop` takes `normal`, `push+1`,
-`push+2`, `pull-1` or `cross` (E-6 slide through C-41 chemistry). Push
-raises contrast and coarsens grain, pull relaxes both, and cross gives
-the shifted-color lomo signature; all apply after the color stage so
-they compose with any film LUT, and all are refused with a note for
-instant cameras, whose development happens inside the film unit. The
+Development is its own axis too: `--develop` takes `normal`, `push+N`
+or `pull-N` for any number of stops from -3 to +4 (`push+1.5` is fine),
+`cross` (E-6 slide through C-41 chemistry) or `cross+N` for a pushed
+cross process. Push raises contrast and coarsens grain, pull relaxes
+both, and cross gives the shifted-color lomo signature; all apply after
+the color stage so they compose with any film LUT, and all are refused
+with a note for instant cameras, whose development happens inside the
+film unit. Within -1..+2 the response is linear and renders exactly as
+earlier versions did; each further stop counts 0.6 of one, the way a
+third and fourth stop of push buy less contrast than the first two (the
+developer has little left to bring up in the shadows) while the grain
+keeps coarsening.
+
+Every camera with a format of its own - the square of a 126 cartridge,
+the 1.03:1 instant print, the 1.36:1 Super 8 gate, the Academy gate -
+cuts that format from the middle of the input, which loses the edges of
+a 3:2 or 4:3 frame. `--crop full` keeps the whole input at its own
+aspect instead; an instant camera then puts its border around the full
+frame. Cameras without a format crop are the same either way, and the
+choice rides in the recipe as `crop=`. The
 web page groups the film library into historical families (Kodachrome,
 Ektachrome, the Portra generations, the Ilford speed ladder, the
 Polaroid chemistries and more) with process labels and notes.

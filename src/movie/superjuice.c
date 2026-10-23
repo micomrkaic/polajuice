@@ -105,7 +105,9 @@ static void usage(FILE *stream)
         "                          still-print formats and are refused\n"
         "  -f, --film NAME|FILE    film stock (library name or .cube path)\n"
         "      --no-film / --any-film\n"
-        "      --develop MODE      normal, push+1, push+2, pull-1, cross\n"
+        "      --develop MODE      normal, push+N, pull-N (-3..+4 stops), cross,\n"
+        "                          cross+N\n"
+        "      --crop MODE         camera (default, the gate crop) or full\n"
         "      --age NUMBER        0..1\n"
         "      --strength NUMBER   0..1\n"
         "      --grain MODEL       classic (default) or silver (grain from\n"
@@ -198,12 +200,17 @@ int main(int argc, char **argv)
             print_request = argv[++i];
         else if (!strcmp(argv[i], "--develop") && i + 1 < argc) {
             const char *dev = argv[++i];
-            if (!strcmp(dev, "push+1")) options.push = 1.0f;
-            else if (!strcmp(dev, "push+2")) options.push = 2.0f;
-            else if (!strcmp(dev, "pull-1")) options.push = -1.0f;
-            else if (!strcmp(dev, "cross")) options.cross_process = true;
-            else if (strcmp(dev, "normal")) {
-                fprintf(stderr, "invalid develop mode '%s'\n", dev);
+            if (!pj_develop_parse(dev, &options.push, &options.cross_process)) {
+                fprintf(stderr, "invalid develop mode '%s' (normal, push+N, pull-N, "
+                        "cross, cross+N; N in %g..%g stops)\n",
+                        dev, (double)PJ_PUSH_MIN, (double)PJ_PUSH_MAX);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (!strcmp(argv[i], "--crop") && i + 1 < argc) {
+            options.crop = pj_crop_parse(argv[++i]);
+            if (options.crop < 0) {
+                fprintf(stderr, "invalid crop mode '%s' (camera, full)\n", argv[i]);
                 return EXIT_FAILURE;
             }
         }

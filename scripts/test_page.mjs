@@ -120,6 +120,28 @@ elems["camera"].value = "bw-35";
 elems["camera"].handlers["change"]();
 if (elems["edge"].disabled) throw new Error("edge slider stuck disabled");
 console.log("edge slider present; disabled for instant cameras, re-enabled for film");
+// 1.21: the format control follows the camera's crop; the recipe and CLI
+// line carry crop=full and the extended develop text
+if (!elems["crop"]) throw new Error("crop select absent");
+elems["camera"].value = "35mm-negative";
+elems["camera"].handlers["change"]();
+if (!elems["crop"].disabled) throw new Error("crop enabled for a camera without a format crop");
+elems["camera"].value = "polaroid-600";
+elems["camera"].handlers["change"]();
+if (elems["crop"].disabled) throw new Error("crop disabled for an instant camera");
+if (!/instant print/.test(elems["cropval"].textContent)) throw new Error("format label missing: " + elems["cropval"].textContent);
+elems["crop"].value = "full";
+elems["camera"].value = "super8";
+elems["camera"].handlers["change"]();
+elems["develop"].value = "push+3";
+elems["crop"].handlers["change"]();
+await new Promise(r => setTimeout(r, 400));
+if (!/\ncrop=full\n/.test(elems["recipe"].value)) throw new Error("recipe lacks crop=full:\n" + elems["recipe"].value);
+if (!/\ndevelop=push\+3\n/.test(elems["recipe"].value)) throw new Error("recipe lacks develop=push+3");
+if (!/--crop full/.test(elems["cli"].textContent) || !/--develop push\+3/.test(elems["cli"].textContent))
+  throw new Error("CLI line lacks the new flags: " + elems["cli"].textContent);
+elems["crop"].value = "camera"; elems["develop"].value = "normal";
+console.log("format control follows the camera; crop and develop ride in the recipe and CLI line");
 
 // THE regression: pick an instant camera, then click a sample that suggests
 // a slide camera; the film dropdown must be rebuilt for the new camera.

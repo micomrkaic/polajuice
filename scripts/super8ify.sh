@@ -29,6 +29,10 @@
 #                                   apply on top of it
 #   EV       [0]                    exposure in stops, -4..4
 #   HALATION [1]                    scale the camera's halation 0..2 (0 off)
+#   DEVELOP  [normal]              normal, push+N, pull-N (-3..+4 stops),
+#                                   cross, cross+N
+#   CROP     [camera]              camera = the gate crop (1.36:1 for
+#                                   super8); full = keep the whole frame
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
 #                                   2 = worn projector, 0 = tripod-locked
 #   SOUND    [stripe]              stripe = audiotard tape mangle;
@@ -59,6 +63,7 @@ IN=$1
 SET_CAMERA=${CAMERA+x}; SET_FILM=${FILM+x}; SET_AGE=${AGE+x}; SET_SEED=${SEED+x}
 SET_FILTER=${FILTER+x}; SET_GRAIN=${GRAIN+x}; SET_EDGE=${EDGE+x}
 SET_EV=${EV+x}; SET_HALATION=${HALATION+x}
+SET_DEVELOP=${DEVELOP+x}; SET_CROP=${CROP+x}
 CAMERA=${CAMERA:-super8}
 FILM=${FILM:-}
 
@@ -81,6 +86,8 @@ EDGE=${EDGE:-0}
 RECIPE=${RECIPE:-}
 EV=${EV:-0}
 HALATION=${HALATION:-1}
+DEVELOP=${DEVELOP:-normal}
+CROP=${CROP:-camera}
 MOTION=${MOTION:-1}
 SOUND=${SOUND:-stripe}
 WOW=${WOW:-14}
@@ -140,12 +147,15 @@ sj_args() {
         [ -n "$SET_EDGE" ] && { q --edge; q "$EDGE"; }
         [ -n "$SET_EV" ] && { q --ev; q "$EV"; }
         [ -n "$SET_HALATION" ] && { q --halation; q "$HALATION"; }
+        [ -n "$SET_DEVELOP" ] && { q --develop; q "$DEVELOP"; }
+        [ -n "$SET_CROP" ] && { q --crop; q "$CROP"; }
     else
         q -c; q "$CAMERA"
         case "$FILM" in none) q --no-film ;; "") ;; *) q -f; q "$FILM" ;; esac
         q --age; q "$AGE"; q --seed; q "$SEED"
         [ -n "$FILTER" ] && { q --filter; q "$FILTER"; }
         q --grain; q "$GRAIN"; q --edge; q "$EDGE"; q --ev; q "$EV"; q --halation; q "$HALATION"
+        q --develop; q "$DEVELOP"; q --crop; q "$CROP"
     fi
     q --motion-scale; q "$MOTION"
     return 0

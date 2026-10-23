@@ -117,6 +117,28 @@ try {
       throw new Error("custom cube render failed");
 }
 {
+  // 1.21: the extended push range, its limit, the format crop and the
+  // format labels all reach the engine
+  const { bytes: src, ext: srcExt } = await testInput();
+  const out = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7 });
+  const pushed2 = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, develop: "push+2" });
+  const pushed4 = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, develop: "push+4" });
+  if (Buffer.compare(Buffer.from(pushed4), Buffer.from(pushed2)) === 0)
+      throw new Error("push+4 identical to push+2");
+  let overPushed = false;
+  try { await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, develop: "push+5" }); }
+  catch (e) { overPushed = true; }
+  if (!overPushed) throw new Error("push+5 accepted");
+  const fullFrame = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, crop: "full" });
+  if (Buffer.compare(Buffer.from(fullFrame), Buffer.from(out)) === 0)
+      throw new Error("crop=full had no effect on the super8 gate");
+  if (!/crop=full/.test(new TextDecoder("latin1").decode(fullFrame.subarray(0, 4096))))
+      throw new Error("crop=full missing from the embedded recipe");
+  if (!cameras.find(c => c.name === "super8").format) throw new Error("super8 reports no format label");
+  if (cameras.find(c => c.name === "35mm-negative").format) throw new Error("35mm-negative reports a format crop");
+  console.log("push+4 differs from +2, push+5 refused, crop=full, format labels ok");
+}
+{
   // filter reaches the engine: red differs from none on the same seed
   const { bytes: src, ext: srcExt } = await testInput();
   const plain = await engine.render({ inputBytes: src, ext: srcExt,

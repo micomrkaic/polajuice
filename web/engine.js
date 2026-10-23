@@ -55,11 +55,12 @@ async function run(args, workFiles) {
             const r = await run(["--list-cameras"], {});
             if (r.code !== 0) throw new Error(r.stderr || "camera listing failed");
             return r.stdout.trim().split("\n").map(line => {
-                const [name, film, description, traits, kind, procs]
+                const [name, film, description, traits, kind, procs, format]
                     = line.split("\t");
                 return { name, film: film || null, description,
                          traits: traits || "", instant: kind === "instant",
-                         processes: procs ? procs.split(",") : [] };
+                         processes: procs ? procs.split(",") : [],
+                         format: format || null };
             });
         },
         /* inputBytes: Uint8Array; ext: "jpg"|"png"|"nef"|"dng"; cubeText: string|null;
@@ -81,7 +82,7 @@ async function run(args, workFiles) {
                        filmStem = null, printCubeText = null, filter = null,
                        strength = 1.0, seed = 42, age = 0, develop = "normal",
                        maxDim = 0, grainModel = "classic", edge = 0,
-                       ev = 0, halation = 1, printStem = null }) {
+                       ev = 0, halation = 1, printStem = null, crop = "camera" }) {
             const inName = "in." + inputExtension(ext);
             const workFiles = { [inName]: inputBytes };
             let filmArg = "-";
@@ -101,7 +102,8 @@ async function run(args, workFiles) {
                  String(strength), String(seed >>> 0), String(age),
                  develop, String(maxDim), "work/out.jpg",
                  grainModel || "classic", String(edge),
-                 String(ev), String(halation), printStem || "-"], workFiles);
+                 String(ev), String(halation), printStem || "-",
+                 crop || "camera"], workFiles);
             if (r.code !== 0)
                 throw new Error(r.stderr.trim() || `render failed (${r.code})`);
             const out = r.files.get("out.jpg");
@@ -153,7 +155,8 @@ export function createNativeEngine(base, info) {
                  print: o.printStem || "none", filter: o.filter || "none",
                  strength: o.strength ?? 1, develop: o.develop || "normal", age: o.age ?? 0,
                  grain: o.grainModel || "classic", edge: o.edge ?? 0, ev: o.ev ?? 0,
-                 halation: o.halation ?? 1, seed: (o.seed ?? 42) >>> 0 };
+                 halation: o.halation ?? 1, seed: (o.seed ?? 42) >>> 0,
+                 crop: o.crop || "camera" };
     }
     return {
         native: true,

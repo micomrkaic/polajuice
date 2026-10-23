@@ -775,11 +775,24 @@ static AgeProfile age_profile(const char *process)
 }
 
 static void develop_band(size_t y0, size_t y1, void *vctx);
+/* Push/pull response: linear within the -1..+2 the model was calibrated
+ * on (and renders as through 1.20); each stop beyond counts 0.6, since
+ * extended pushes buy less contrast per stop (the developer has little
+ * left to bring up in the shadows) and the slope would otherwise run
+ * away. Shared by development, silver grain and classic grain. */
+static float push_effective(float push)
+{
+    if (push < PJ_PUSH_MIN) push = PJ_PUSH_MIN;
+    if (push > PJ_PUSH_MAX) push = PJ_PUSH_MAX;
+    if (push > 2.0f) return 2.0f + 0.6f * (push - 2.0f);
+    if (push < -1.0f) return -1.0f + 0.6f * (push + 1.0f);
+    return push;
+}
+
+/* push arrives already through push_effective() */
 static void apply_develop(PjImage *image, float push, bool cross)
 {
     if (push == 0.0f && !cross) return;
-    if (push < -1.0f) push = -1.0f;
-    if (push > 2.0f) push = 2.0f;
     float contrast = 1.0f + 0.16f * push + (cross ? 0.22f : 0.0f);
     float sat = 1.0f + 0.06f * push + (cross ? 0.28f : 0.0f);
     Ctx ctx = {.image = image, .f = {contrast, sat}, .flag = cross};
@@ -1393,7 +1406,10 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
 
     stage_mark(NULL);
     PjImage *image;
-    if (preset->instant_frame) {
+    bool full_frame = options && options->crop == PJ_CROP_FULL;
+    if (full_frame)
+        image = clone_image(input, error);
+    else if (preset->instant_frame) {
         double img_w = preset->frame_image_w_mm > 0 ? preset->frame_image_w_mm : 78.94;
         double img_h = preset->frame_image_h_mm > 0 ? preset->frame_image_h_mm : 76.80;
         image = crop_aspect(input, img_w / img_h, error);
@@ -1455,7 +1471,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
                     (process && !strcmp(process, "bw"));
         bool silver = options && options->grain_model &&
                       !strcmp(options->grain_model, "silver");
-        float push = options ? options->push : 0.0f;
+        float push = options ? push_effective(options->push) : 0.0f;
         bool cross = options ? options->cross_process : false;
         float edge = options ? options->edge * strength : 0.0f;
         if (preset->instant_frame) { push = 0.0f; cross = false; edge = 0.0f; }

@@ -172,13 +172,13 @@ bool look_from_params(Look *look, const LookParam *params, size_t count,
             look->options.contrast_filter = strcmp(v, "none") && *v ? look->filter_buf : NULL;
         }
         else if (!strcmp(k, "develop")) {
-            look->options.push = 0.0f; look->options.cross_process = false;
-            if (!strcmp(v, "normal")) { }
-            else if (!strcmp(v, "push+1")) look->options.push = 1.0f;
-            else if (!strcmp(v, "push+2")) look->options.push = 2.0f;
-            else if (!strcmp(v, "pull-1")) look->options.push = -1.0f;
-            else if (!strcmp(v, "cross")) look->options.cross_process = true;
-            else { say(msg, msgsize, "%s: unknown develop '%s'", tool, v); return false; }
+            if (!pj_develop_parse(v, &look->options.push, &look->options.cross_process)) {
+                say(msg, msgsize, "%s: unknown develop '%s'", tool, v); return false;
+            }
+        }
+        else if (!strcmp(k, "crop")) {
+            look->options.crop = pj_crop_parse(v);
+            if (look->options.crop < 0) { say(msg, msgsize, "%s: unknown crop '%s'", tool, v); return false; }
         }
         else if (!strcmp(k, "grain")) {
             if (!pj_grain_model_known(v)) { say(msg, msgsize, "%s: unknown grain model '%s'", tool, v); return false; }
