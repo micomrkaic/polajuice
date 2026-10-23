@@ -1,0 +1,9 @@
+1.18.4: the encoder and the decoder were never on more than one core
+
+The profile from 1.18.3 said it plainly: the pipeline stages scaled
+five-fold on eight cores and save/load did not. pj_parallel_rows had a
+"fewer than 64 rows is not worth a thread" cutoff written for pixel
+rows; the JPEG encoder hands it 63 bands and the raw decoder 48 tiles,
+so both ran serially on every machine. The cutoff is gone (the only
+limit is one band per item), and the render's input copy is banded so
+its pages are first touched in parallel. No arithmetic changed.

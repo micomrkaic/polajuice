@@ -69,8 +69,10 @@ void pj_parallel_rows(size_t rows, PjRowFn fn, void *ctx)
 {
     if (rows == 0) return;
     unsigned n = thread_count();
-    /* a few rows per thread is not worth the spawn */
-    if (rows < 64) n = 1;
+    /* never more bands than items; no other threshold - the "rows" are
+     * sometimes JPEG bands or raw tiles, a few dozen of them with tens
+     * of milliseconds of work each, and a count-based cutoff once left
+     * the encoder and the decoder on one core */
     if (n > rows) n = (unsigned)rows;
 #ifdef PJ_SERIAL
     n = 1;

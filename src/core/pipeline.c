@@ -112,13 +112,24 @@ static float *scratch_frame(size_t width, size_t height)
     return scratch_get();
 }
 
+typedef struct { const PjImage *in; PjImage *out; } CloneCtx;
+
+static void clone_band(size_t y0, size_t y1, void *vctx)
+{
+    CloneCtx *c = vctx;
+    size_t w = c->in->width;
+    memcpy(c->out->rgb + y0 * w * 3, c->in->rgb + y0 * w * 3,
+           (y1 - y0) * w * 3 * sizeof(float));
+}
+
+/* banded so the copy's pages are first touched in parallel */
 static PjImage *clone_image(const PjImage *input, PjError *error)
 {
     PjImage *copy = pj_image_new(input->width, input->height, error);
-    if (copy) copy->scene_linear = input->scene_linear;
-    if (copy)
-        memcpy(copy->rgb, input->rgb,
-               input->width * input->height * 3 * sizeof(float));
+    if (!copy) return NULL;
+    copy->scene_linear = input->scene_linear;
+    CloneCtx c = {input, copy};
+    pj_parallel_rows(input->height, clone_band, &c);
     return copy;
 }
 
