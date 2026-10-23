@@ -13,6 +13,7 @@ struct PjImage {
     size_t width;
     size_t height;
     float *rgb;
+    char *comment;      /* text saved with the image (the recipe) */
     bool scene_linear;  /* raw / --linear input: values are scene-referred
                            with the sensor's white at 1.0 and headroom
                            above it preserved; the pipeline opens such
@@ -89,7 +90,8 @@ void pj_parallel_rows(size_t rows, PjRowFn fn, void *ctx);
 /* jpegenc.c: baseline JPEG, 4:4:4 above quality 90, band-parallel with
  * restart markers; the same bytes at any thread count */
 bool pj_jpeg_write(const char *path, const unsigned char *rgb, size_t width,
-                   size_t height, int quality, PjError *error);
+                   size_t height, int quality, const char *comment,
+                   PjError *error);
 
 void pj_srgb_tables_init(void);
 float pj_srgb_encode(float linear);

@@ -9,9 +9,9 @@ CFLAGS += -std=c17 -Wall -Wextra -Wpedantic -pthread
 CFLAGS += -MMD -MP
 LDLIBS += -lm -pthread
 
-CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/rawdec.c src/core/stb_impl.c
+CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/recipe.c src/core/rawdec.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
-ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/cli/filmlib.o src/movie/superjuice.o tests/test_core.o
+ALL_OBJ = $(CORE_OBJ) src/cli/main.o src/cli/filmlib.o src/cli/recipe.o src/movie/superjuice.o tests/test_core.o
 
 .PHONY: all clean clean-wasm check check-wasm install fetch-luts fetch-polaroid-lut wasm serve
 
@@ -23,14 +23,14 @@ src/core/stb_impl.o: CFLAGS += -w
 libpolajuice.a: $(CORE_OBJ)
 	$(AR) rcs $@ $^
 
-polajuice: src/cli/main.o src/cli/filmlib.o libpolajuice.a
-	$(CC) $(CFLAGS) -o $@ src/cli/main.o src/cli/filmlib.o libpolajuice.a $(LDLIBS)
+polajuice: src/cli/main.o src/cli/filmlib.o src/cli/recipe.o libpolajuice.a
+	$(CC) $(CFLAGS) -o $@ src/cli/main.o src/cli/filmlib.o src/cli/recipe.o libpolajuice.a $(LDLIBS)
 
 tests/test_core: tests/test_core.o libpolajuice.a
 	$(CC) $(CFLAGS) -o $@ tests/test_core.o libpolajuice.a $(LDLIBS)
 
-superjuice: src/movie/superjuice.o src/cli/filmlib.o libpolajuice.a
-	$(CC) $(CFLAGS) -o $@ src/movie/superjuice.o src/cli/filmlib.o libpolajuice.a $(LDLIBS)
+superjuice: src/movie/superjuice.o src/cli/filmlib.o src/cli/recipe.o libpolajuice.a
+	$(CC) $(CFLAGS) -o $@ src/movie/superjuice.o src/cli/filmlib.o src/cli/recipe.o libpolajuice.a $(LDLIBS)
 
 check: tests/test_core
 	./tests/test_core
@@ -45,7 +45,7 @@ wasm:
 	sh scripts/build_web.sh
 
 check-wasm:
-	cd scripts && node test_wasm.mjs && node test_page.mjs && node test_page_dom.mjs
+	cd scripts && node test_wasm.mjs && node test_page.mjs && node test_page_dom.mjs && node test_workspace.mjs
 
 # 'clean' deliberately keeps web/polajuice.wasm: release tarballs ship it
 # prebuilt and release.sh runs 'make clean' before verifying it.

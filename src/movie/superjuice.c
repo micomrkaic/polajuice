@@ -20,6 +20,7 @@
 
 #include "polajuice.h"
 #include "filmlib.h"
+#include "recipe.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -112,6 +113,8 @@ static void usage(FILE *stream)
         "      --edge NUMBER       development edge effects 0..2\n"
         "      --ev NUMBER         exposure in stops, -4..+4\n"
         "      --halation NUMBER   scale the camera's halation 0..2 (0 off)\n"
+        "      --recipe FILE       take the look from a recipe file or a\n"
+        "                          polajuice JPEG; later flags override\n"
         "      --seed INTEGER      base seed; grain decorrelates per frame\n"
         "      --motion-scale N    scale gate weave and flicker (default 1;\n"
         "                          0.5 steadier, 2 a worn projector)\n"
@@ -174,6 +177,16 @@ int main(int argc, char **argv)
     PjRenderOptions options = {.seed = UINT64_C(0x504f4c414a554943),
                                .strength = 1.0f, .temporal = true};
 
+    static Recipe recipe;
+    for (int i = 1; i + 1 < argc; ++i)
+        if (!strcmp(argv[i], "--recipe")) {
+            if (!recipe_load(argv[i + 1], &recipe, "superjuice")) return EXIT_FAILURE;
+            if (!recipe_apply(&recipe, &options, &camera, &film_request, &no_film,
+                              &print_request, "superjuice"))
+                return EXIT_FAILURE;
+            break;
+        }
+
     for (int i = 1; i < argc; ++i) {
         if ((!strcmp(argv[i], "-c") || !strcmp(argv[i], "--camera")) && i + 1 < argc)
             camera = argv[++i];
@@ -218,6 +231,9 @@ int main(int argc, char **argv)
                         "(classic, silver)\n", options.grain_model);
                 return EXIT_FAILURE;
             }
+        }
+        else if (!strcmp(argv[i], "--recipe") && i + 1 < argc) {
+            ++i;   /* applied above */
         }
         else if (!strcmp(argv[i], "--edge") && i + 1 < argc) {
             char *end = NULL;

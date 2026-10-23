@@ -235,7 +235,8 @@ static void encode_band(size_t b0, size_t b1, void *vctx)
 }
 
 bool pj_jpeg_write(const char *path, const unsigned char *rgb, size_t width,
-                   size_t height, int quality, PjError *error)
+                   size_t height, int quality, const char *comment,
+                   PjError *error)
 {
     if (width == 0 || height == 0 || width > 65535 || height > 65535) {
         pj_set_error(error, "JPEG: dimensions out of range");
@@ -297,7 +298,17 @@ bool pj_jpeg_write(const char *path, const unsigned char *rgb, size_t width,
         unsigned restart = (unsigned)e.mcus_x * MCU_ROWS_PER_BAND;
         unsigned char dri[] = { 0xFF,0xDD,0,4,(unsigned char)(restart >> 8),(unsigned char)restart };
         unsigned char one = 1, ac0 = 0x10, ac1 = 0x11;
-        ok = ok && fwrite(head0, 1, sizeof head0, f) == sizeof head0;
+        /* SOI + APP0 first, then the comment, then the tables */
+        ok = ok && fwrite(head0, 1, 20, f) == 20;
+        if (comment && *comment) {
+            size_t clen = strlen(comment);
+            if (clen > 65533) clen = 65533;
+            unsigned char com[4] = { 0xFF, 0xFE, (unsigned char)((clen + 2) >> 8),
+                                     (unsigned char)((clen + 2) & 255) };
+            ok = ok && fwrite(com, 1, 4, f) == 4;
+            ok = ok && fwrite(comment, 1, clen, f) == clen;
+        }
+        ok = ok && fwrite(head0 + 20, 1, sizeof head0 - 20, f) == sizeof head0 - 20;
         ok = ok && fwrite(ytable, 1, 64, f) == 64;
         ok = ok && fwrite(&one, 1, 1, f) == 1;
         ok = ok && fwrite(uvtable, 1, 64, f) == 64;

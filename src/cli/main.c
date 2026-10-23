@@ -4,6 +4,7 @@
 
 #include "polajuice.h"
 #include "filmlib.h"
+#include "recipe.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -59,6 +60,11 @@ static void usage(FILE *stream)
         "                          default 1)\n"
         "      --linear            take a 16-bit PNG/TIFF as scene-linear\n"
         "                          (dcraw -4 -T, darktable linear export)\n"
+        "      --recipe FILE       take the look from a recipe: a key=value\n"
+        "                          file, or any JPEG polajuice rendered (the\n"
+        "                          recipe rides in it); flags given after\n"
+        "                          override it line by line\n"
+        "      --save-recipe FILE  write the look used as a recipe file\n"
         "  -h, --help              show this help\n\n"
         "Raw input: .nef and .dng files open through a scene-linear door -\n"
         "the sensor's white sits a stop above display white and the top stop\n"
@@ -95,6 +101,7 @@ static int list_cameras(void)
 static int inspect_image(const char *path)
 {
     PjError error = {{0}};
+    char *embedded = pj_jpeg_read_comment(path);
     PjImage *image = pj_image_load(path, &error);
     if (!image) return fail(&error);
     bool raw = pj_image_is_scene_linear(image);
@@ -111,6 +118,10 @@ static int inspect_image(const char *path)
     printf("path: %s\nwidth: %zu\nheight: %zu\ncolorspace: %s\n",
            path, pj_image_width(image), pj_image_height(image),
            raw ? "scene-linear (sensor white = 1.0)" : "sRGB");
+    if (embedded) {
+        printf("recipe: embedded (replay with --recipe %s)\n%s", path, embedded);
+        free(embedded);
+    }
     if (raw)
         printf("raw: %s\n"
                "mean luminance: %.3f (%.2f stops below sensor white)\n"
@@ -183,8 +194,20 @@ static int apply(int argc, char **argv)
     bool no_film = false;
     bool linear_input = false;
     bool any_film = false;
+    const char *save_recipe = NULL;
     PjRenderOptions options = {.seed = UINT64_C(0x504f4c414a554943),
                                .strength = 1.0f};
+
+    /* the recipe goes first so that flags override it */
+    static Recipe recipe;
+    for (int i = 3; i + 1 < argc; ++i)
+        if (!strcmp(argv[i], "--recipe")) {
+            if (!recipe_load(argv[i + 1], &recipe, "polajuice")) return EXIT_FAILURE;
+            if (!recipe_apply(&recipe, &options, &camera, &film_request, &no_film,
+                              &print_request, "polajuice"))
+                return EXIT_FAILURE;
+            break;
+        }
 
     for (int i = 3; i < argc; ++i) {
         /* -p/--preset and --lut are accepted as quiet aliases from 0.3.x */
@@ -260,6 +283,10 @@ static int apply(int argc, char **argv)
             options.halation = h == 0.0f ? PJ_HALATION_OFF : h;
         } else if (!strcmp(argv[i], "--linear")) {
             linear_input = true;
+        } else if (!strcmp(argv[i], "--recipe") && i + 1 < argc) {
+            ++i;   /* applied above */
+        } else if (!strcmp(argv[i], "--save-recipe") && i + 1 < argc) {
+            save_recipe = argv[++i];
         } else if (!strcmp(argv[i], "--edge") && i + 1 < argc) {
             char *end = NULL;
             options.edge = strtof(argv[++i], &end);
@@ -282,8 +309,11 @@ static int apply(int argc, char **argv)
         return EXIT_FAILURE;
     }
     if (no_film && film_request) {
-        fprintf(stderr, "--film and --no-film are mutually exclusive\n");
-        return EXIT_FAILURE;
+        if (recipe.has_film) no_film = false;   /* -f after a film=none recipe */
+        else {
+            fprintf(stderr, "--film and --no-film are mutually exclusive\n");
+            return EXIT_FAILURE;
+        }
     }
     char derived[4096];
     if (!output) {
@@ -382,6 +412,27 @@ static int apply(int argc, char **argv)
     if (!options.film_process)
         options.film_process = pj_preset_primary_process(camera);
 
+    static char recipe_text[1024];
+    {
+        char print_stem[256];
+        const char *pstem = NULL;
+        if (print_request) {
+            char *print_path = resolve_film(print_request, true);
+            pstem = film_stem_of_path(print_path, print_stem, sizeof print_stem);
+            free(print_path);
+        }
+        pj_recipe_format(camera, lut ? options.film_stem : "none", pstem,
+                         &options, recipe_text, sizeof recipe_text);
+        if (save_recipe) {
+            FILE *rf = fopen(save_recipe, "w");
+            if (!rf || fputs(recipe_text, rf) == EOF || fclose(rf) != 0) {
+                fprintf(stderr, "polajuice: cannot write recipe '%s'\n", save_recipe);
+                pj_lut3d_free(lut); pj_lut3d_free(print_lut);
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
     const char *prof = getenv("POLAJUICE_PROFILE");
     bool profiling = prof && *prof && *prof != '0';
     struct timespec t0, t1;
@@ -406,6 +457,7 @@ static int apply(int argc, char **argv)
     pj_lut3d_free(lut);
     pj_lut3d_free(print_lut);
     if (!result) return fail(&error);
+    pj_image_set_comment(result, recipe_text);
     if (profiling) timespec_get(&t0, TIME_UTC);
     bool saved = pj_image_save(result, output, &error);
     if (profiling) {

@@ -11,7 +11,7 @@
  *   polajuice.wasm --version
  *   polajuice.wasm render IN CAMERA FILM|- PROCESS|- FILMSTEM|- PRINT|-
  *                         FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT
- *                         GRAIN EDGE EV HALATION
+ *                         GRAIN EDGE EV HALATION PRINTSTEM|-
  *   polajuice.wasm develop IN MAX_DIM OUT
  *       the straight print of a raw (.nef/.dng) input: scene-linear
  *       decode, a stop up, shoulder, JPEG - what the page shows as the
@@ -56,10 +56,10 @@ static int list_cameras(void)
 
 static int render(int argc, char **argv)
 {
-    if (argc != 19) {
+    if (argc != 20) {
         fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- FILMSTEM|- "
                         "PRINT|- FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM "
-                        "OUT GRAIN EDGE EV HALATION\n");
+                        "OUT GRAIN EDGE EV HALATION PRINTSTEM|-\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
@@ -86,6 +86,7 @@ static int render(int argc, char **argv)
     }
     float ev = strtof(argv[17], NULL);
     float halation = strtof(argv[18], NULL);
+    const char *print_stem = strcmp(argv[19], "-") ? argv[19] : NULL;
     if (ev < -4.0f || ev > 4.0f) { fprintf(stderr, "ev must be -4..4\n"); return 2; }
     if (halation < 0.0f || halation > 2.0f) { fprintf(stderr, "halation must be 0..2\n"); return 2; }
 
@@ -161,6 +162,14 @@ static int render(int argc, char **argv)
     pj_lut3d_free(lut);
     pj_lut3d_free(print_lut);
     if (!result) { fprintf(stderr, "%s\n", error.message); return 1; }
+    /* the recipe rides in the JPEG, as from the CLI: the page reads it
+     * back from the bytes, so the engine is the one source of its text */
+    {
+        char recipe[1024];
+        pj_recipe_format(camera, lut ? options.film_stem : "none", print_stem,
+                         &options, recipe, sizeof recipe);
+        pj_image_set_comment(result, recipe);
+    }
     bool saved = pj_image_save(result, out_path, &error);
     pj_image_free(result);
     if (!saved) { fprintf(stderr, "%s\n", error.message); return 1; }

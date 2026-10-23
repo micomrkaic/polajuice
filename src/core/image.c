@@ -107,7 +107,26 @@ void pj_image_free(PjImage *image)
 {
     if (!image) return;
     free(image->rgb);
+    free(image->comment);
     free(image);
+}
+
+bool pj_image_set_comment(PjImage *image, const char *text)
+{
+    if (!image) return false;
+    free(image->comment);
+    image->comment = NULL;
+    if (!text) return true;
+    size_t n = strlen(text);
+    image->comment = malloc(n + 1);
+    if (!image->comment) return false;
+    memcpy(image->comment, text, n + 1);
+    return true;
+}
+
+const char *pj_image_comment(const PjImage *image)
+{
+    return image ? image->comment : NULL;
 }
 
 bool pj_image_is_scene_linear(const PjImage *image)
@@ -234,7 +253,7 @@ bool pj_image_save_ppm(const PjImage *image, const char *path, PjError *error)
     return ok;
 }
 
-const char *pj_version_string(void) { return "1.18.4"; }
+const char *pj_version_string(void) { return "1.19.0"; }
 
 PjImage *pj_image_downscale(PjImage *image, size_t max_dim, PjError *error)
 {

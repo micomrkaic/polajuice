@@ -5,111 +5,174 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Polajuice — photographic process emulator</title>
 <style>
-  :root { --ink:#1c1a17; --paper:#f4f1ea; --accent:#b3492c; --line:#d8d2c4; }
+  :root { --ink:#1c1a17; --paper:#f4f1ea; --panel:#fbf9f4; --accent:#b3492c;
+          --line:#d8d2c4; --muted:#7a7263; --faint:#a89f8d; }
   * { box-sizing: border-box; }
+  html, body { height:100%; }
   body { margin:0; background:var(--paper); color:var(--ink);
-         font:16px/1.5 Georgia, 'Times New Roman', serif; }
-  header { padding:2rem 1.5rem 0.5rem; max-width:60rem; margin:0 auto; }
-  h1 { font-size:1.7rem; margin:0; letter-spacing:0.02em; }
-  h1 small { font-weight:normal; color:#7a7263; font-size:0.9rem; margin-left:0.6rem; }
-  main { max-width:60rem; margin:0 auto; padding:1rem 1.5rem 3rem; }
-  .controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));
-              gap:0.9rem; margin:1rem 0; padding:1rem;
-              border:1px solid var(--line); background:#fbf9f4; }
-  label { display:block; font-size:0.8rem; text-transform:uppercase;
-          letter-spacing:0.08em; color:#7a7263; margin-bottom:0.25rem; }
-  select, input[type=number] { width:100%; padding:0.4rem; font:inherit;
-          border:1px solid var(--line); background:white; }
-  input[type=range] { width:100%; }
-  #drop { border:2px dashed var(--line); padding:2.2rem 1rem; text-align:center;
-          cursor:pointer; color:#7a7263; transition:border-color .15s; }
-  #drop.armed { border-color:var(--accent); color:var(--accent); }
-  button { font:inherit; padding:0.55rem 1.4rem; border:1px solid var(--ink);
+         font:15px/1.45 Georgia, 'Times New Roman', serif;
+         display:flex; flex-direction:column; min-height:100vh; }
+  a { color:var(--accent); }
+  header { display:flex; align-items:baseline; gap:1rem; padding:0.6rem 1.2rem;
+           border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap; }
+  h1 { font-size:1.35rem; margin:0; letter-spacing:0.02em; }
+  h1 small { font-weight:normal; color:var(--muted); font-size:0.8rem; margin-left:0.5rem; }
+  header .tag { color:var(--muted); font-size:0.85rem; font-style:italic; }
+  #status { color:var(--muted); font-style:italic; margin-left:auto; font-size:0.9rem; }
+  #status.error { color:var(--accent); }
+
+  .workspace { display:grid; grid-template-columns:21rem 1fr; flex:1; min-height:0; }
+  @media (max-width:56rem) { .workspace { grid-template-columns:1fr; } }
+
+  aside.panel { border-right:1px solid var(--line); background:var(--panel);
+                overflow-y:auto; padding:0.4rem 0 1rem; }
+  details.group { border-bottom:1px solid var(--line); padding:0.2rem 1rem 0.5rem; }
+  details.group summary { cursor:pointer; font-size:0.78rem; text-transform:uppercase;
+    letter-spacing:0.1em; color:var(--muted); padding:0.45rem 0; list-style:none; }
+  details.group summary::-webkit-details-marker { display:none; }
+  details.group summary::before { content:"▸ "; }
+  details.group[open] summary::before { content:"▾ "; }
+  .field { margin:0.35rem 0 0.55rem; }
+  label { display:block; font-size:0.74rem; text-transform:uppercase;
+          letter-spacing:0.08em; color:var(--muted); margin-bottom:0.15rem; }
+  label .val { float:right; text-transform:none; letter-spacing:0; color:var(--ink);
+               font-variant-numeric:tabular-nums; }
+  select, input[type=number], input[type=text] { width:100%; padding:0.3rem 0.4rem;
+          font:inherit; font-size:0.9rem; border:1px solid var(--line); background:white; }
+  input[type=range] { width:100%; margin:0.1rem 0 0; accent-color:var(--accent); }
+  .cubeload { font-size:0.75rem; color:var(--muted); margin-top:0.3rem; }
+  .cubeload input { font-size:0.72rem; max-width:100%; }
+  button { font:inherit; font-size:0.85rem; padding:0.4rem 0.9rem; border:1px solid var(--ink);
            background:var(--ink); color:var(--paper); cursor:pointer; }
   button.secondary { background:transparent; color:var(--ink); }
+  button.small { padding:0.25rem 0.6rem; font-size:0.78rem; }
   button:disabled { opacity:0.4; cursor:default; }
-  .row { display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap; margin:0.8rem 0; }
-  #status { color:#7a7263; font-style:italic; }
-  #status.error { color:var(--accent); }
-  .views { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1rem; }
-  @media (max-width:44rem) { .views { grid-template-columns:1fr; } }
-  figure { margin:0; }
-  figcaption { font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;
-               color:#7a7263; margin-bottom:0.3rem; }
-  img.view { width:100%; display:block; border:1px solid var(--line);
-             background:white; }
-  .samplestrip { display:flex; gap:0.5rem; margin:0.6rem 0 0; flex-wrap:wrap; }
-  .samplestrip figure { margin:0; cursor:pointer; text-align:center; }
-  .samplestrip img { height:4.5rem; display:block; border:1px solid var(--line); }
-  .samplestrip figcaption { font-size:0.65rem; color:#7a7263; max-width:6rem;
-    text-transform:none; letter-spacing:0; margin-top:0.15rem; }
-  .cubeload { font-size:0.78rem; opacity:0.75; margin-left:0.5rem; }
-  .cubeload input { font-size:0.75rem; max-width:13rem; }
-  .samplestrip .credit { align-self:flex-end; font-size:0.7rem; color:#a89f8d;
-    font-style:italic; }
-  details#help { border:1px solid var(--line); background:#fbf9f4;
-    padding:0.6rem 1rem; margin:0.4rem 0 0.8rem; }
-  details#help summary { cursor:pointer; color:#7a7263; font-style:italic; }
-  .helpgrid { display:grid; grid-template-columns:1fr 1fr; gap:1.4rem;
-    margin-top:0.8rem; }
-  @media (max-width:44rem) { .helpgrid { grid-template-columns:1fr; } }
-  .helpgrid h3 { margin:0 0 0.2rem; font-size:1rem; }
-  .helpnote { font-size:0.85rem; color:#7a7263; margin:0 0 0.6rem; }
-  .helpgrid dt { font-weight:bold; margin-top:0.5rem; }
-  .helpgrid dd { margin:0.1rem 0 0 0; font-size:0.9rem; color:#4a453b; }
-  .helpgrid dd .traits { color:#7a7263; font-style:italic; }
-  footer { max-width:60rem; margin:0 auto; padding:0 1.5rem 2rem;
-           font-size:0.85rem; color:#7a7263; }
-  a { color:var(--accent); }
+  button.on { background:var(--accent); border-color:var(--accent); color:white; }
+  .btnrow { display:flex; gap:0.4rem; flex-wrap:wrap; margin:0.4rem 0; }
+
+  textarea#recipe { width:100%; height:12.5rem; font:0.78rem/1.35 ui-monospace, Menlo, Consolas, monospace;
+    border:1px solid var(--line); background:white; padding:0.4rem; resize:vertical; }
+  code#cli { display:block; font:0.74rem/1.35 ui-monospace, Menlo, Consolas, monospace;
+    background:white; border:1px solid var(--line); padding:0.4rem; white-space:pre-wrap;
+    word-break:break-all; margin-top:0.4rem; }
+  .presetrow { display:flex; gap:0.3rem; margin-top:0.4rem; }
+  .presetrow input { flex:1; }
+
+  section.stage { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .toolbar { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;
+             padding:0.5rem 1rem; border-bottom:1px solid var(--line); }
+  .toolbar .seg { display:inline-flex; border:1px solid var(--ink); }
+  .toolbar .seg button { border:0; border-right:1px solid var(--ink); background:transparent;
+                         color:var(--ink); }
+  .toolbar .seg button:last-child { border-right:0; }
+  .toolbar .seg button.on { background:var(--ink); color:var(--paper); }
+  .toolbar .spacer { flex:1; }
+  #viewport { flex:1; min-height:20rem; overflow:auto; background:#2b2823;
+              display:flex; align-items:center; justify-content:center; position:relative; }
+  #viewport img { max-width:100%; max-height:100%; object-fit:contain; display:block;
+                  background:#111; }
+  #viewport.one2one img { max-width:none; max-height:none; }
+  #viewport.one2one { display:block; }
+  #caption { padding:0.35rem 1rem; font-size:0.8rem; color:var(--muted); font-style:italic;
+             border-top:1px solid var(--line); min-height:1.6rem; }
+  #before, #after { display:none; }
+  .strip { display:flex; gap:0.5rem; align-items:stretch; padding:0.5rem 1rem;
+           border-top:1px solid var(--line); background:var(--panel); overflow-x:auto; }
+  #drop { border:2px dashed var(--line); padding:0.4rem 0.8rem; text-align:center;
+          cursor:pointer; color:var(--muted); font-size:0.78rem; display:flex;
+          align-items:center; min-width:9rem; transition:border-color .15s; }
+  #drop.armed { border-color:var(--accent); color:var(--accent); }
+  .thumbs { display:flex; gap:0.4rem; }
+  .thumbs figure, .samplestrip figure { margin:0; cursor:pointer; text-align:center; }
+  .thumbs img, .samplestrip img { height:3.6rem; display:block; border:2px solid transparent; }
+  .thumbs figure.on img { border-color:var(--accent); }
+  .thumbs figcaption, .samplestrip figcaption { font-size:0.62rem; color:var(--muted);
+    max-width:6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .samplestrip { display:flex; gap:0.4rem; align-items:flex-end; }
+  .samplestrip .credit { font-size:0.62rem; color:var(--faint); font-style:italic;
+    align-self:flex-end; white-space:nowrap; }
+  .sep { width:1px; background:var(--line); margin:0 0.3rem; }
+
+  details#help { padding:0.2rem 1rem 0.5rem; }
+  details#help summary { cursor:pointer; color:var(--muted); font-style:italic; font-size:0.85rem; }
+  .helpgrid h3 { margin:0.6rem 0 0.2rem; font-size:0.95rem; }
+  .helpnote { font-size:0.8rem; color:var(--muted); margin:0 0 0.5rem; }
+  .helpgrid dt { font-weight:bold; margin-top:0.4rem; font-size:0.85rem; }
+  .helpgrid dd { margin:0.1rem 0 0 0; font-size:0.8rem; color:#4a453b; }
+  .helpgrid dd .traits { color:var(--muted); font-style:italic; }
+  footer { padding:0.4rem 1.2rem; font-size:0.75rem; color:var(--muted);
+           border-top:1px solid var(--line); background:var(--panel); }
 </style>
 </head>
 <body>
 <header>
   <h1>Polajuice <small id="version"></small></h1>
-  <p>A look is a <b>camera</b> (optics, grain, framing, process) plus a
-     <b>film</b> (color chemistry). Photos never leave your machine —
-     everything renders locally in WebAssembly.</p>
+  <span class="tag">camera + film, rendered locally in WebAssembly — photos never leave your machine</span>
+  <span id="status">loading engine…</span>
 </header>
-<main>
-  <div id="drop">drop a JPEG, PNG, NEF or DNG here, click to choose — or try a sample below
-    <input id="file" type="file" accept=".jpg,.jpeg,.png,.nef,.dng,image/jpeg,image/png" hidden>
-  </div>
 
-  <div id="samplestrip" class="samplestrip"></div>
+<div class="workspace">
+<aside class="panel">
+  <details class="group" open>
+    <summary>Scene</summary>
+    <div class="field">
+      <label for="ev" title="Exposure in stops on the scene light, before anything else.
+Raw files open one stop up on top of this, with the sensor's top stop
+rolled in by a shoulder before the film sees it.">Exposure <span class="val" id="evval">0</span></label>
+      <input id="ev" type="range" min="-2" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="halation" title="Scales the camera's halation: the brightest light scattering back
+through the film base as a red-orange glow. 0 off, 1 the camera's own,
+2 double. Strongest with raw input, where speculars still exist above
+white.">Halation <span class="val" id="halval">1.0</span></label>
+      <input id="halation" type="range" min="0" max="2" step="0.1" value="1">
+    </div>
+  </details>
 
-  <div class="controls">
-    <div>
+  <details class="group" open>
+    <summary>Camera</summary>
+    <div class="field">
       <label for="camera">Camera</label>
       <select id="camera"></select>
     </div>
-    <div>
+    <div class="field">
+      <label for="filter" title="Lens contrast filter, applied to the light before the film.
+Orange or red with black-and-white film darkens skies and dramatizes clouds;
+green lightens foliage. On color stock: a period-correct strong cast.">Filter</label>
+      <select id="filter">
+        <option value="">none</option>
+        <option value="yellow">yellow (#8)</option>
+        <option value="orange">orange (#15)</option>
+        <option value="red">red (#25)</option>
+        <option value="green">green (#58)</option>
+        <option value="blue">blue (#47)</option>
+      </select>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Film</summary>
+    <div class="field">
       <label for="film">Film</label>
       <select id="film"></select>
-      <label title="Lens contrast filter, applied to the light before the film.
-Orange or red with black-and-white film darkens skies and dramatizes clouds;
-green lightens foliage. On color stock: a period-correct strong cast.">
-        filter <select id="filter">
-          <option value="">none</option>
-          <option value="yellow">yellow (#8)</option>
-          <option value="orange">orange (#15)</option>
-          <option value="red">red (#25)</option>
-          <option value="green">green (#58)</option>
-          <option value="blue">blue (#47)</option>
-        </select>
-      </label>
-      <label class="cubeload" title="Render with any .cube from your own library (data/luts on your machine) - the full warehouse, not just this shelf">
+      <div class="cubeload" title="Render with any .cube from your own library (data/luts on your machine) - the full warehouse, not just this shelf">
         or load .cube: <input type="file" id="cubefile" accept=".cube">
-      </label>
+      </div>
     </div>
-    <div>
-      <label for="strength">Strength <span id="strengthval">1.00</span></label>
-      <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
-    </div>
-    <div id="printcontrol" style="display:none">
+    <div class="field" id="printcontrol" style="display:none">
       <label for="print">Print stock</label>
       <select id="print"><option value="__none__">none — direct</option></select>
     </div>
-    <div>
+    <div class="field">
+      <label for="strength">Strength <span class="val" id="strengthval">1.00</span></label>
+      <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Development</summary>
+    <div class="field">
       <label for="develop">Developing</label>
       <select id="develop">
         <option value="normal">normal</option>
@@ -119,11 +182,11 @@ green lightens foliage. On color stock: a period-correct strong cast.">
         <option value="cross">cross-process (E-6 in C-41)</option>
       </select>
     </div>
-    <div>
-      <label for="age">Age <span id="ageval">fresh</span></label>
+    <div class="field">
+      <label for="age">Age <span class="val" id="ageval">fresh</span></label>
       <input id="age" type="range" min="0" max="1" step="0.05" value="0">
     </div>
-    <div>
+    <div class="field">
       <label for="grain" title="classic: display noise laid over the finished picture.
 silver: grain formed from exposure inside the film - coarse in the
 shadows, fine in the highlights, and the print stock, push and age
@@ -133,32 +196,45 @@ act on it as they act on the image.">Grain model</label>
         <option value="silver">silver (from exposure)</option>
       </select>
     </div>
-    <div>
+    <div class="field">
       <label for="edge" title="Development edge effects. Developer exhausts locally, so the dense
 side of a boundary develops denser and a small dense detail more than a
 large one (border, fringe and Eberhard effects). 1 is a dilute developer,
 2 stand development. Not an unsharp mask: uniform areas are untouched.
-Ignored for instant cameras.">Edge effects <span id="edgeval">off</span></label>
+Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</span></label>
       <input id="edge" type="range" min="0" max="2" step="0.1" value="0">
     </div>
-    <div>
-      <label for="ev" title="Exposure in stops on the scene light, before anything else.
-Raw files open one stop up on top of this, with the sensor's top stop
-rolled in by a shoulder before the film sees it.">Exposure <span id="evval">0</span></label>
-      <input id="ev" type="range" min="-2" max="2" step="0.1" value="0">
-    </div>
-    <div>
-      <label for="halation" title="Scales the camera's halation: the brightest light scattering back
-through the film base as a red-orange glow. 0 off, 1 the camera's own,
-2 double. Strongest with raw input, where speculars still exist above
-white.">Halation <span id="halval">1.0</span></label>
-      <input id="halation" type="range" min="0" max="2" step="0.1" value="1">
-    </div>
-    <div>
+    <div class="field">
       <label for="seed">Grain seed</label>
       <input id="seed" type="number" value="42" step="1">
     </div>
-  </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Recipe</summary>
+    <p class="helpnote">The whole look as text, as the engine wrote it into the
+    last render. Every JPEG saved from here carries it; <code>polajuice apply
+    IN --recipe out.jpg</code> replays it exactly.</p>
+    <textarea id="recipe" readonly spellcheck="false"></textarea>
+    <div class="btnrow">
+      <button class="small secondary" id="copyrecipe">copy</button>
+      <button class="small secondary" id="saverecipe">save .recipe</button>
+      <label class="small" style="display:inline"><button class="small secondary" type="button" id="loadrecipebtn">load…</button>
+        <input type="file" id="loadrecipe" accept=".recipe,.txt,.jpg,.jpeg" hidden></label>
+    </div>
+    <div class="presetrow">
+      <input type="text" id="presetname" placeholder="name this look">
+      <button class="small" id="presetsave">keep</button>
+    </div>
+    <div class="field" style="margin-top:0.4rem">
+      <label for="presets">Kept looks (this browser)</label>
+      <select id="presets"><option value="">—</option></select>
+      <div class="btnrow"><button class="small secondary" id="presetdelete">forget</button></div>
+    </div>
+    <label style="margin-top:0.5rem">Equivalent command</label>
+    <code id="cli"></code>
+    <div class="btnrow"><button class="small secondary" id="copycli">copy command</button></div>
+  </details>
 
   <details id="help">
     <summary>What do these cameras and films do?</summary>
@@ -196,21 +272,37 @@ white.">Halation <span id="halval">1.0</span></label>
       </div>
     </div>
   </details>
+</aside>
 
-  <div class="row">
-    <button id="render" disabled>Render preview</button>
-    <button id="download" class="secondary" disabled>Render full size &amp; download</button>
-    <span id="status">loading engine…</span>
+<section class="stage">
+  <div class="toolbar">
+    <span class="seg">
+      <button id="viewOriginal" title="the photo as loaded (hold \ for a glance)">original</button>
+      <button id="viewA" title="the look pinned as A" disabled>A</button>
+      <button id="viewB" class="on" title="the current look">current</button>
+    </span>
+    <button id="pinA" class="small secondary" title="keep the current render and recipe as A, then change things and compare">pin as A</button>
+    <button id="one2one" class="small secondary" title="1:1 pixels (scroll around)">1:1</button>
+    <span class="spacer"></span>
+    <button id="render" class="secondary" disabled>Render preview</button>
+    <button id="download" disabled>Render full size &amp; download</button>
   </div>
+  <div id="viewport"><img id="view" alt=""></div>
+  <img id="before" alt=""><img id="after" alt="">
+  <div id="caption"><span id="aftercap">no image loaded</span></div>
+  <div class="strip">
+    <div id="drop">drop JPEG, PNG,<br>NEF or DNG here<input id="file" type="file" accept=".jpg,.jpeg,.png,.nef,.dng,image/jpeg,image/png" hidden multiple></div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="sep"></div>
+    <div id="samplestrip" class="samplestrip"></div>
+  </div>
+</section>
+</div>
 
-  <div class="views">
-    <figure><figcaption>original</figcaption><img id="before" class="view" alt=""></figure>
-    <figure><figcaption id="aftercap">rendered</figcaption><img id="after" class="view" alt=""></figure>
-  </div>
-</main>
 <footer>
-  Film stocks are G'MIC/Pat David color presets served from
-  <code>films/</code>; camera descriptions come from the engine itself.
+  Film stocks are G'MIC/Pat David color presets served from <code>films/</code>;
+  camera descriptions come from the engine itself. Keyboard: <b>\</b> hold for
+  the original, <b>a</b> toggle A/current, <b>r</b> re-render.
   Source: <a href="https://github.com/micomrkaic/polajuice">github.com/micomrkaic/polajuice</a>.
 </footer>
 
@@ -218,9 +310,23 @@ white.">Halation <span id="halval">1.0</span></label>
 "use strict";
 import { createEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-let engine = null, inputBytes = null, inputName = "photo", inputExt = "jpg";
-const PAGE_VERSION = "1.18.4";   // kept in step by scripts/release checks
-let filmFamilies = [];   // module scope: render() needs it, not just boot()
+const PAGE_VERSION = "1.19.0";   // kept in step by scripts/release checks
+
+/* ---- state --------------------------------------------------------- */
+let engine = null;
+let inputBytes = null, inputName = "photo", inputExt = "jpg";
+let images = [];          /* {name, ext, bytes, url} loaded this session */
+let current = -1;
+let filmFamilies = [];
+let films = [];
+const filmCache = new Map();
+let customCube = null;    /* {stem, text} from the user's own library */
+let lastRender = null;    /* {blob, url, recipe} of the current look */
+let pinned = null;        /* {blob, url, recipe} pinned as A */
+let originalUrl = null;
+let view = "B";           /* "original" | "A" | "B" */
+let renderTimer = null, rendering = false, renderAgain = false;
+
 function familyToken(family) {
   const p = family.process || "";
   if (p.includes("K-14") || p === "E-6" || p.includes("E-6 in C-41")) return "slide";
@@ -230,14 +336,151 @@ function familyToken(family) {
     return /pack/i.test(family.name) ? "pack" : "integral";
   return null;   // unknown: never filtered out
 }
-let films = [];
-const filmCache = new Map();
 
 function setStatus(text, isError) {
   $("status").textContent = text;
   $("status").className = isError ? "error" : "";
 }
 
+/* ---- recipe text: read from the engine's JPEG, parse, apply --------- */
+
+/* the first COM segment that announces itself as a polajuice recipe */
+function readJpegComment(bytes) {
+  if (!bytes || bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null;
+  let i = 2;
+  while (i + 4 <= bytes.length) {
+    if (bytes[i] !== 0xFF) return null;
+    const marker = bytes[i + 1];
+    if (marker === 0xFF) { i++; continue; }
+    if (marker === 0xDA || marker === 0xD9) return null;
+    const len = bytes[i + 2] << 8 | bytes[i + 3];
+    if (marker === 0xFE) {
+      const text = new TextDecoder().decode(bytes.subarray(i + 4, i + 2 + len));
+      if (text.startsWith("# polajuice recipe")) return text;
+    }
+    i += 2 + len;
+  }
+  return null;
+}
+
+function parseRecipe(text) {
+  const r = {};
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq < 0) continue;
+    r[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  }
+  return r;
+}
+
+/* what the page would send: a recipe built from the controls, for the
+ * CLI line before any render has happened */
+function recipeFromControls() {
+  const stem = customCube ? customCube.stem : resolveFilmStem();
+  const printStem = $("print") && $("print").value !== "__none__" ? $("print").value : "none";
+  return {
+    camera: $("camera").value, film: stem || "none", print: printStem,
+    filter: $("filter").value || "none",
+    strength: String(parseFloat($("strength").value)),
+    develop: $("develop").value, age: String(parseFloat($("age").value)),
+    grain: $("grain").value, edge: String(parseFloat($("edge").value)),
+    ev: String(parseFloat($("ev").value)), halation: String(parseFloat($("halation").value)),
+    seed: String(parseInt($("seed").value, 10) || 0) };
+}
+
+function cliLine(r) {
+  const q = s => /^[A-Za-z0-9_.+\-\/]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
+  const parts = ["polajuice", "apply", q(inputName + "." + inputExt), "-c", q(r.camera)];
+  if (r.film === "none") parts.push("--no-film");
+  else if (r.film && r.film !== "auto") parts.push("-f", q(r.film));
+  if (r.print && r.print !== "none") parts.push("--print", q(r.print));
+  if (r.filter && r.filter !== "none") parts.push("--filter", r.filter);
+  if (r.strength !== undefined && parseFloat(r.strength) !== 1) parts.push("--strength", r.strength);
+  if (r.develop && r.develop !== "normal") parts.push("--develop", r.develop);
+  if (r.age && parseFloat(r.age) !== 0) parts.push("--age", r.age);
+  if (r.grain && r.grain !== "classic") parts.push("--grain", r.grain);
+  if (r.edge && parseFloat(r.edge) !== 0) parts.push("--edge", r.edge);
+  if (r.ev && parseFloat(r.ev) !== 0) parts.push("--ev", r.ev);
+  if (r.halation !== undefined && parseFloat(r.halation) !== 1) parts.push("--halation", r.halation);
+  if (r.seed !== undefined) parts.push("--seed", r.seed);
+  return parts.join(" ");
+}
+
+function recipeText(r) {
+  return ["# polajuice recipe 1", `camera=${r.camera}`, `film=${r.film}`, `print=${r.print}`,
+          `filter=${r.filter}`, `strength=${r.strength}`, `develop=${r.develop}`,
+          `age=${r.age}`, `grain=${r.grain}`, `edge=${r.edge}`, `ev=${r.ev}`,
+          `halation=${r.halation}`, `seed=${r.seed}`, ""].join("\n");
+}
+
+function showRecipe(text) {
+  $("recipe").value = text;
+  $("cli").textContent = cliLine(parseRecipe(text));
+}
+
+function refreshRecipeFromControls() {
+  showRecipe(recipeText(recipeFromControls()));
+}
+
+/* set the controls from a recipe; returns a note about anything that
+ * could not be honored */
+function applyRecipe(r) {
+  const notes = [];
+  if (r.camera) {
+    const cam = $("camera");
+    if ([...cam.options].some(o => o.value === r.camera)) {
+      cam.value = r.camera;
+      cam.dispatchEvent(new Event("change"));
+    } else notes.push(`no camera '${r.camera}' here`);
+  }
+  if (r.film !== undefined) {
+    customCube = null;
+    if ($("cubefile")) $("cubefile").value = "";
+    const sel = $("film");
+    const want = r.film === "none" ? "__none__" : r.film === "auto" ? "__auto__" : r.film;
+    if ([...sel.options].some(o => o.value === want)) sel.value = want;
+    else { sel.value = "__auto__"; notes.push(`film '${r.film}' is not staged here; using the canonical stock`); }
+  }
+  if (r.print !== undefined && $("print")) {
+    const want = r.print === "none" ? "__none__" : r.print;
+    if ([...$("print").options].some(o => o.value === want)) $("print").value = want;
+    else if (r.print !== "none") notes.push(`print stock '${r.print}' is not staged here`);
+  }
+  if (r.filter !== undefined) $("filter").value = r.filter === "none" ? "" : r.filter;
+  if (r.strength !== undefined) $("strength").value = r.strength;
+  if (r.develop !== undefined) $("develop").value = r.develop;
+  if (r.age !== undefined) $("age").value = r.age;
+  if (r.grain !== undefined) $("grain").value = r.grain;
+  if (r.edge !== undefined) $("edge").value = r.edge;
+  if (r.ev !== undefined) $("ev").value = r.ev;
+  if (r.halation !== undefined) $("halation").value = r.halation;
+  if (r.seed !== undefined) $("seed").value = r.seed;
+  syncValueLabels();
+  refreshRecipeFromControls();
+  return notes.join("; ");
+}
+
+/* ---- kept looks (localStorage, this browser only) ------------------ */
+const STORE_KEY = "polajuice.looks";
+function loadLooks() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { return {}; }
+}
+function saveLooks(looks) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(looks)); } catch (e) { /* private mode */ }
+}
+function refreshPresetList() {
+  const sel = $("presets");
+  if (!sel) return;
+  const previous = sel.value;
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  sel.add(new Option("—", ""));
+  for (const name of Object.keys(loadLooks()).sort()) sel.add(new Option(name, name));
+  sel.value = [...sel.options].some(o => o.value === previous) ? previous : "";
+}
+
+/* ---- boot ----------------------------------------------------------- */
 async function boot() {
   const wasm = await (await fetch("polajuice.wasm")).arrayBuffer();
   engine = await createEngine(new Uint8Array(wasm));
@@ -298,7 +541,9 @@ async function boot() {
     $("edge").disabled = cam.instant;
     rebuildFilmSelect();
   }
-  cameraSel.addEventListener("change", syncCompat);
+  /* one handler per element and event: the camera's change does the
+   * compatibility rebuild and then asks for a render */
+  cameraSel.addEventListener("change", () => { syncCompat(); onControlChange(); });
   try {
     const manifest = await (await fetch("films/films.json")).json();
     if (Array.isArray(manifest))
@@ -367,10 +612,10 @@ async function boot() {
   } catch (e) { /* no samples staged; the drop zone is enough */ }
 
   wireCustomCube();
+  refreshPresetList();
+  refreshRecipeFromControls();
   setStatus("ready — drop a photo, or click a sample");
 }
-
-let customCube = null;   /* {stem, text} from the user's own library */
 
 function wireCustomCube() {
   const input = $("cubefile");
@@ -381,7 +626,7 @@ function wireCustomCube() {
     customCube = { stem: f.name.replace(/\.cube$/i, ""),
                    text: await f.text() };
     setStatus(`custom film loaded: ${customCube.stem}`);
-    scheduleRender();
+    onControlChange();
   });
   $("film").addEventListener("change", () => {
     if (customCube) {
@@ -389,6 +634,7 @@ function wireCustomCube() {
       input.value = "";
       setStatus("custom film cleared - using the catalog again");
     }
+    onControlChange();
   });
 }
 
@@ -407,6 +653,15 @@ function resolveFilmStem() {
   if (chosen !== "__auto__") return chosen;
   const canonical = $("camera").selectedOptions[0].dataset.film;
   return canonical && films.some(f => f.stem === canonical) ? canonical : null;
+}
+
+/* ---- rendering ------------------------------------------------------ */
+function previewSize() {
+  const vp = $("viewport");
+  const w = vp && vp.clientWidth ? vp.clientWidth : 1400;
+  const h = vp && vp.clientHeight ? vp.clientHeight : 1000;
+  const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+  return Math.max(800, Math.min(2000, Math.round(Math.max(w, h) * dpr)));
 }
 
 async function render(maxDim) {
@@ -435,10 +690,14 @@ async function render(maxDim) {
       grainModel: $("grain").value,
       edge: parseFloat($("edge").value),
       ev: parseFloat($("ev").value),
-      halation: parseFloat($("halation").value) });
+      halation: parseFloat($("halation").value),
+      printStem });
     const secs = ((performance.now() - t0) / 1000).toFixed(1);
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine"));
-    $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "");
+    $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "") +
+      (maxDim ? ` (preview, long edge ${maxDim}px)` : " (full size)");
+    const recipe = readJpegComment(out);
+    if (recipe) showRecipe(recipe);
     return new Blob([out], { type: "image/jpeg" });
   } catch (e) {
     setStatus(e.message, true);
@@ -446,27 +705,115 @@ async function render(maxDim) {
   }
 }
 
-async function acceptBytes(bytes, name) {
-  inputName = name.replace(/\.[^.]+$/, "");
-  const m = /\.(png|nef|dng)$/i.exec(name);
-  inputExt = m ? m[1].toLowerCase() : "jpg";
-  inputBytes = bytes;
+function showView(which) {
+  view = which;
+  for (const [id, v] of [["viewOriginal", "original"], ["viewA", "A"], ["viewB", "B"]])
+    $(id).className = v === which ? "on" : "";
+  const src = which === "original" ? originalUrl
+            : which === "A" ? (pinned && pinned.url)
+            : (lastRender && lastRender.url) || originalUrl;
+  if (src) $("view").src = src;
+  if (which === "A" && pinned) $("aftercap").textContent = "A — " + pinned.caption;
+  else if (which === "original") $("aftercap").textContent = "original — " + inputName + "." + inputExt;
+  else if (lastRender) $("aftercap").textContent = lastRender.caption;
+}
+
+async function renderPreview() {
+  if (rendering) { renderAgain = true; return; }
+  rendering = true;
+  try {
+    const blob = await render(previewSize());
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent };
+      $("after").src = url;
+      if (view !== "original") showView("B");
+    }
+  } finally {
+    rendering = false;
+    if (renderAgain) { renderAgain = false; renderPreview(); }
+  }
+}
+
+function scheduleRender() {
+  if (!inputBytes) return;
+  if (renderTimer) clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => { renderTimer = null; renderPreview(); }, 250);
+}
+
+/* any control: labels, the recipe box, and a debounced preview */
+function onControlChange() {
+  syncValueLabels();
+  refreshRecipeFromControls();
+  scheduleRender();
+}
+
+function syncValueLabels() {
+  $("strengthval").textContent = parseFloat($("strength").value).toFixed(2);
+  const age = parseFloat($("age").value);
+  $("ageval").textContent = age === 0 ? "fresh" : age.toFixed(2);
+  const edge = parseFloat($("edge").value);
+  $("edgeval").textContent = edge === 0 ? "off" : edge.toFixed(1);
+  const ev = parseFloat($("ev").value);
+  $("evval").textContent = (ev > 0 ? "+" : "") + ev.toFixed(1);
+  const hal = parseFloat($("halation").value);
+  $("halval").textContent = hal === 0 ? "off" : hal.toFixed(1);
+}
+
+/* ---- images --------------------------------------------------------- */
+function refreshThumbs() {
+  const box = $("thumbs");
+  if (!box) return;
+  while (box.firstChild) box.removeChild(box.firstChild);
+  images.forEach((im, i) => {
+    const fig = document.createElement("figure");
+    fig.className = i === current ? "on" : "";
+    const img = document.createElement("img");
+    img.src = im.url; img.alt = im.name;
+    const cap = document.createElement("figcaption");
+    cap.textContent = im.name;
+    fig.append(img, cap);
+    fig.addEventListener("click", () => selectImage(i));
+    box.append(fig);
+  });
+}
+
+function selectImage(i) {
+  current = i;
+  const im = images[i];
+  inputBytes = im.bytes; inputExt = im.ext;
+  inputName = im.name.replace(/\.[^.]+$/, "");
+  originalUrl = im.url;
+  lastRender = null;
+  $("before").src = im.url;
   $("render").disabled = $("download").disabled = false;
-  if (inputExt === "nef" || inputExt === "dng") {
+  refreshThumbs();
+  refreshRecipeFromControls();
+  showView("original");
+  scheduleRender();
+}
+
+async function acceptBytes(bytes, name) {
+  const m = /\.(png|nef|dng)$/i.exec(name);
+  const ext = m ? m[1].toLowerCase() : "jpg";
+  let url;
+  if (ext === "nef" || ext === "dng") {
     /* the browser cannot show a raw file: the engine prints it straight */
     setStatus(`decoding ${name}…`);
     try {
-      const jpg = await engine.develop({ inputBytes, ext: inputExt, maxDim: 1400 });
-      $("before").src = URL.createObjectURL(new Blob([jpg], { type: "image/jpeg" }));
+      const jpg = await engine.develop({ inputBytes: bytes, ext, maxDim: 1400 });
+      url = URL.createObjectURL(new Blob([jpg], { type: "image/jpeg" }));
       setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB raw — straight print shown)`);
     } catch (e) {
       setStatus(`cannot decode ${name}: ${e.message}`, true);
-      $("render").disabled = $("download").disabled = true;
+      return;
     }
-    return;
+  } else {
+    url = URL.createObjectURL(new Blob([bytes]));
+    setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB)`);
   }
-  $("before").src = URL.createObjectURL(new Blob([inputBytes]));
-  setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB)`);
+  images.push({ name, ext, bytes, url });
+  selectImage(images.length - 1);
 }
 
 function acceptFile(file) {
@@ -479,7 +826,6 @@ async function useSample(sample) {
   setStatus(`fetching ${sample.file}…`);
   const res = await fetch(`samples/${sample.file}`);
   if (!res.ok) { setStatus(`sample not found: ${sample.file}`, true); return; }
-  acceptBytes(new Uint8Array(await res.arrayBuffer()), sample.file);
   if (sample.suggest) {
     $("camera").value = sample.suggest;
     /* setting .value programmatically fires no "change" event, so the
@@ -487,49 +833,134 @@ async function useSample(sample) {
      * triggered explicitly - the bug that once let a Polaroid stock ride
      * along onto a slide camera via a sample click */
     $("camera").dispatchEvent(new Event("change"));
-    setStatus(`loaded ${sample.file} — try ${sample.suggest}`);
   }
+  await acceptBytes(new Uint8Array(await res.arrayBuffer()), sample.file);
+  if (sample.suggest) setStatus(`loaded ${sample.file} — ${sample.suggest}`);
 }
 
+/* ---- wiring --------------------------------------------------------- */
 $("drop").addEventListener("click", () => $("file").click());
-$("file").addEventListener("change", e => e.target.files[0] && acceptFile(e.target.files[0]));
+$("file").addEventListener("change", e => { for (const f of e.target.files || []) acceptFile(f); });
 ["dragover","dragleave","drop"].forEach(ev =>
   $("drop").addEventListener(ev, e => {
     e.preventDefault();
     $("drop").classList.toggle("armed", ev === "dragover");
-    if (ev === "drop" && e.dataTransfer.files[0]) acceptFile(e.dataTransfer.files[0]);
+    if (ev === "drop") for (const f of e.dataTransfer.files || []) acceptFile(f);
   }));
-$("strength").addEventListener("input",
-  () => $("strengthval").textContent = parseFloat($("strength").value).toFixed(2));
-$("age").addEventListener("input", () => {
-  const v = parseFloat($("age").value);
-  $("ageval").textContent = v === 0 ? "fresh" : v.toFixed(2);
-});
-$("edge").addEventListener("input", () => {
-  const v = parseFloat($("edge").value);
-  $("edgeval").textContent = v === 0 ? "off" : v.toFixed(1);
-});
-$("ev").addEventListener("input", () => {
-  const v = parseFloat($("ev").value);
-  $("evval").textContent = (v > 0 ? "+" : "") + v.toFixed(1);
-});
-$("halation").addEventListener("input", () => {
-  const v = parseFloat($("halation").value);
-  $("halval").textContent = v === 0 ? "off" : v.toFixed(1);
-});
+for (const id of ["strength", "age", "edge", "ev", "halation"])
+  $(id).addEventListener("input", onControlChange);
+for (const id of ["filter", "print", "develop", "grain", "seed"])
+  $(id).addEventListener("change", onControlChange);
+
 $("render").addEventListener("click", async () => {
+  if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
   const blob = await render(1400);
-  if (blob) $("after").src = URL.createObjectURL(blob);
+  if (blob) {
+    const url = URL.createObjectURL(blob);
+    lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent };
+    $("after").src = url;
+    showView("B");
+  }
 });
 $("download").addEventListener("click", async () => {
   const blob = await render(0);
   if (!blob) return;
-  $("after").src = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent };
+  $("after").src = url;
+  showView("B");
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
+  link.href = url;
   link.download = `${inputName}_${$("camera").value}.jpg`;
   link.click();
 });
+
+$("viewOriginal").addEventListener("click", () => showView("original"));
+$("viewA").addEventListener("click", () => { if (pinned) showView("A"); });
+$("viewB").addEventListener("click", () => showView("B"));
+$("pinA").addEventListener("click", () => {
+  if (!lastRender) { setStatus("render something first, then pin it", true); return; }
+  pinned = { ...lastRender };
+  $("viewA").disabled = false;
+  setStatus("pinned as A — change the look, then flip between A and current (key: a)");
+});
+$("one2one").addEventListener("click", () => {
+  const vp = $("viewport");
+  const on = vp.className !== "one2one";
+  vp.className = on ? "one2one" : "";
+  $("one2one").className = on ? "small on" : "small secondary";
+});
+
+$("copyrecipe").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("recipe").value); setStatus("recipe copied"); }
+  catch (e) { setStatus("select the recipe text and copy it by hand", true); }
+});
+$("copycli").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("cli").textContent); setStatus("command copied"); }
+  catch (e) { setStatus("select the command and copy it by hand", true); }
+});
+$("saverecipe").addEventListener("click", () => {
+  const blob = new Blob([$("recipe").value], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  const r = parseRecipe($("recipe").value);
+  link.download = `${r.camera || "look"}${r.film && r.film !== "none" ? "_" + r.film : ""}.recipe`;
+  link.click();
+});
+$("loadrecipebtn").addEventListener("click", () => $("loadrecipe").click());
+$("loadrecipe").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const text = /\.jpe?g$/i.test(f.name) ? readJpegComment(bytes) : new TextDecoder().decode(bytes);
+  if (!text || !text.includes("=")) { setStatus(`${f.name} holds no recipe`, true); return; }
+  const note = applyRecipe(parseRecipe(text));
+  setStatus(`recipe loaded from ${f.name}` + (note ? " — " + note : ""), !!note);
+  scheduleRender();
+  e.target.value = "";
+});
+$("presetsave").addEventListener("click", () => {
+  const name = ($("presetname").value || "").trim();
+  if (!name) { setStatus("give the look a name first", true); return; }
+  const looks = loadLooks();
+  looks[name] = $("recipe").value;
+  saveLooks(looks);
+  refreshPresetList();
+  $("presets").value = name;
+  setStatus(`kept '${name}' in this browser`);
+});
+$("presets").addEventListener("change", () => {
+  const name = $("presets").value;
+  if (!name) return;
+  const text = loadLooks()[name];
+  if (!text) return;
+  const note = applyRecipe(parseRecipe(text));
+  setStatus(`look '${name}'` + (note ? " — " + note : ""), !!note);
+  scheduleRender();
+});
+$("presetdelete").addEventListener("click", () => {
+  const name = $("presets").value;
+  if (!name) return;
+  const looks = loadLooks();
+  delete looks[name];
+  saveLooks(looks);
+  refreshPresetList();
+  setStatus(`forgot '${name}'`);
+});
+
+if (typeof document.addEventListener === "function") {
+  let glance = false;
+  document.addEventListener("keydown", e => {
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (e.key === "\\" && !glance) { glance = true; showView("original"); }
+    else if (e.key === "a") showView(view === "A" ? "B" : (pinned ? "A" : "B"));
+    else if (e.key === "r") renderPreview();
+  });
+  document.addEventListener("keyup", e => {
+    if (e.key === "\\" && glance) { glance = false; showView("B"); }
+  });
+}
 
 boot().catch(e => setStatus("engine failed to load: " + e.message, true));
 </script>

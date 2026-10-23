@@ -197,7 +197,7 @@ make
 make check
 if command -v node >/dev/null; then
     echo "== verifying the shipped wasm engine (node)"
-    ( cd scripts && node test_wasm.mjs && node test_page.mjs )
+    ( cd scripts && node test_wasm.mjs && node test_page.mjs && node test_workspace.mjs )
 else
     echo "note: node not found; shipping wasm without local verification" >&2
 fi

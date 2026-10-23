@@ -183,6 +183,39 @@ PjImage *pj_image_apply_orientation(PjImage *image, int orientation,
     return out;
 }
 
+/* The first COM segment of a JPEG that holds a polajuice recipe. */
+char *pj_jpeg_read_comment(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return NULL;
+    unsigned char head[2];
+    if (fread(head, 1, 2, f) != 2 || head[0] != 0xFF || head[1] != 0xD8) { fclose(f); return NULL; }
+    char *result = NULL;
+    for (;;) {
+        int c = fgetc(f);
+        if (c != 0xFF) break;
+        int marker = fgetc(f);
+        while (marker == 0xFF) marker = fgetc(f);
+        if (marker == EOF || marker == 0xDA || marker == 0xD9) break;   /* scan data: stop */
+        int l1 = fgetc(f), l2 = fgetc(f);
+        if (l1 == EOF || l2 == EOF) break;
+        long len = (l1 << 8 | l2) - 2;
+        if (len < 0) break;
+        if (marker == 0xFE && len > 0 && len < 65536) {
+            char *text = malloc((size_t)len + 1);
+            if (!text) break;
+            if (fread(text, 1, (size_t)len, f) != (size_t)len) { free(text); break; }
+            text[len] = '\0';
+            if (pj_recipe_is_recipe(text)) { result = text; break; }
+            free(text);
+            continue;
+        }
+        if (fseek(f, len, SEEK_CUR) != 0) break;
+    }
+    fclose(f);
+    return result;
+}
+
 /* ---- load / save ------------------------------------------------------ */
 
 static PjImage *load_stb(const char *path, PjError *error)
@@ -280,7 +313,7 @@ bool pj_image_save(const PjImage *image, const char *path, PjError *error)
                             encoded, (int)(image->width * 3));
     else {
         bool wrote = pj_jpeg_write(path, encoded, image->width, image->height,
-                                   92, error);
+                                   92, image->comment, error);
         free(encoded);
         return wrote;
     }

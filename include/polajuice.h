@@ -10,8 +10,8 @@ extern "C" {
 #endif
 
 #define PJ_VERSION_MAJOR 1
-#define PJ_VERSION_MINOR 18
-#define PJ_VERSION_PATCH 4
+#define PJ_VERSION_MINOR 19
+#define PJ_VERSION_PATCH 0
 
 typedef struct PjImage PjImage;
 typedef struct PjLut3D PjLut3D;
@@ -171,6 +171,22 @@ PjImage *pj_render(const PjImage *input,
                    const char *preset_name,
                    const PjRenderOptions *options,
                    PjError *error);
+
+/* The recipe: the whole look as key=value text (docs/RECIPES.md).
+ * film and print are library stems or "none" (the scalar engine / no
+ * print). Writes at most size bytes, returns the length it needed. */
+size_t pj_recipe_format(const char *camera, const char *film,
+                        const char *print, const PjRenderOptions *options,
+                        char *buf, size_t size);
+bool pj_recipe_is_recipe(const char *text);
+
+/* Text carried with the image: the recipe, embedded as a JPEG comment
+ * on save so any render can be replayed with --recipe out.jpg. The
+ * image keeps its own copy. NULL clears it. */
+bool pj_image_set_comment(PjImage *image, const char *text);
+const char *pj_image_comment(const PjImage *image);
+/* The recipe embedded in a JPEG file, or NULL; the caller frees. */
+char *pj_jpeg_read_comment(const char *path);
 
 const char *pj_version_string(void);
 /* Threads the pipeline will use (cores, or POLAJUICE_THREADS). */

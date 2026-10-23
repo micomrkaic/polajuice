@@ -24,6 +24,9 @@
 #                                   the film: coarse shadows, fine lights)
 #   EDGE     [0]                    development edge effects 0..2 (1 dilute
 #                                   developer, 2 stand development)
+#   RECIPE   []                    a recipe file or polajuice JPEG to take
+#                                   the look from; the other knobs still
+#                                   apply on top of it
 #   EV       [0]                    exposure in stops, -4..4
 #   HALATION [1]                    scale the camera's halation 0..2 (0 off)
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
@@ -50,6 +53,12 @@ set -eu
 IN=$1
 [ -f "$IN" ] || { echo "super8ify: no such file: $IN" >&2; exit 1; }
 
+# With RECIPE set, only knobs the user set explicitly go on the command
+# line, so the recipe supplies the rest; without it, the usual defaults.
+# These must be read before the defaults below are applied.
+SET_CAMERA=${CAMERA+x}; SET_FILM=${FILM+x}; SET_AGE=${AGE+x}; SET_SEED=${SEED+x}
+SET_FILTER=${FILTER+x}; SET_GRAIN=${GRAIN+x}; SET_EDGE=${EDGE+x}
+SET_EV=${EV+x}; SET_HALATION=${HALATION+x}
 CAMERA=${CAMERA:-super8}
 FILM=${FILM:-}
 
@@ -69,6 +78,7 @@ HEIGHT=${HEIGHT:-720}
 FILTER=${FILTER:-}
 GRAIN=${GRAIN:-classic}
 EDGE=${EDGE:-0}
+RECIPE=${RECIPE:-}
 EV=${EV:-0}
 HALATION=${HALATION:-1}
 MOTION=${MOTION:-1}
@@ -111,15 +121,42 @@ trap 'rm -rf "$WORK"' EXIT
 
 echo "== reel: $IN -> $OUT ($CAMERA / ${FILM:-canonical}, age $AGE, ${FPS} fps, sound: $SOUND)"
 
+# the superjuice command line: a recipe first (so flags override it),
+# then every knob - or, with a recipe, only the knobs set explicitly.
+# Emitted shell-quoted, one line, for eval "set -- ..." in the subshell,
+# so a film name or recipe path with spaces survives.
+q() { printf "'%s' " "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+sj_args() {
+    if [ -n "$RECIPE" ]; then
+        q --recipe; q "$RECIPE"
+        [ -n "$SET_CAMERA" ] && { q -c; q "$CAMERA"; }
+        if [ -n "$SET_FILM" ]; then
+            case "$FILM" in none) q --no-film ;; "") ;; *) q -f; q "$FILM" ;; esac
+        fi
+        [ -n "$SET_AGE" ] && { q --age; q "$AGE"; }
+        [ -n "$SET_SEED" ] && { q --seed; q "$SEED"; }
+        [ -n "$SET_FILTER" ] && [ -n "$FILTER" ] && { q --filter; q "$FILTER"; }
+        [ -n "$SET_GRAIN" ] && { q --grain; q "$GRAIN"; }
+        [ -n "$SET_EDGE" ] && { q --edge; q "$EDGE"; }
+        [ -n "$SET_EV" ] && { q --ev; q "$EV"; }
+        [ -n "$SET_HALATION" ] && { q --halation; q "$HALATION"; }
+    else
+        q -c; q "$CAMERA"
+        case "$FILM" in none) q --no-film ;; "") ;; *) q -f; q "$FILM" ;; esac
+        q --age; q "$AGE"; q --seed; q "$SEED"
+        [ -n "$FILTER" ] && { q --filter; q "$FILTER"; }
+        q --grain; q "$GRAIN"; q --edge; q "$EDGE"; q --ev; q "$EV"; q --halation; q "$HALATION"
+    fi
+    q --motion-scale; q "$MOTION"
+    return 0
+}
+SJ_ARGS=$(sj_args)
+
 # ---- picture ----------------------------------------------------------
 ffmpeg -v error -i "$IN" -vf "fps=$FPS,scale=-2:$HEIGHT" \
        -f yuv4mpegpipe -pix_fmt yuv420p - \
   | ( cd "$SJ_DIR" && \
-      case "$FILM" in \
-      none) ./superjuice -c "$CAMERA" --no-film --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" --ev "$EV" --halation "$HALATION" ;; \
-      "")   ./superjuice -c "$CAMERA" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" --ev "$EV" --halation "$HALATION" ;; \
-      *)    ./superjuice -c "$CAMERA" -f "$FILM" --age "$AGE" --seed "$SEED" --motion-scale "$MOTION" ${FILTER:+--filter "$FILTER"} --grain "$GRAIN" --edge "$EDGE" --ev "$EV" --halation "$HALATION" ;; \
-      esac ) \
+      eval "set -- $SJ_ARGS" && exec ./superjuice "$@" ) \
   | ffmpeg -v error -y -f yuv4mpegpipe -i - \
        -vf 'crop=trunc(iw/2)*2:trunc(ih/2)*2' \
        -c:v libx264 -crf 18 -pix_fmt yuv420p "$WORK/reel.mp4"

@@ -418,6 +418,30 @@ calibration data. Exact color emulation should use a reference 3D LUT. This is
 the standard approach used by G'MIC and RawTherapee because a small collection
 of saturation and white-balance sliders cannot describe film color adequately.
 
+## The workspace and recipes
+
+The page at <https://micomrkaic.github.io/polajuice/> is a workspace:
+controls on the left grouped the way the pipeline runs (scene, camera,
+film, development), a live preview that re-renders on every change,
+original / A / current views with a pin for A/B comparison, a 1:1
+toggle, a strip of loaded images and the samples, and the recipe.
+
+A recipe is the whole look as `key=value` text (docs/RECIPES.md). The
+engine writes it into every JPEG it saves, the page reads it back from
+the render and shows it with the equivalent `polajuice apply` line, and
+the CLI replays it:
+
+```sh
+polajuice apply IN.jpg --recipe look.recipe       # a saved look
+polajuice apply IN.jpg --recipe render.jpg        # any polajuice JPEG
+polajuice apply IN.jpg --recipe look.recipe --ev 0   # flags after it win
+polajuice inspect render.jpg                      # shows what made it
+```
+
+Tune in the page, keep the look under a name, save the .recipe, run
+the folder from the shell. `superjuice --recipe` and `RECIPE=` in
+super8ify take the same files.
+
 ## Speed
 
 Every image stage runs in row bands on one thread per core (POSIX

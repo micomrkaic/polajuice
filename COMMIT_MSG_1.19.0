@@ -1,0 +1,26 @@
+1.19.0: the workspace, and recipes
+
+The page is now a workspace: controls on the left grouped the way the
+pipeline runs (scene, camera, film, development), a live preview that
+re-renders on every change at the viewport's size, original / A /
+current views with "pin as A" for comparing two looks on one frame, a
+1:1 toggle, a strip of every image loaded this session beside the
+samples, multi-file drop, keyboard glances (\ original, a A/current, r
+re-render). Every element id the fake-DOM suite knows is kept.
+
+Recipes bridge the page and the shell. A recipe is the whole look as
+key=value text (docs/RECIPES.md): pj_recipe_format writes it, every
+JPEG the engine saves carries it as a COM segment, and the page shows
+the one it reads back from the render's bytes - the engine is the only
+source of its text - with the equivalent polajuice apply line. The
+page saves .recipe files, loads them or any polajuice JPEG, and keeps
+named looks in local storage. The CLI: --recipe FILE (a .recipe or a
+JPEG), flags after it override line by line, --save-recipe, inspect
+prints an embedded recipe; superjuice --recipe; RECIPE= in super8ify,
+where only knobs set explicitly go on top of it. Replay from a JPEG or
+a file is byte-identical to the original render.
+
+scripts/test_workspace.mjs drives the page in Chromium through
+Playwright when it is installed (skips otherwise): render after a
+click, recipe read back from the JPEG, a slider re-rendering, A/B, a
+kept look surviving a reload. Added to check-wasm and the release.

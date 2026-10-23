@@ -25,7 +25,7 @@ fi
 echo "== $($WASI_DIR/bin/clang --version | head -1)"
 "$WASI_DIR/bin/clang" --target=wasm32-wasi -O3 -std=c17 -Iinclude -Ithird_party \
     src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c \
-    src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/rawdec.c src/core/stb_impl.c src/web/pj_wasi_main.c \
+    src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/recipe.c src/core/rawdec.c src/core/stb_impl.c src/web/pj_wasi_main.c \
     -o web/polajuice.wasm -lm \
     -Wl,-z,stack-size=1048576 \
     -Wl,--initial-memory=67108864 \

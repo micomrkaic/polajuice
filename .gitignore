@@ -30,4 +30,5 @@ web/_pagecheck.mjs
 /*.cube
 # synthetic raw test files (tools/make_test_raws.py), a few KB each;
 # this must stay below the raw ignores above, since the last match wins
+node_modules
 !tests/raw/*

@@ -81,7 +81,7 @@ async function run(args, workFiles) {
                        filmStem = null, printCubeText = null, filter = null,
                        strength = 1.0, seed = 42, age = 0, develop = "normal",
                        maxDim = 0, grainModel = "classic", edge = 0,
-                       ev = 0, halation = 1 }) {
+                       ev = 0, halation = 1, printStem = null }) {
             const inName = "in." + inputExtension(ext);
             const workFiles = { [inName]: inputBytes };
             let filmArg = "-";
@@ -101,7 +101,7 @@ async function run(args, workFiles) {
                  String(strength), String(seed >>> 0), String(age),
                  develop, String(maxDim), "work/out.jpg",
                  grainModel || "classic", String(edge),
-                 String(ev), String(halation)], workFiles);
+                 String(ev), String(halation), printStem || "-"], workFiles);
             if (r.code !== 0)
                 throw new Error(r.stderr.trim() || `render failed (${r.code})`);
             const out = r.files.get("out.jpg");

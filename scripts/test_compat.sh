@@ -85,5 +85,26 @@ expect 35mm-slide kodachrome refuse        # genuinely ambiguous still refuses
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-slide -f px-100uv \
     --any-film -o "$OUT" >/dev/null 2>&1 || {
     echo "test_compat: --any-film override broken" >&2; exit 1; }
+# recipes: a saved recipe and the JPEG that carries it both replay to
+# the same bytes; a flag after --recipe overrides its line
+R1="$LIB/r1.jpg"; R2="$LIB/r2.jpg"; R3="$LIB/r3.jpg"; R4="$LIB/r4.jpg"
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative -f portra_400 \
+    --ev -0.5 --halation 1.5 --grain silver --edge 1 --filter orange --seed 7 \
+    -o "$R1" --save-recipe "$LIB/look.recipe" >/dev/null 2>&1 || {
+    echo "test_compat: render with --save-recipe failed"; exit 1; }
+grep -q '^film=kodak_portra_400$' "$LIB/look.recipe" || {
+    echo "test_compat: recipe does not record the resolved film stem"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$LIB/look.recipe" -o "$R2" >/dev/null 2>&1
+cmp -s "$R1" "$R2" || { echo "test_compat: replay from .recipe differs"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$R1" -o "$R3" >/dev/null 2>&1
+cmp -s "$R1" "$R3" || { echo "test_compat: replay from the JPEG differs"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$LIB/look.recipe" --ev 0 -o "$R4" >/dev/null 2>&1
+cmp -s "$R1" "$R4" && { echo "test_compat: flag after --recipe did not override"; exit 1; }
+./polajuice inspect "$R1" | grep -q '^halation=1.5$' || {
+    echo "test_compat: inspect does not show the embedded recipe"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$IN" -o "$R4" >/dev/null 2>&1 && {
+    echo "test_compat: a recipe-less file was accepted as a recipe"; exit 1; }
+echo "recipes: save, replay from file and JPEG byte-identical, flags override, inspect shows"
+
 rm -f "$IN" "$OUT"
 echo "compatibility matrix tests passed (37 cells + override)"
