@@ -67,6 +67,13 @@ globalThis.Blob = class { constructor(parts) { this.parts = parts; } };
 globalThis.URL.createObjectURL = () => "blob:stub";
 globalThis.performance ??= { now: () => Date.now() };
 globalThis.FileReader = class {};
+// node 22+ ships a localStorage global that warns when touched; the page
+// keeps its looks there, so give it a plain in-memory one
+{
+  const store = new Map();
+  globalThis.localStorage = { getItem: k => store.has(k) ? store.get(k) : null,
+    setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
+}
 globalThis.fetch = async (path) => {
   try {
     const data = await readFile(new URL(path, webDir));

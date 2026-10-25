@@ -8,7 +8,7 @@ command -v curl >/dev/null 2>&1 || { echo "test_serve: curl not found, skipping"
 [ -x ./polajuice ] || { echo "test_serve: build polajuice first" >&2; exit 1; }
 TMP=$(mktemp -d)
 PORT=$((20000 + $$ % 20000))
-cleanup() { [ -n "${PID:-}" ] && kill "$PID" 2>/dev/null; rm -rf "$TMP"; rm -rf looks/__test_serve__.recipe; }
+cleanup() { [ -n "${PID:-}" ] && { kill "$PID"; wait "$PID" || true; } 2>/dev/null; rm -rf "$TMP"; rm -rf looks/__test_serve__.recipe; }
 trap cleanup EXIT
 mkdir -p "$TMP/dir"
 cp web/samples/sleeping-cat.jpg "$TMP/dir/cat.jpg"

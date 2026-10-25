@@ -1,0 +1,10 @@
+1.21.2: quiet build and tests on macOS
+
+The _DARWIN_C_SOURCE defines in parallel.c and serve.c are guarded so
+the Makefile's -D_DARWIN_C_SOURCE no longer redefines them; the serve
+test waits on the server it kills so bash stops reporting the kill;
+the fake-DOM page test supplies its own localStorage so node 22+ does
+not warn about its experimental one. No change to rendering.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs
