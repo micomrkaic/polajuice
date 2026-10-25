@@ -979,6 +979,66 @@ static unsigned char *slurp(const char *path, size_t *size, PjError *error)
 static char raw_description[256];
 const char *pj_raw_last_description(void) { return raw_description; }
 const char *pj_raw_description(void) { return raw_description; }
+/* Sensor readouts of Nikon bodies that declare no crop (the D610 writes
+ * CropHiSpeed as "6080x4028 cropped to 6080x4028 at 0,0"): the image
+ * area every other converter delivers, keyed by model and raw size so
+ * a mismatch means no crop rather than a wrong one. Image sizes are the
+ * cameras' JPEG sizes; the raw sizes come from memory for all but the
+ * D610 and are guarded by the match. */
+typedef struct { const char *model; unsigned raw_w, raw_h, img_w, img_h; } NikonArea;
+static const NikonArea nikon_areas[] = {
+    {"D610", 6080, 4028, 6016, 4016}, {"D600", 6080, 4028, 6016, 4016},
+    {"D3200", 6080, 4028, 6016, 4000}, {"D3300", 6080, 4028, 6016, 4000},
+    {"D7000", 4992, 3280, 4928, 3264}, {"D800", 7424, 4924, 7360, 4912},
+    {"D90", 4352, 2868, 4288, 2848}, {"D750", 6032, 4032, 6016, 4016},
+};
+
+bool pj_raw_nikon_image_area(const char *model, size_t raw_w, size_t raw_h,
+                             size_t *img_w, size_t *img_h)
+{
+    if (!model) return false;
+    for (size_t i = 0; i < sizeof nikon_areas / sizeof nikon_areas[0]; ++i)
+        if (strstr(model, nikon_areas[i].model) && raw_w == nikon_areas[i].raw_w &&
+            raw_h == nikon_areas[i].raw_h) {
+            *img_w = nikon_areas[i].img_w; *img_h = nikon_areas[i].img_h;
+            return true;
+        }
+    return false;
+}
+
+static double band_mean(const uint16_t *pix, size_t w, const double black[4],
+                        size_t x0, size_t x1, size_t y0, size_t y1)
+{
+    double sum = 0; size_t n = 0;
+    for (size_t y = y0; y < y1; ++y)
+        for (size_t x = x0; x < x1; ++x, ++n) {
+            double v = (double)pix[y * w + x] - black[(y & 1) * 2 + (x & 1)];
+            if (v > 0) sum += v;
+        }
+    return n ? sum / (double)n : 0.0;
+}
+
+/* Where the masked band sits, given how much of it there is: the
+ * optically black columns read the black level along their whole
+ * length, so of the two candidate bands the darker one is the mask.
+ * Even offsets keep the CFA phase, which is how the sensors are laid
+ * out; an odd margin is rounded down so the phase holds. */
+void pj_raw_choose_sides(const uint16_t *pix, size_t w, size_t h, const double black[4],
+                         size_t img_w, size_t img_h, size_t *x0, size_t *y0)
+{
+    *x0 = 0; *y0 = 0;
+    size_t mx = w - img_w, my = h - img_h;
+    if (mx) {
+        double left = band_mean(pix, w, black, 0, mx, 0, h);
+        double right = band_mean(pix, w, black, w - mx, w, 0, h);
+        if (left < right) *x0 = mx & ~(size_t)1;   /* the mask is on the left: the picture starts after it */
+    }
+    if (my) {
+        double top = band_mean(pix, w, black, 0, w, 0, my);
+        double bottom = band_mean(pix, w, black, 0, w, h - my, h);
+        if (top < bottom) *y0 = my & ~(size_t)1;
+    }
+}
 
 PjImage *pj_image_load_raw(const char *path, PjError *error)
 {
@@ -1017,6 +1077,7 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
      * the demosaic, the statistics and the picture never see the black
      * border; a crop at an odd offset shifts the CFA phase. */
     size_t crop_x = 0, crop_y = 0, crop_w = w, crop_h = h;
+    bool detect_border = false;
     {
         const Bytes *cb = &t.b;
         if (t.is_dng) {
@@ -1042,16 +1103,13 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
                 nm.crop[4] + nm.crop[2] <= w && nm.crop[5] + nm.crop[3] <= h) {
                 crop_x = nm.crop[4]; crop_y = nm.crop[5]; crop_w = nm.crop[2]; crop_h = nm.crop[3];
             }
+            /* the D610 writes the tag as "6080x4028 cropped to 6080x4028
+             * at 0,0": no crop declared; known bodies get their image
+             * area from the table, the side of the masked band from the
+             * data once the black level is known, below */
+            if (crop_w == w && crop_h == h) detect_border = true;
         }
         if (crop_w < 4 || crop_h < 4) { crop_x = crop_y = 0; crop_w = w; crop_h = h; }
-    }
-    unsigned cfa_shift_x = (unsigned)(crop_x & 1), cfa_shift_y = (unsigned)(crop_y & 1);
-    if (crop_w != w || crop_h != h) {
-        /* compact in place: every destination lies at or before its source */
-        for (size_t y = 0; y < crop_h; ++y)
-            memmove(pix + y * crop_w * spp, pix + ((y + crop_y) * w + crop_x) * spp,
-                    crop_w * spp * sizeof *pix);
-        w = crop_w; h = crop_h;
     }
 
     /* linearization, black and white levels */
@@ -1084,20 +1142,6 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
     unsigned cfa[4] = {0, 1, 1, 2};
     if (!linear_raw && d->have_cfa_pattern && d->cfa_pattern.count >= 4)
         for (int c = 0; c < 4; ++c) cfa[c] = (unsigned)entry_num(b, &d->cfa_pattern, (uint32_t)c) & 3;
-    if (cfa_shift_x || cfa_shift_y) {
-        /* the crop moved the origin: cell (y,x) of the picture is cell
-         * (y+sy, x+sx) of the sensor, for the pattern and the per-cell black */
-        unsigned cfa2[4]; double black2[4];
-        for (unsigned y = 0; y < 2; ++y)
-            for (unsigned x = 0; x < 2; ++x) {
-                unsigned from = ((y + cfa_shift_y) & 1) * 2 + ((x + cfa_shift_x) & 1);
-                cfa2[y * 2 + x] = cfa[from];
-                black2[y * 2 + x] = black[from];
-            }
-        memcpy(cfa, cfa2, sizeof cfa);
-        memcpy(black, black2, sizeof black);
-    }
-
     /* white balance multipliers and camera->sRGB matrix */
     double wb[3] = {1, 1, 1};
     double xyz_cam[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
@@ -1130,6 +1174,36 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
                 break;
             }
     }
+    if (detect_border && !linear_raw && spp == 1) {
+        size_t iw, ih;
+        if (pj_raw_nikon_image_area(t.model, w, h, &iw, &ih) && iw <= w && ih <= h) {
+            pj_raw_choose_sides(pix, w, h, black, iw, ih, &crop_x, &crop_y);
+            crop_w = iw; crop_h = ih;
+        }
+    }
+    unsigned cfa_shift_x = (unsigned)(crop_x & 1), cfa_shift_y = (unsigned)(crop_y & 1);
+    if (crop_w != w || crop_h != h) {
+        /* compact in place: every destination lies at or before its source */
+        for (size_t y = 0; y < crop_h; ++y)
+            memmove(pix + y * crop_w * spp, pix + ((y + crop_y) * w + crop_x) * spp,
+                    crop_w * spp * sizeof *pix);
+        w = crop_w; h = crop_h;
+    }
+
+    if (cfa_shift_x || cfa_shift_y) {
+        /* the crop moved the origin: cell (y,x) of the picture is cell
+         * (y+sy, x+sx) of the sensor, for the pattern and the per-cell black */
+        unsigned cfa2[4]; double black2[4];
+        for (unsigned y = 0; y < 2; ++y)
+            for (unsigned x = 0; x < 2; ++x) {
+                unsigned from = ((y + cfa_shift_y) & 1) * 2 + ((x + cfa_shift_x) & 1);
+                cfa2[y * 2 + x] = cfa[from];
+                black2[y * 2 + x] = black[from];
+            }
+        memcpy(cfa, cfa2, sizeof cfa);
+        memcpy(black, black2, sizeof black);
+    }
+
     /* normalize so green stays at 1 */
     if (wb[1] > 1e-9) { wb[0] /= wb[1]; wb[2] /= wb[1]; wb[1] = 1.0; }
     double rgb_cam[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};

@@ -693,6 +693,31 @@ int main(void)
             assert(memcmp(pj_image_pixels_const(bn), pj_image_pixels_const(decoded[3]),
                           64 * 48 * 3 * sizeof(float)) == 0);
             pj_image_free(bn);
+            /* the D610 case: the tag declares no crop, so the image area
+             * comes from the table and the side of the masked band from
+             * the samples (the darker band is the mask) */
+            {
+                size_t iw = 0, ih = 0;
+                assert(pj_raw_nikon_image_area("NIKON D610", 6080, 4028, &iw, &ih));
+                assert(iw == 6016 && ih == 4016);
+                assert(!pj_raw_nikon_image_area("NIKON D610", 6016, 4016, &iw, &ih));
+                assert(!pj_raw_nikon_image_area("NIKON D5", 6080, 4028, &iw, &ih));
+                /* a 40x30 readout, 32x24 picture: masked right and bottom */
+                uint16_t buf[40 * 30];
+                const double blk[4] = {100, 100, 100, 100};
+                for (size_t y = 0; y < 30; ++y)
+                    for (size_t x = 0; x < 40; ++x)
+                        buf[y * 40 + x] = (uint16_t)((x < 32 && y < 24) ? 100 + 50 + (x * 7 + y * 3) % 40 : 100 + (x + y) % 3);
+                size_t x0 = 9, y0 = 9;
+                pj_raw_choose_sides(buf, 40, 30, blk, 32, 24, &x0, &y0);
+                assert(x0 == 0 && y0 == 0);
+                /* masked left and top instead */
+                for (size_t y = 0; y < 30; ++y)
+                    for (size_t x = 0; x < 40; ++x)
+                        buf[y * 40 + x] = (uint16_t)((x >= 8 && y >= 6) ? 100 + 50 + (x * 7 + y * 3) % 40 : 100 + (x + y) % 3);
+                pj_raw_choose_sides(buf, 40, 30, blk, 32, 24, &x0, &y0);
+                assert(x0 == 8 && y0 == 6);
+            }
         }
 
         /* Through the pipeline: raw opens a stop up, so at --ev -1 the

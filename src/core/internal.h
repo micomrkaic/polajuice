@@ -106,4 +106,10 @@ PjImage *pj_image_apply_orientation(PjImage *image, int orientation, PjError *er
 const PjPreset *pj_find_preset(const char *name);
 const PjPreset *pj_preset_at(size_t index);
 
+/* raw door internals exposed for the tests */
+bool pj_raw_nikon_image_area(const char *model, size_t raw_w, size_t raw_h,
+                             size_t *img_w, size_t *img_h);
+void pj_raw_choose_sides(const uint16_t *pix, size_t w, size_t h, const double black[4],
+                         size_t img_w, size_t img_h, size_t *x0, size_t *y0);
+
 #endif

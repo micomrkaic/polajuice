@@ -1,0 +1,21 @@
+1.22.1: the D610's image area, which declares no crop
+
+1.22.0 cut raw files to the image area the file declares, and the
+D610 declares none: its CropHiSpeed tag reads "6080x4028 cropped to
+6080x4028 at 0,0", so the masked border stayed. Bodies that declare
+nothing now get their image area from a small table keyed by model
+and raw size (D600/D610 6016x4016 from 6080x4028; D3200/D3300, D7000,
+D800, D90 and D750 from memory, each guarded by an exact raw-size
+match so a mismatch means no crop, never a wrong one), and only the
+side of the masked band is read from the samples: of the two
+candidate bands, the one at the black level is the mask. A generic
+"find the black border" detector was tried and dropped - it cropped
+a legitimately black edge column in the test scene, which a real
+photo can have too.
+
+The table lookup and the side choice are unit-tested on a 40x30
+readout masked on either side; the bordered synthetic raws of 1.22.0
+still decode to the bit as the plain files.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs
