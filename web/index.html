@@ -75,6 +75,8 @@
   #viewport img { max-width:100%; max-height:100%; object-fit:contain; display:block;
                   background:#111; }
   #viewport.one2one img { max-width:none; max-height:none; }
+  #viewport.wiping #view { max-width:none; max-height:none; object-fit:fill; }
+  #viewport.wiping { display:block; }
   #viewport.one2one { display:block; }
   #caption { padding:0.35rem 1rem; font-size:0.8rem; color:var(--muted); font-style:italic;
              border-top:1px solid var(--line); min-height:1.6rem; }
@@ -406,7 +408,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.23.3";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.23.4";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -423,6 +425,7 @@ let lastRender = null;    /* {blob, url, recipe} of the current look */
 let pinned = null;        /* {blob, url, recipe} pinned as A */
 let originalUrl = null;
 let view = "B";           /* "original" | "A" | "B" */
+let glance = false;       /* the \ key held: the original, briefly */
 let renderTimer = null, rendering = false, renderAgain = false;
 
 function familyToken(family) {
@@ -472,6 +475,7 @@ function parseGeometry(text) {
 }
 function stripGeometry(text) { return text ? text.replace(/^# geometry .*\n?/m, "") : text; }
 let renderGeometry = null;   /* of the last render() that returned */
+let renderCaption = "";      /* its caption; the view decides when to show it */
 
 function parseRecipe(text) {
   const r = {};
@@ -896,7 +900,7 @@ async function render(maxDim, overrides, quiet, fromRecipe) {
     const secs = ((performance.now() - t0) / 1000).toFixed(secs_digits(performance.now() - t0));
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine") +
               (eng.native ? "" : (engine.native ? " (wasm, custom cube)" : "")));
-    $("aftercap").textContent = `rendered — ${look.camera}` + (stem ? ` / ${stem}` : "") +
+    renderCaption = `rendered — ${look.camera}` + (stem ? ` / ${stem}` : "") +
       (maxDim ? ` (preview, long edge ${maxDim}px)` : " (full size)");
     if (recipe) showRecipe(stripGeometry(recipe));
     return new Blob([out], { type: "image/jpeg" });
@@ -932,9 +936,11 @@ async function renderPreview() {
     const blob = await render(previewSize());
     if (blob) {
       const url = URL.createObjectURL(blob);
-      lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
+      lastRender = { blob, url, recipe: $("recipe").value, caption: renderCaption, geometry: renderGeometry };
       $("after").src = url;
-      if (view !== "original") showView("B");
+      /* a render is what the knobs asked to see: show it, unless the
+       * original is being glanced at with the key held */
+      if (!glance) showView("B");
       else composeStage();   /* the current may be the wipe's left side */
     }
   } finally {
@@ -1088,7 +1094,7 @@ $("render").addEventListener("click", async () => {
   const blob = await render(1400);
   if (blob) {
     const url = URL.createObjectURL(blob);
-    lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
+    lastRender = { blob, url, recipe: $("recipe").value, caption: renderCaption, geometry: renderGeometry };
     $("after").src = url;
     showView("B");
   }
@@ -1097,7 +1103,7 @@ $("download").addEventListener("click", async () => {
   const blob = await render(0);
   if (!blob) return;
   const url = URL.createObjectURL(blob);
-  lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
+  lastRender = { blob, url, recipe: $("recipe").value, caption: renderCaption, geometry: renderGeometry };
   $("after").src = url;
   showView("B");
   const link = document.createElement("a");
@@ -1191,47 +1197,74 @@ function leftKind() {
   if (sel.value !== kind) sel.value = kind;
   return kind;
 }
+let wipeFrame = null;   /* the last composed frame, for the loupe: {ox, oy, sc, divider, left:{kind,x,y,w,h}} */
 function composeStage() {
-  const r = viewRect();
-  const ov = $("wipeimg"), bar = $("wipebar");
+  const vp = $("viewport"), v = $("view"), ov = $("wipeimg"), bar = $("wipebar"), cc = $("clipcanvas");
   const shown = shownInfo();
   const left = wipeOn && shown ? imageInfo(leftKind()) : null;
-  const active = !!(left && left.kind !== shown.kind && r.width);
+  const active = !!(left && left.kind !== shown.kind && shown.geometry.outW > 0);
   $("wipeside").style.display = wipeOn ? "" : "none";
   $("wipe").className = wipeOn ? "small on" : "small secondary";
-  $("viewport").className = ($("viewport").className.replace(/\bwiping\b/, "").trim() + (active ? " wiping" : "")).trim();
-  placeOverlay($("clipcanvas"), r);
-  if (!active) { ov.style.display = "none"; bar.style.display = "none"; return; }
-  bar.style.left = (r.left + r.width * wipeX) + "px"; bar.style.top = r.top + "px";
-  bar.style.height = r.height + "px"; bar.style.display = "block";
-  if (ov.src !== left.url) ov.src = left.url;
-  /* left pixel u is input pixel u - placeL + cropL, which is shown pixel
-   * u - placeL + cropL - cropS + placeS; everything in shown-output
-   * pixels times the view scale */
+  vp.className = (vp.className.replace(/\bwiping\b/, "").trim() + (active ? " wiping" : "")).trim();
+  if (!active) {
+    /* the view alone: back to the stylesheet's fit, nothing clipped */
+    for (const k of ["position", "left", "top", "width", "height", "clipPath"]) v.style[k] = "";
+    ov.style.display = "none"; bar.style.display = "none";
+    cc.style.clipPath = "";
+    placeOverlay(cc, viewRect());
+    wipeFrame = null;
+    return;
+  }
+  /* Two images in one frame, nothing else. Left pixel u is input pixel
+   * u - placeL + cropL, which is shown pixel u - placeL + cropL - cropS
+   * + placeS: that offset puts the two pictures on top of each other.
+   * The frame is the union of the two extents in shown-output pixels,
+   * fitted to the viewport (or at 1:1); the view is clipped to the
+   * right of the divider, the left image to the left of it, and where
+   * either has no pixels the stage shows through. */
   const gS = shown.geometry, gL = left.geometry;
-  const sc = r.width / gS.outW;
   const dx = gS.placeX - gS.cropX + gL.cropX - gL.placeX;
   const dy = gS.placeY - gS.cropY + gL.cropY - gL.placeY;
-  const W = gL.outW, H = gL.outH;
-  ov.style.left = (r.left + dx * sc) + "px"; ov.style.top = (r.top + dy * sc) + "px";
-  ov.style.width = (W * sc) + "px"; ov.style.height = (H * sc) + "px";
-  /* visible: the view's box, left of the divider */
-  const x0 = 0, y0 = 0, x1 = Math.min(gS.outW, wipeX * gS.outW), y1 = gS.outH;
-  const insetL = Math.max(0, (x0 - dx) * sc), insetT = Math.max(0, (y0 - dy) * sc);
-  const insetR = Math.max(0, W * sc - (x1 - dx) * sc), insetB = Math.max(0, H * sc - (y1 - dy) * sc);
-  ov.style.clipPath = `inset(${insetT.toFixed(2)}px ${insetR.toFixed(2)}px ${insetB.toFixed(2)}px ${insetL.toFixed(2)}px)`;
-  ov.style.display = (x1 - dx) * sc > insetL ? "block" : "none";
+  const minX = Math.min(0, dx), minY = Math.min(0, dy);
+  const maxX = Math.max(gS.outW, dx + gL.outW), maxY = Math.max(gS.outH, dy + gL.outH);
+  const uw = maxX - minX, uh = maxY - minY;
+  const one2one = /\bone2one\b/.test(vp.className);
+  const vw = vp.clientWidth || 1400, vh = vp.clientHeight || 900;
+  const sc = one2one ? 1 : Math.min(vw / uw, vh / uh);
+  const ox = Math.max(0, (vw - uw * sc) / 2) - minX * sc;
+  const oy = Math.max(0, (vh - uh * sc) / 2) - minY * sc;
+  v.style.position = "absolute";
+  v.style.left = ox + "px"; v.style.top = oy + "px";
+  v.style.width = (gS.outW * sc) + "px"; v.style.height = (gS.outH * sc) + "px";
+  if (ov.src !== left.url) ov.src = left.url;
+  const lx = ox + dx * sc, ly = oy + dy * sc, lw = gL.outW * sc, lh = gL.outH * sc;
+  ov.style.left = lx + "px"; ov.style.top = ly + "px"; ov.style.width = lw + "px"; ov.style.height = lh + "px";
+  const divider = ox + minX * sc + wipeX * uw * sc;
+  /* the view keeps what is right of the divider, the left image what is left of it */
+  const vClip = Math.min(Math.max(divider - ox, 0), gS.outW * sc);
+  v.style.clipPath = `inset(0 0 0 ${vClip.toFixed(2)}px)`;
+  const lClip = Math.min(Math.max(lx + lw - divider, 0), lw);
+  ov.style.clipPath = `inset(0 ${lClip.toFixed(2)}px 0 0)`;
+  ov.style.display = "block";
+  bar.style.left = divider + "px"; bar.style.top = (oy + minY * sc) + "px";
+  bar.style.height = (uh * sc) + "px"; bar.style.display = "block";
+  placeOverlay(cc, viewRect());
+  cc.style.clipPath = v.style.clipPath;
+  wipeFrame = { ox, oy, sc, divider, frameLeft: ox + minX * sc, frameWidth: uw * sc,
+                left: { kind: left.kind, x: lx, y: ly, w: lw, h: lh } };
 }
 function layoutOverlays() { composeStage(); }
 function setWipe(on) { wipeOn = on; composeStage(); }
 $("wipe").addEventListener("click", () => setWipe(!wipeOn));
 $("wipeagainst").addEventListener("change", composeStage);
 function wipeFromEvent(e) {
-  const r = viewRect(), vp = $("viewport");
+  const vp = $("viewport");
   const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
-  const x = (e.clientX - rect.left + (vp.scrollLeft || 0) - r.left) / (r.width || 1);
-  wipeX = Math.max(0, Math.min(1, x));
-  layoutOverlays();
+  const px = e.clientX - rect.left + (vp.scrollLeft || 0);
+  /* the divider runs over the composed frame (both images), not the view alone */
+  const f = wipeFrame ? { left: wipeFrame.frameLeft, width: wipeFrame.frameWidth } : viewRect();
+  wipeX = Math.max(0, Math.min(1, (px - f.left) / (f.width || 1)));
+  composeStage();
 }
 $("viewport").addEventListener("pointerdown", e => {
   if (!wipeOn || e.button !== 0) return;
@@ -1386,13 +1419,16 @@ async function ensureFull(kind) {
 }
 async function moveLoupe(e) {
   const lp = $("loupe");
-  const kind = shownKind();
-  const fr = await ensureFull(kind);
-  if (!fr || !fr.w || !loupeOn || shownKind() !== kind) { lp.style.display = "none"; return; }
-  const r = viewRect(), vp = $("viewport");
+  const vp = $("viewport");
   const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
-  const fx = (e.clientX - rect.left + (vp.scrollLeft || 0) - r.left) / (r.width || 1);
-  const fy = (e.clientY - rect.top + (vp.scrollTop || 0) - r.top) / (r.height || 1);
+  const px = e.clientX - rect.left + (vp.scrollLeft || 0), py = e.clientY - rect.top + (vp.scrollTop || 0);
+  /* with the wipe on, left of the divider the loupe looks at the left image */
+  let kind = shownKind(), r = viewRect();
+  if (wipeFrame && px < wipeFrame.divider) { kind = wipeFrame.left.kind; r = { left: wipeFrame.left.x, top: wipeFrame.left.y, width: wipeFrame.left.w, height: wipeFrame.left.h }; }
+  const fr = await ensureFull(kind);
+  if (!fr || !fr.w || !loupeOn) { lp.style.display = "none"; return; }
+  const fx = (px - r.left) / (r.width || 1);
+  const fy = (py - r.top) / (r.height || 1);
   if (fx < 0 || fx > 1 || fy < 0 || fy > 1) { lp.style.display = "none"; return; }
   const size = 320;
   lp.style.backgroundImage = `url("${fr.url}")`;
@@ -1470,7 +1506,7 @@ $("sheetclose").addEventListener("click", closeSheet);
 
 if (typeof window !== "undefined" && window.addEventListener) {
   /* a hook for the Chromium test to check the wipe's placement */
-  window.__polajuice = { imageInfo, shownInfo, leftKind, viewRect };
+  window.__polajuice = { imageInfo, shownInfo, leftKind, viewRect, frame: () => wipeFrame };
   window.addEventListener("resize", layoutOverlays);
   if (typeof ResizeObserver === "function") new ResizeObserver(layoutOverlays).observe($("view"));
   $("view").addEventListener("load", layoutOverlays);
@@ -1557,7 +1593,6 @@ $("batch").addEventListener("click", async () => {
 /* the look as the native engine wants it, from the controls */
 
 if (typeof document.addEventListener === "function") {
-  let glance = false;
   document.addEventListener("keydown", e => {
     const tag = (e.target && e.target.tagName) || "";
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;

@@ -1,0 +1,32 @@
+1.23.4: the wipe is two images and a divider, nothing else
+
+The wipe's base image was never clipped: left of the divider it showed
+the left image where that had pixels and the view everywhere else, so
+with a Polaroid on either side the original bled through around the
+print. That was the fundamental fault behind every report.
+
+The composer now builds one frame from the two images: the union of
+their extents in the view's output pixels, aligned on the picture
+(left pixel u is shown pixel u - placeL + cropL - cropS + placeS),
+fitted to the viewport or at 1:1. The view is clipped to the right of
+the divider and the left image to the left of it; where either has no
+pixels the stage shows through. The divider runs over that frame, the
+loupe looks at the left image left of it, and captions follow the
+view (a render landing while the original is on view no longer
+relabels it).
+
+And the view itself: after choosing an image the page showed the
+original and the first render never brought the view to "current" -
+the guard meant for the \-key glance blocked it - while the caption
+said "rendered". So a good part of what looked reversed was the
+original on view with a render's caption. A render now brings the
+view to current unless the glance key is held, and the caption
+follows the view.
+
+Tests: the Chromium placement check runs on the composed frame (54
+cases, both pictures' centers coinciding within 0.75 px); the divider
+at 25% must clip the view's left quarter; a render under the original
+view keeps caption and view.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs
