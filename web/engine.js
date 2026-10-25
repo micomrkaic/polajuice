@@ -181,6 +181,7 @@ export function createNativeEngine(base, info) {
         },
         async files() { return (await expectOk(await fetch(api("/api/files"), { cache: "no-store" }))).json(); },
         fileUrl(name) { return api("/api/file", { name }); },
+        async stats(name) { return (await expectOk(await fetch(api("/api/stats", { name })))).json(); },
         developUrl(name, maxDim) { return api("/api/develop", { name, max: maxDim || 0 }); },
         async exportFile(o) {
             const r = await fetch(api("/api/export", { ...lookParams(o), name: o.name }), { method: "POST" });

@@ -1,0 +1,42 @@
+1.23.0: wipe, histogram and clipping, loupe, bracket
+
+Four comparison tools on the workspace view, all page-side, so every
+render stays byte-identical to 1.22.
+
+Wipe (w): a divider dragged across the view with the current look on
+the right and the original, or the look pinned as A, on the left.
+Overlays are laid on the displayed image's own rectangle, so they
+follow fit and 1:1 modes and resizes.
+
+Histogram and clipping: a per-channel log histogram of what is shown,
+sampled at up to 512 px wide from the view's pixels, with the share of
+pixels clipped at white per channel and crushed at black; the clipping
+button paints them on the view, red for white and blue for black. The
+native engine adds /api/stats (the inspect numbers for a file in the
+folder), and for raw input the panel reports the sensor's own mean and
+clipped share next to the print's, so the two kinds of clipping are
+told apart.
+
+Loupe (l): a 320 px window at 1:1 of the full-size render under the
+pointer. The full-size render is made once per look (render() takes
+overrides and a quiet flag now) and dropped when the look changes.
+
+Bracket: nine renders of the current look stepping one knob -
+exposure, develop, strength, age, halation, edge - in a grid over the
+view; a click takes that value and re-renders. About a second on the
+native engine.
+
+A bug from 1.21.0 fixed on the way: the develop list had been
+reordered to start at pull-3, which made pull-3 the page's default
+development for every film camera (instant cameras force normal, so
+the polaroid sample hid it). The normal entry is now the selected one,
+and both page tests check the default.
+
+Tests: test_workspace.mjs (Chromium) drives all four tools - the
+histogram text, the clipping overlay, the wipe divider following a
+drag and the "vs A" switch, a nine-cell exposure bracket and taking a
+cell, the loupe's full-size render and its window; test_serve.sh
+covers /api/stats for a raw and a JPEG.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

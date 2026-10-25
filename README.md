@@ -468,6 +468,28 @@ Tune in the page, keep the look under a name, save the .recipe, run
 the folder from the shell. `superjuice --recipe` and `RECIPE=` in
 super8ify take the same files.
 
+### Comparing looks: wipe, histogram, loupe, bracket
+
+Four tools on the view, all page-side (renders are unchanged):
+
+- **Wipe** (`w`): a divider dragged across the view, the current look
+  on the right and the original - or the look pinned as A - on the
+  left.
+- **Histogram and clipping**: a per-channel log histogram of what is
+  shown, with the share of pixels clipped at white per channel and
+  crushed at black; the *clipping* button paints them on the view, red
+  for white and blue for black. On the native engine a raw input also
+  reports the sensor's own numbers (mean in stops below sensor white,
+  share at sensor white), so print clipping and sensor clipping are
+  told apart.
+- **Loupe** (`l`): a 320 px window at 1:1 of the full-size render under
+  the pointer, for judging grain and edge effects without rendering
+  full size by hand; the full-size render is made once per look.
+- **Bracket**: nine renders of the current look stepping one knob
+  (exposure, develop, strength, age, halation, edge) in a grid over
+  the view; click a cell to take that value. On the native engine the
+  nine take about a second; in the browser engine they take their time.
+
 ### `polajuice serve`: the workspace on the native engine
 
 The page on GitHub renders in WebAssembly, single-threaded. Served by

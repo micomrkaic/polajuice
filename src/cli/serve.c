@@ -18,6 +18,7 @@
  *   GET  /api/cameras                     the camera list, as the page needs it
  *   GET  /api/files                       images in DIR
  *   GET  /api/file?name=X                 the bytes of one
+ *   GET  /api/stats?name=F                the inspect numbers for a file (mean, stops, clipped)
  *   GET  /api/develop?name=X&max=N        a raw file's straight print (JPEG)
  *   POST /api/render?name=X&max=N&camera=..&film=..&...   JPEG
  *        (without name: the request body is the image, ext=jpg|png|nef|dng)
@@ -47,6 +48,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -395,6 +397,35 @@ static void handle_file(int fd, const Request *r)
     char path[2048];
     snprintf(path, sizeof path, "%s/%s", g_dir, name);
     if (!respond_file(fd, path, mime_of(name))) respond_error(fd, 404, "no such file");
+}
+
+/* the inspect numbers for one file in the folder: the page shows the
+ * sensor's exposure next to the print's histogram */
+static void handle_stats(int fd, const Request *r)
+{
+    char msg[512];
+    PjImage *image = load_request_image(r, msg, sizeof msg);
+    if (!image) { respond_error(fd, 400, msg); return; }
+    bool raw = pj_image_is_scene_linear(image);
+    const float *px = pj_image_pixels_const(image);
+    size_t n = pj_image_width(image) * pj_image_height(image);
+    size_t clipped = 0;
+    double mean = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+        mean += 0.2126f * px[i * 3] + 0.7152f * px[i * 3 + 1] + 0.0722f * px[i * 3 + 2];
+        if (px[i * 3] >= 0.999f || px[i * 3 + 1] >= 0.999f || px[i * 3 + 2] >= 0.999f) ++clipped;
+    }
+    mean = n ? mean / (double)n : 0.0;
+    char desc[600];
+    json_escape(raw ? pj_raw_description() : "", desc, sizeof desc);
+    char json[1024];
+    snprintf(json, sizeof json,
+             "{\"width\":%zu,\"height\":%zu,\"scene_linear\":%s,\"mean\":%.5f,"
+             "\"stops_below_white\":%.3f,\"clipped_percent\":%.4f,\"raw\":\"%s\"}",
+             pj_image_width(image), pj_image_height(image), raw ? "true" : "false", mean,
+             mean > 0.0 ? -log2(mean) : 0.0, 100.0 * (double)clipped / (double)(n ? n : 1), desc);
+    pj_image_free(image);
+    respond_json(fd, json);
 }
 
 static void handle_develop(int fd, const Request *r)
@@ -760,6 +791,7 @@ static void handle(int fd, Request *r)
     else if (!strcmp(p, "/api/files")) handle_files(fd);
     else if (!strcmp(p, "/api/file")) handle_file(fd, r);
     else if (!strcmp(p, "/api/develop")) handle_develop(fd, r);
+    else if (!strcmp(p, "/api/stats")) handle_stats(fd, r);
     else if (!strcmp(p, "/api/render")) handle_render(fd, r);
     else if (!strcmp(p, "/api/export")) handle_export(fd, r);
     else if (!strcmp(p, "/api/batch")) handle_batch(fd, r);

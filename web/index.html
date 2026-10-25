@@ -67,6 +67,7 @@
   .toolbar .seg button:last-child { border-right:0; }
   .toolbar .seg button.on { background:var(--ink); color:var(--paper); }
   .toolbar .spacer { flex:1; }
+  .toolbar select { width:auto; font-size:0.8rem; padding:0.2rem 0.3rem; }
   #viewport { flex:1; min-height:20rem; overflow:auto; background:#2b2823;
               display:flex; align-items:center; justify-content:center; position:relative; }
   #viewport img { max-width:100%; max-height:100%; object-fit:contain; display:block;
@@ -76,6 +77,40 @@
   #caption { padding:0.35rem 1rem; font-size:0.8rem; color:var(--muted); font-style:italic;
              border-top:1px solid var(--line); min-height:1.6rem; }
   #before, #after { display:none; }
+  /* overlays sit on the displayed image's own rectangle (set from script) */
+  #viewport .overlay { position:absolute; display:none; }
+  #wipeimg { object-fit:contain; background:#111; pointer-events:none; }
+  #wipebar { width:0; border-left:2px solid var(--paper); box-shadow:0 0 0 1px rgba(0,0,0,0.6);
+             cursor:ew-resize; }
+  #wipebar::after { content:"◂ ▸"; position:absolute; top:50%; left:-1.4rem; width:2.8rem; text-align:center;
+             transform:translateY(-50%); background:var(--paper); color:var(--ink); font-size:0.7rem;
+             padding:0.15rem 0; border-radius:1rem; }
+  #viewport.wiping { cursor:ew-resize; }
+  #clipcanvas { pointer-events:none; image-rendering:pixelated; }
+  #loupe { position:fixed; width:320px; height:320px; border:2px solid var(--paper); border-radius:4px;
+           box-shadow:0 4px 16px rgba(0,0,0,0.5); background-repeat:no-repeat; background-color:#111;
+           pointer-events:none; display:none; z-index:30; }
+  #loupe span { position:absolute; left:0; bottom:0; right:0; font-size:0.65rem; color:var(--paper);
+           background:rgba(0,0,0,0.55); padding:0.1rem 0.3rem; font-style:italic; }
+  #sheet { position:absolute; inset:0; background:rgba(43,40,35,0.97); display:none; z-index:20;
+           flex-direction:column; padding:0.6rem; gap:0.4rem; }
+  #sheet.on { display:flex; }
+  #sheet .head { display:flex; gap:0.6rem; align-items:center; color:var(--paper); font-size:0.85rem; }
+  #sheet .head .spacer { flex:1; }
+  #sheet .head button { color:var(--paper); border-color:var(--paper); background:transparent; }
+  #sheet .grid { flex:1; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+           gap:0.4rem; min-height:0; }
+  #sheet figure { margin:0; min-height:0; display:flex; flex-direction:column; cursor:pointer;
+           border:2px solid transparent; }
+  #sheet figure.cur { border-color:var(--accent); }
+  #sheet figure:hover { border-color:var(--paper); }
+  #sheet img { flex:1; min-height:0; width:100%; object-fit:contain; background:#111; }
+  #sheet figcaption { font-size:0.7rem; color:var(--paper); text-align:center; padding:0.15rem; }
+  #histpanel { display:flex; gap:1rem; align-items:center; padding:0.3rem 1rem; border-top:1px solid var(--line);
+           font-size:0.72rem; color:var(--muted); }
+  #histo { width:256px; height:72px; background:#1d1b18; flex:none; }
+  #histtext { white-space:pre-line; line-height:1.3; }
+  #histpanel button.on { background:var(--accent); color:var(--paper); border-color:var(--accent); }
   .strip { display:flex; gap:0.5rem; align-items:stretch; padding:0.5rem 1rem;
            border-top:1px solid var(--line); background:var(--panel); overflow-x:auto; }
   #drop { border:2px dashed var(--line); padding:0.4rem 0.8rem; text-align:center;
@@ -195,7 +230,7 @@ cross +N pushes it as well.">
         <option value="pull-3">pull -3 stops</option>
         <option value="pull-2">pull -2 stops</option>
         <option value="pull-1">pull -1 stop</option>
-        <option value="normal">normal</option>
+        <option value="normal" selected>normal</option>
         <option value="push+1">push +1 stop</option>
         <option value="push+2">push +2 stops</option>
         <option value="push+3">push +3 stops</option>
@@ -306,15 +341,45 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
     </span>
     <button id="pinA" class="small secondary" title="keep the current render and recipe as A, then change things and compare">pin as A</button>
     <button id="one2one" class="small secondary" title="1:1 pixels (scroll around)">1:1</button>
+    <button id="wipe" class="small secondary" title="wipe: drag a divider between the current look and the original (or A); key w">wipe</button>
+    <select id="wipeagainst" class="small" style="display:none" title="what the left side of the wipe shows">
+      <option value="original">vs original</option>
+      <option value="A">vs A</option>
+    </select>
+    <button id="loupe-btn" class="small secondary" title="loupe: a 1:1 window of the full-size render under the pointer; key l">loupe</button>
+    <button id="bracket" class="small secondary" title="bracket: nine renders of the current look stepping one knob, click one to take it">bracket</button>
+    <select id="bracketaxis" class="small" title="the knob the bracket steps">
+      <option value="ev">exposure</option>
+      <option value="develop">develop</option>
+      <option value="strength">strength</option>
+      <option value="age">age</option>
+      <option value="halation">halation</option>
+      <option value="edge">edge</option>
+    </select>
     <span class="spacer"></span>
     <button id="render" class="secondary" disabled>Render preview</button>
     <button id="download" disabled>Render full size &amp; download</button>
     <button id="export" disabled style="display:none" title="render full size and write it next to the source, recipe embedded">Export next to source</button>
     <button id="batch" class="secondary" disabled style="display:none" title="apply the current look to every image in the folder, written next to each">Apply to folder</button>
   </div>
-  <div id="viewport"><img id="view" alt=""></div>
+  <div id="viewport"><img id="view" alt="">
+    <img id="wipeimg" class="overlay" alt="">
+    <canvas id="clipcanvas" class="overlay"></canvas>
+    <div id="wipebar" class="overlay"></div>
+    <div id="sheet">
+      <div class="head"><span id="sheethead">bracket</span><span class="spacer"></span>
+        <button id="sheetclose" class="small secondary">close (Esc)</button></div>
+      <div class="grid" id="sheetgrid"></div>
+    </div>
+  </div>
+  <div id="loupe"><span id="loupecap"></span></div>
   <img id="before" alt=""><img id="after" alt="">
   <div id="caption"><span id="aftercap">no image loaded</span></div>
+  <div id="histpanel">
+    <canvas id="histo" width="256" height="72" title="per-channel histogram of the view, log scale"></canvas>
+    <span id="histtext">no image</span>
+    <button id="clipwarn" class="small secondary" title="paint clipped pixels: red where a channel hits white, blue where all three sit at black">clipping</button>
+  </div>
   <div class="strip">
     <div id="drop">drop JPEG, PNG,<br>NEF or DNG here<input id="file" type="file" accept=".jpg,.jpeg,.png,.nef,.dng,image/jpeg,image/png" hidden multiple></div>
     <div class="thumbs" id="thumbs"></div>
@@ -327,15 +392,15 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 <footer>
   Film stocks are G'MIC/Pat David color presets served from <code>films/</code>;
   camera descriptions come from the engine itself. Keyboard: <b>\</b> hold for
-  the original, <b>a</b> toggle A/current, <b>r</b> re-render.
-  Source: <a href="https://github.com/micomrkaic/polajuice">github.com/micomrkaic/polajuice</a>.
+  the original, <b>a</b> toggle A/current, <b>w</b> wipe, <b>l</b> loupe,
+  <b>r</b> re-render, Esc closes a bracket. Source: <a href="https://github.com/micomrkaic/polajuice">github.com/micomrkaic/polajuice</a>.
 </footer>
 
 <script type="module">
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.22.2";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.23.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -744,9 +809,10 @@ function previewSize() {
   return Math.max(800, Math.min(2000, Math.round(Math.max(w, h) * dpr)));
 }
 
-async function render(maxDim) {
+async function render(maxDim, overrides, quiet) {
   if ((!inputBytes && !inputServerName) || !engine) return null;
-  setStatus("rendering…");
+  overrides = overrides || {};
+  if (!quiet) setStatus("rendering…");
   await new Promise(r => setTimeout(r, 20));
   try {
     const stem = customCube ? customCube.stem : resolveFilmStem();
@@ -767,7 +833,7 @@ async function render(maxDim) {
         ? $("print").value : null;
     const printCubeText = printStem && !eng.native ? await loadFilmCube(printStem) : null;
     const t0 = performance.now();
-    const out = await eng.render({
+    const params = {
       inputBytes, ext: inputExt, name: eng.native ? inputServerName : null,
       camera: $("camera").value, cubeText, filmChoice,
       filmProcess, filmStem: stem, printCubeText,
@@ -780,7 +846,10 @@ async function render(maxDim) {
       edge: parseFloat($("edge").value),
       ev: parseFloat($("ev").value),
       halation: parseFloat($("halation").value),
-      printStem, crop: $("crop").value === "full" ? "full" : "camera" });
+      printStem, crop: $("crop").value === "full" ? "full" : "camera" };
+    Object.assign(params, overrides);
+    const out = await eng.render(params);
+    if (quiet) return new Blob([out], { type: "image/jpeg" });
     const secs = ((performance.now() - t0) / 1000).toFixed(secs_digits(performance.now() - t0));
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine") +
               (eng.native ? "" : (engine.native ? " (wasm, custom cube)" : "")));
@@ -790,7 +859,7 @@ async function render(maxDim) {
     if (recipe) showRecipe(recipe);
     return new Blob([out], { type: "image/jpeg" });
   } catch (e) {
-    setStatus(e.message, true);
+    if (!quiet) setStatus(e.message, true);
     return null;
   }
 }
@@ -808,6 +877,8 @@ function showView(which) {
   if (which === "A" && pinned) $("aftercap").textContent = "A — " + pinned.caption;
   else if (which === "original") $("aftercap").textContent = "original — " + inputName + "." + inputExt;
   else if (lastRender) $("aftercap").textContent = lastRender.caption;
+  if (src) updateHistogram(src);
+  syncWipe();
 }
 
 async function renderPreview() {
@@ -819,6 +890,7 @@ async function renderPreview() {
       const url = URL.createObjectURL(blob);
       lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent };
       $("after").src = url;
+      fullRender = null;   /* the loupe's full-size render is of the old look now */
       if (view !== "original") showView("B");
     }
   } finally {
@@ -900,9 +972,11 @@ function selectImage(i) {
   lastRender = null;
   $("before").src = im.url;
   $("render").disabled = $("download").disabled = false;
+  fullRender = null;
   refreshThumbs();
   refreshRecipeFromControls();
   showView("original");
+  fetchSensorStats();
   scheduleRender();
 }
 
@@ -1004,6 +1078,276 @@ $("one2one").addEventListener("click", () => {
   $("one2one").className = on ? "small on" : "small secondary";
 });
 
+/* ---- comparison tools: wipe, histogram and clipping, loupe, bracket --- */
+let fullRender = null;    /* {url, w, h, key} full-size render of the current look, for the loupe */
+let wipeOn = false, wipeX = 0.5, wipeDrag = false;
+let clipOn = false, loupeOn = false;
+let histSrc = null;
+
+/* the rectangle the displayed image occupies inside the viewport; every
+ * overlay is laid on exactly that */
+function viewRect() {
+  const v = $("view");
+  return { left: v.offsetLeft || 0, top: v.offsetTop || 0,
+           width: v.clientWidth || v.width || 0, height: v.clientHeight || v.height || 0 };
+}
+function placeOverlay(el, r) {
+  el.style.left = r.left + "px"; el.style.top = r.top + "px";
+  el.style.width = r.width + "px"; el.style.height = r.height + "px";
+}
+function layoutOverlays() {
+  const r = viewRect();
+  if (!r.width) return;
+  placeOverlay($("wipeimg"), r);
+  placeOverlay($("clipcanvas"), r);
+  const bar = $("wipebar");
+  bar.style.left = (r.left + r.width * wipeX) + "px"; bar.style.top = r.top + "px";
+  bar.style.height = r.height + "px";
+  $("wipeimg").style.clipPath = `inset(0 ${((1 - wipeX) * 100).toFixed(3)}% 0 0)`;
+}
+
+/* wipe: the left of the divider shows the original (or A), the right the
+ * view as selected; the divider follows the pointer while pressed */
+function syncWipe() {
+  const canA = !!(pinned && pinned.url);
+  const against = $("wipeagainst").value === "A" && canA ? "A" : "original";
+  const src = against === "A" ? pinned.url : originalUrl;
+  const show = wipeOn && !!src;
+  $("wipeimg").style.display = show ? "block" : "none";
+  $("wipebar").style.display = show ? "block" : "none";
+  $("wipeagainst").style.display = wipeOn ? "" : "none";
+  $("viewport").className = ($("viewport").className.replace(/\bwiping\b/, "").trim() + (show ? " wiping" : "")).trim();
+  $("wipe").className = wipeOn ? "small on" : "small secondary";
+  if (show && $("wipeimg").src !== src) $("wipeimg").src = src;
+  if (show) layoutOverlays();
+}
+function setWipe(on) {
+  wipeOn = on;
+  if (on && view === "original") showView("B");
+  syncWipe();
+}
+$("wipe").addEventListener("click", () => setWipe(!wipeOn));
+$("wipeagainst").addEventListener("change", syncWipe);
+function wipeFromEvent(e) {
+  const r = viewRect(), vp = $("viewport");
+  const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
+  const x = (e.clientX - rect.left + (vp.scrollLeft || 0) - r.left) / (r.width || 1);
+  wipeX = Math.max(0, Math.min(1, x));
+  layoutOverlays();
+}
+$("viewport").addEventListener("pointerdown", e => {
+  if (!wipeOn || e.button !== 0) return;
+  wipeDrag = true; wipeFromEvent(e);
+  if (e.preventDefault) e.preventDefault();
+});
+$("viewport").addEventListener("pointermove", e => {
+  if (wipeDrag) wipeFromEvent(e);
+  if (loupeOn) moveLoupe(e);
+});
+$("viewport").addEventListener("pointerup", () => { wipeDrag = false; });
+$("viewport").addEventListener("pointerleave", () => { wipeDrag = false; $("loupe").style.display = "none"; });
+
+/* histogram and clipping: from the pixels of the view, sampled at up to
+ * 512 px wide; per channel, log scale; the clipping overlay paints a
+ * channel at white red and all three at black blue */
+async function updateHistogram(src) {
+  histSrc = src;
+  const canvas = $("histo");
+  if (typeof createImageBitmap !== "function" || !canvas.getContext || typeof document.createElement !== "function") return;
+  let bmp;
+  try { bmp = await createImageBitmap(await (await fetch(src)).blob()); }
+  catch (e) { return; }
+  if (histSrc !== src) { bmp.close && bmp.close(); return; }   /* a newer view came along */
+  const scale = Math.min(1, 512 / bmp.width);
+  const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+  const work = document.createElement("canvas");
+  work.width = w; work.height = h;
+  const wctx = work.getContext("2d", { willReadFrequently: true });
+  if (!wctx) return;
+  wctx.drawImage(bmp, 0, 0, w, h);
+  bmp.close && bmp.close();
+  const px = wctx.getImageData(0, 0, w, h).data;
+  const bins = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+  let hi = [0, 0, 0], lo = 0, n = w * h;
+  const clip = $("clipcanvas");
+  const paint = clipOn && clip.getContext;
+  let cctx = null, cimg = null;
+  if (paint) {
+    clip.width = w; clip.height = h;
+    cctx = clip.getContext("2d");
+    cimg = cctx.createImageData(w, h);
+  }
+  for (let i = 0, j = 0; i < n; ++i, j += 4) {
+    const r = px[j], g = px[j + 1], b = px[j + 2];
+    bins[0][r]++; bins[1][g]++; bins[2][b]++;
+    const anyHi = r >= 254 || g >= 254 || b >= 254;
+    const allLo = r <= 1 && g <= 1 && b <= 1;
+    if (r >= 254) hi[0]++; if (g >= 254) hi[1]++; if (b >= 254) hi[2]++;
+    if (allLo) lo++;
+    if (paint) {
+      const d = cimg.data;
+      if (anyHi) { d[j] = 255; d[j + 1] = 40; d[j + 2] = 40; d[j + 3] = 230; }
+      else if (allLo) { d[j] = 60; d[j + 1] = 90; d[j + 2] = 255; d[j + 3] = 230; }
+      else d[j + 3] = 0;
+    }
+  }
+  if (paint) { cctx.putImageData(cimg, 0, 0); clip.style.display = "block"; layoutOverlays(); }
+  else clip.style.display = "none";
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#1d1b18"; ctx.fillRect(0, 0, W, H);
+  let peak = 1;
+  for (const c of bins) for (let i = 1; i < 255; ++i) peak = Math.max(peak, c[i]);
+  const lp = Math.log(peak + 1);
+  const colors = ["rgba(230,70,70,0.75)", "rgba(80,210,90,0.65)", "rgba(80,120,255,0.7)"];
+  ctx.globalCompositeOperation = "lighter";
+  for (let c = 0; c < 3; ++c) {
+    ctx.fillStyle = colors[c];
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let i = 0; i < 256; ++i) {
+      const y = H - (Math.log(bins[c][i] + 1) / lp) * (H - 2);
+      ctx.lineTo(i * W / 256, y);
+    }
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+  const pct = v => (100 * v / n).toFixed(2) + "%";
+  let text = `clipped high: R ${pct(hi[0])}  G ${pct(hi[1])}  B ${pct(hi[2])}\ncrushed black: ${pct(lo)}`;
+  if (sensorStats) text += `\nsensor: ${sensorStats}`;
+  $("histtext").textContent = text;
+  canvas.dataset.clippedHigh = String(hi[0] + hi[1] + hi[2]);
+  canvas.dataset.crushed = String(lo);
+}
+let sensorStats = null;   /* from the native engine, for raw input */
+async function fetchSensorStats() {
+  sensorStats = null;
+  if (!(engine && engine.native && engine.stats && inputServerName)) return;
+  try {
+    const st = await engine.stats(inputServerName);
+    if (st && st.scene_linear)
+      sensorStats = `${st.stops_below_white.toFixed(2)} stops below white (mean), ${st.clipped_percent.toFixed(2)}% at sensor white`;
+  } catch (e) { sensorStats = null; }
+  if (histSrc) updateHistogram(histSrc);
+}
+$("clipwarn").addEventListener("click", () => {
+  clipOn = !clipOn;
+  $("clipwarn").className = clipOn ? "small on" : "small secondary";
+  if (!clipOn) $("clipcanvas").style.display = "none";
+  if (histSrc) updateHistogram(histSrc);
+});
+
+/* loupe: a 320 px window at 1:1 of the full-size render, following the
+ * pointer; the full-size render is made once per look and reused */
+async function ensureFullRender() {
+  const key = inputName + "|" + $("recipe").value;
+  if (fullRender && fullRender.key === key) return fullRender;
+  if (fullRender && fullRender.pending === key) return null;
+  fullRender = { pending: key };
+  setStatus("loupe: rendering full size…");
+  const blob = await render(0, {}, true);
+  if (!blob) { fullRender = null; return null; }
+  const url = URL.createObjectURL(blob);
+  const dims = await new Promise(resolve => {
+    if (typeof Image !== "function") { resolve({ w: 0, h: 0 }); return; }
+    const im = new Image();
+    im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+    im.onerror = () => resolve({ w: 0, h: 0 });
+    im.src = url;
+  });
+  fullRender = { key, url, w: dims.w, h: dims.h };
+  setStatus(`loupe: full size ${dims.w}×${dims.h} ready`);
+  return fullRender;
+}
+async function moveLoupe(e) {
+  const lp = $("loupe");
+  const fr = await ensureFullRender();
+  if (!fr || !fr.w) { lp.style.display = "none"; return; }
+  const r = viewRect(), vp = $("viewport");
+  const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
+  const fx = (e.clientX - rect.left + (vp.scrollLeft || 0) - r.left) / (r.width || 1);
+  const fy = (e.clientY - rect.top + (vp.scrollTop || 0) - r.top) / (r.height || 1);
+  if (fx < 0 || fx > 1 || fy < 0 || fy > 1) { lp.style.display = "none"; return; }
+  const size = 320;
+  lp.style.backgroundImage = `url("${fr.url}")`;
+  lp.style.backgroundSize = `${fr.w}px ${fr.h}px`;
+  lp.style.backgroundPosition = `${Math.round(size / 2 - fx * fr.w)}px ${Math.round(size / 2 - fy * fr.h)}px`;
+  const ww = (typeof window !== "undefined" && window.innerWidth) || 1600;
+  const wh = (typeof window !== "undefined" && window.innerHeight) || 1000;
+  lp.style.left = Math.min(e.clientX + 24, ww - size - 8) + "px";
+  lp.style.top = Math.min(e.clientY + 24, wh - size - 8) + "px";
+  $("loupecap").textContent = `1:1 of ${fr.w}×${fr.h} at ${Math.round(fx * fr.w)},${Math.round(fy * fr.h)}`;
+  lp.style.display = "block";
+}
+function setLoupe(on) {
+  loupeOn = on;
+  $("loupe-btn").className = on ? "small on" : "small secondary";
+  if (!on) $("loupe").style.display = "none";
+  else if (lastRender || originalUrl) ensureFullRender();
+}
+$("loupe-btn").addEventListener("click", () => setLoupe(!loupeOn));
+
+/* bracket: nine renders stepping one knob around the current value,
+ * small, in a grid over the view; a click takes that value */
+const BRACKETS = {
+  ev:       v => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(d => +(v + d).toFixed(2)).filter(x => x >= -4 && x <= 4),
+  strength: () => [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+  age:      () => [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
+  halation: () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+  edge:     () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+  develop:  () => ["pull-2", "pull-1", "normal", "push+1", "push+2", "push+3", "push+4", "cross", "cross+1"],
+};
+let bracketRun = 0;
+async function runBracket() {
+  if (!inputBytes && !inputServerName) { setStatus("load an image first", true); return; }
+  const axis = $("bracketaxis").value;
+  const cur = axis === "develop" ? $("develop").value : parseFloat($(axis).value);
+  const values = BRACKETS[axis](cur);
+  const run = ++bracketRun;
+  const grid = $("sheetgrid");
+  while (grid.firstChild) grid.removeChild(grid.firstChild);
+  $("sheethead").textContent = `bracket — ${axis}`;
+  $("sheet").className = "on";
+  const cells = [];
+  for (const v of values) {
+    const fig = document.createElement("figure");
+    const img = document.createElement("img");
+    const cap = document.createElement("figcaption");
+    cap.textContent = axis === "develop" ? v : (axis === "ev" && v > 0 ? "+" : "") + String(v);
+    if (String(v) === String(cur)) fig.className = "cur";
+    fig.append(img, cap);
+    fig.addEventListener("click", () => {
+      $(axis).value = String(v);
+      syncValueLabels();
+      closeSheet();
+      onControlChange();
+    });
+    grid.append(fig);
+    cells.push({ v, img, fig });
+  }
+  const size = Math.max(240, Math.min(600, Math.round(previewSize() / 3)));
+  for (const cell of cells) {
+    if (run !== bracketRun) return;
+    const overrides = axis === "develop" ? { develop: cell.v } : { [axis]: cell.v };
+    const t0 = performance.now();
+    const blob = await render(size, overrides, true);
+    if (run !== bracketRun) return;
+    if (blob) cell.img.src = URL.createObjectURL(blob);
+    else cell.fig.className = (cell.fig.className + " failed").trim();
+    setStatus(`bracket: ${axis} ${cells.indexOf(cell) + 1}/${cells.length} (${((performance.now() - t0) / 1000).toFixed(1)}s)`);
+  }
+  setStatus(`bracket: ${axis} — click a cell to take it, Esc to close`);
+}
+function closeSheet() { $("sheet").className = ""; ++bracketRun; }
+$("bracket").addEventListener("click", runBracket);
+$("sheetclose").addEventListener("click", closeSheet);
+
+if (typeof window !== "undefined" && window.addEventListener) {
+  window.addEventListener("resize", layoutOverlays);
+  if (typeof ResizeObserver === "function") new ResizeObserver(layoutOverlays).observe($("view"));
+  $("view").addEventListener("load", layoutOverlays);
+}
+
 $("copyrecipe").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText($("recipe").value); setStatus("recipe copied"); }
   catch (e) { setStatus("select the recipe text and copy it by hand", true); }
@@ -1102,6 +1446,9 @@ if (typeof document.addEventListener === "function") {
     if (e.key === "\\" && !glance) { glance = true; showView("original"); }
     else if (e.key === "a") showView(view === "A" ? "B" : (pinned ? "A" : "B"));
     else if (e.key === "r") renderPreview();
+    else if (e.key === "w") setWipe(!wipeOn);
+    else if (e.key === "l") setLoupe(!loupeOn);
+    else if (e.key === "Escape") closeSheet();
   });
   document.addEventListener("keyup", e => {
     if (e.key === "\\" && glance) { glance = false; showView("B"); }

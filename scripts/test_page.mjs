@@ -127,6 +127,9 @@ elems["camera"].value = "bw-35";
 elems["camera"].handlers["change"]();
 if (elems["edge"].disabled) throw new Error("edge slider stuck disabled");
 console.log("edge slider present; disabled for instant cameras, re-enabled for film");
+// the develop list starts at pull-3; the default must still be normal
+// (the fake DOM has no option list, so this is a text check on the page)
+if (!/<option value="normal" selected>/.test(html)) throw new Error("develop default is not 'normal'");
 // 1.21: the format control follows the camera's crop; the recipe and CLI
 // line carry crop=full and the extended develop text
 if (!elems["crop"]) throw new Error("crop select absent");
