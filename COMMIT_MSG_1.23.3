@@ -1,0 +1,23 @@
+1.23.3: the wipe says what it shows
+
+The wipe had two faults of design, not placement. Its one dropdown
+read "vs original" while the view could itself be the original, and
+the page then swapped the comparison silently; and the other image
+was clipped to its picture area, so outside it (a Polaroid's crop
+ending before the original's edge) the view showed through, which
+reads as a glitch.
+
+Now one function composes the stage. The right of the divider is the
+view - original, A or current, the buttons; the left is the image
+chosen in a "left:" dropdown, shown whole, borders included, laid at
+the input's pixel scale so the two pictures coincide and clipped only
+to the view's box and the divider. Choosing for the left what is on
+view moves the choice to its counterpart and the dropdown shows it. A
+new render while the original is on view recomposes, since the
+current may be the left side.
+
+The Chromium test's 54-case placement check now also asserts the
+dropdown names the image actually on the left.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

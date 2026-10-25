@@ -68,6 +68,8 @@
   .toolbar .seg button.on { background:var(--ink); color:var(--paper); }
   .toolbar .spacer { flex:1; }
   .toolbar select { width:auto; font-size:0.8rem; padding:0.2rem 0.3rem; }
+  .toolbar .wipeside { font-size:0.8rem; color:var(--muted); display:inline-flex; gap:0.3rem; align-items:center; }
+  .toolbar .wipeside .muted { color:var(--faint); }
   #viewport { flex:1; min-height:20rem; overflow:auto; background:#2b2823;
               display:flex; align-items:center; justify-content:center; position:relative; }
   #viewport img { max-width:100%; max-height:100%; object-fit:contain; display:block;
@@ -341,12 +343,15 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
     </span>
     <button id="pinA" class="small secondary" title="keep the current render and recipe as A, then change things and compare">pin as A</button>
     <button id="one2one" class="small secondary" title="1:1 pixels (scroll around)">1:1</button>
-    <button id="wipe" class="small secondary" title="wipe: drag a divider between the current look and the original (or A); key w">wipe</button>
-    <select id="wipeagainst" class="small" style="display:none" title="what the left side of the wipe shows">
-      <option value="original">vs original</option>
-      <option value="A">vs A</option>
-      <option value="B">vs current</option>
-    </select>
+    <button id="wipe" class="small secondary" title="wipe: drag a divider; the view (original / A / current, chosen above) is on the right, the image chosen here on the left; key w">wipe</button>
+    <span id="wipeside" class="wipeside" style="display:none">left:
+      <select id="wipeagainst" class="small" title="the image on the left of the divider; the view buttons choose the right">
+        <option value="original">original</option>
+        <option value="A">A</option>
+        <option value="B">current</option>
+      </select>
+      <span class="muted">| right: the view</span>
+    </span>
     <button id="loupe-btn" class="small secondary" title="loupe: a 1:1 window of the full-size render under the pointer; key l">loupe</button>
     <button id="bracket" class="small secondary" title="bracket: nine renders of the current look stepping one knob, click one to take it">bracket</button>
     <select id="bracketaxis" class="small" title="the knob the bracket steps">
@@ -401,7 +406,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.23.2";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.23.3";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -915,7 +920,7 @@ function showView(which) {
   else if (which === "original") $("aftercap").textContent = "original — " + inputName + "." + inputExt;
   else if (lastRender) $("aftercap").textContent = lastRender.caption;
   if (src) updateHistogram(src);
-  syncWipe();
+  composeStage();
   $("loupe").style.display = "none";
   if (loupeOn && src) ensureFull(shownKind());
 }
@@ -930,6 +935,7 @@ async function renderPreview() {
       lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
       $("after").src = url;
       if (view !== "original") showView("B");
+      else composeStage();   /* the current may be the wipe's left side */
     }
   } finally {
     rendering = false;
@@ -1167,71 +1173,59 @@ function imageInfo(kind) {
   const g = lastRender.geometry ? scaleGeometry(lastRender.geometry, rw / lastRender.geometry.inW) : identityGeometry(rw, rh);
   return { kind: "B", url: lastRender.url, geometry: g };
 }
-function shownInfo() { return imageInfo(view === "A" ? "A" : view === "original" ? "original" : "B"); }
-/* the wipe's other image: the choice in the dropdown, and when that is
- * what is on view already, the natural counterpart */
-function otherInfo() {
-  const want = $("wipeagainst").value || "original";
-  const shown = view === "A" ? "A" : view === "original" ? "original" : "B";
-  let kind = want;
-  if (kind === shown) kind = shown === "B" ? "original" : "B";
-  let info = imageInfo(kind);
-  if (!info && kind !== "original") info = imageInfo("original");
-  if (info && info.kind === shown) return null;
-  return info;
+function shownInfo() { return imageInfo(shownKind()); }
+/* ---- the stage: one place composes what is on screen ----------------
+ * The base image is the view (original / A / current, the buttons). With
+ * the wipe on, the image chosen as "left" is laid over it at the input's
+ * pixel scale so the two pictures coincide, and shown left of the
+ * divider; whole, borders included, within the view's box. If the left
+ * choice is the view itself, the choice moves to its counterpart and
+ * the dropdown says so - nothing is swapped silently. */
+function shownKind() { return view === "A" ? "A" : view === "original" ? "original" : "B"; }
+function leftKind() {
+  const sel = $("wipeagainst");
+  let kind = sel.value || "original";
+  if (kind === "A" && !(pinned && pinned.url)) kind = "original";
+  if (kind === shownKind()) kind = shownKind() === "B" ? "original" : "B";
+  if (kind === "B" && !(lastRender && lastRender.url)) kind = "original";
+  if (sel.value !== kind) sel.value = kind;
+  return kind;
 }
-
-function layoutOverlays() {
+function composeStage() {
   const r = viewRect();
-  if (!r.width) return;
+  const ov = $("wipeimg"), bar = $("wipebar");
+  const shown = shownInfo();
+  const left = wipeOn && shown ? imageInfo(leftKind()) : null;
+  const active = !!(left && left.kind !== shown.kind && r.width);
+  $("wipeside").style.display = wipeOn ? "" : "none";
+  $("wipe").className = wipeOn ? "small on" : "small secondary";
+  $("viewport").className = ($("viewport").className.replace(/\bwiping\b/, "").trim() + (active ? " wiping" : "")).trim();
   placeOverlay($("clipcanvas"), r);
-  const bar = $("wipebar");
+  if (!active) { ov.style.display = "none"; bar.style.display = "none"; return; }
   bar.style.left = (r.left + r.width * wipeX) + "px"; bar.style.top = r.top + "px";
-  bar.style.height = r.height + "px";
-  const ov = $("wipeimg");
-  const shown = shownInfo(), other = otherInfo();
-  if (!shown || !other) { ov.style.display = "none"; return; }
-  if (ov.src !== other.url) ov.src = other.url;
-  /* Lay the other image at the input's pixel scale so its picture
-   * coincides with the picture on view: other pixel u is input pixel
-   * u - placeO + cropO, which is shown pixel u - placeO + cropO - cropS
-   * + placeS. Visible: both pictures' areas, within the view, left of
-   * the divider. All in shown-output pixels times the view scale. */
-  const gS = shown.geometry, gO = other.geometry;
+  bar.style.height = r.height + "px"; bar.style.display = "block";
+  if (ov.src !== left.url) ov.src = left.url;
+  /* left pixel u is input pixel u - placeL + cropL, which is shown pixel
+   * u - placeL + cropL - cropS + placeS; everything in shown-output
+   * pixels times the view scale */
+  const gS = shown.geometry, gL = left.geometry;
   const sc = r.width / gS.outW;
-  const dx = gS.placeX - gS.cropX + gO.cropX - gO.placeX;
-  const dy = gS.placeY - gS.cropY + gO.cropY - gO.placeY;
-  const W = gO.outW, H = gO.outH;
+  const dx = gS.placeX - gS.cropX + gL.cropX - gL.placeX;
+  const dy = gS.placeY - gS.cropY + gL.cropY - gL.placeY;
+  const W = gL.outW, H = gL.outH;
   ov.style.left = (r.left + dx * sc) + "px"; ov.style.top = (r.top + dy * sc) + "px";
   ov.style.width = (W * sc) + "px"; ov.style.height = (H * sc) + "px";
-  const x0 = Math.max(gS.placeX, gO.placeX + dx, 0);
-  const y0 = Math.max(gS.placeY, gO.placeY + dy, 0);
-  const x1 = Math.min(gS.placeX + gS.cropW, gO.placeX + gO.cropW + dx, gS.outW, wipeX * gS.outW);
-  const y1 = Math.min(gS.placeY + gS.cropH, gO.placeY + gO.cropH + dy, gS.outH);
+  /* visible: the view's box, left of the divider */
+  const x0 = 0, y0 = 0, x1 = Math.min(gS.outW, wipeX * gS.outW), y1 = gS.outH;
   const insetL = Math.max(0, (x0 - dx) * sc), insetT = Math.max(0, (y0 - dy) * sc);
   const insetR = Math.max(0, W * sc - (x1 - dx) * sc), insetB = Math.max(0, H * sc - (y1 - dy) * sc);
   ov.style.clipPath = `inset(${insetT.toFixed(2)}px ${insetR.toFixed(2)}px ${insetB.toFixed(2)}px ${insetL.toFixed(2)}px)`;
-  ov.style.display = x1 > x0 && y1 > y0 ? "block" : "none";
+  ov.style.display = (x1 - dx) * sc > insetL ? "block" : "none";
 }
-
-/* wipe: the view on the right of the divider, the chosen other image on
- * the left (original, A or current - whichever is not on view) */
-function syncWipe() {
-  const other = wipeOn ? otherInfo() : null;
-  const show = !!other;
-  $("wipebar").style.display = show ? "block" : "none";
-  $("wipeagainst").style.display = wipeOn ? "" : "none";
-  $("viewport").className = ($("viewport").className.replace(/\bwiping\b/, "").trim() + (show ? " wiping" : "")).trim();
-  $("wipe").className = wipeOn ? "small on" : "small secondary";
-  if (!show) { $("wipeimg").style.display = "none"; return; }
-  layoutOverlays();
-}
-function setWipe(on) {
-  wipeOn = on;
-  syncWipe();
-}
+function layoutOverlays() { composeStage(); }
+function setWipe(on) { wipeOn = on; composeStage(); }
 $("wipe").addEventListener("click", () => setWipe(!wipeOn));
-$("wipeagainst").addEventListener("change", syncWipe);
+$("wipeagainst").addEventListener("change", composeStage);
 function wipeFromEvent(e) {
   const r = viewRect(), vp = $("viewport");
   const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
@@ -1390,7 +1384,6 @@ async function ensureFull(kind) {
   setStatus(`loupe: full size ${dims.w}×${dims.h} ready` + (kind === "B" ? "" : ` (${kind})`));
   return entry;
 }
-function shownKind() { return view === "A" ? "A" : view === "original" ? "original" : "B"; }
 async function moveLoupe(e) {
   const lp = $("loupe");
   const kind = shownKind();
@@ -1477,7 +1470,7 @@ $("sheetclose").addEventListener("click", closeSheet);
 
 if (typeof window !== "undefined" && window.addEventListener) {
   /* a hook for the Chromium test to check the wipe's placement */
-  window.__polajuice = { imageInfo, shownInfo, otherInfo, viewRect };
+  window.__polajuice = { imageInfo, shownInfo, leftKind, viewRect };
   window.addEventListener("resize", layoutOverlays);
   if (typeof ResizeObserver === "function") new ResizeObserver(layoutOverlays).observe($("view"));
   $("view").addEventListener("load", layoutOverlays);

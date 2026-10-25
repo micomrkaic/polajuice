@@ -472,10 +472,12 @@ super8ify take the same files.
 
 Four tools on the view, all page-side (renders are unchanged):
 
-- **Wipe** (`w`): a divider dragged across the view, the image on view
-  on the right and the original, the look pinned as A or the current
-  look on the left (when the choice is what is on view, its natural
-  counterpart). The comparison image is laid on the picture, not the box: the
+- **Wipe** (`w`): a divider dragged across the view. The right side is
+  the view (original / A / current, the buttons); the left side is the
+  image chosen in the *left:* dropdown, shown whole - borders included -
+  laid so that the two pictures coincide. Choosing for the left what is
+  on view moves the choice to its counterpart, and the dropdown shows
+  it. The comparison image is laid on the picture, not the box: the
   engine writes where the picture landed (crop and placement) as a
   comment line after the recipe in every JPEG, so a Polaroid's border,
   a Super 8 gate or the 126 square all line up, and two cameras with

@@ -94,8 +94,9 @@ if (await page.$eval("#wipeimg", e => e.style.display) !== "none") fail("w key d
 async function checkWipeAlignment(label) {
   const res = await page.evaluate(() => {
     const H = window.__polajuice;
-    const S = H.shownInfo(), O = H.otherInfo();
+    const S = H.shownInfo(), O = H.imageInfo(H.leftKind());
     if (!S || !O) return { skip: true };
+    if (document.getElementById("wipeagainst").value !== O.kind) return { lie: true, sel: document.getElementById("wipeagainst").value, O: O.kind };
     const r = H.viewRect();
     const ov = document.getElementById("wipeimg");
     if (ov.style.display !== "block") return { hidden: true, S: S.kind, O: O.kind };
@@ -110,6 +111,7 @@ async function checkWipeAlignment(label) {
     return { S: S.kind, O: O.kind, dx: viaS[0] - viaO[0], dy: viaS[1] - viaO[1], scale: so / sc };
   });
   if (res.skip) fail(label + ": no images to compare");
+  if (res.lie) fail(label + `: dropdown says ${res.sel} but the left is ${res.O}`);
   if (res.hidden) fail(label + `: wipe hidden for ${res.S} vs ${res.O}`);
   if (Math.abs(res.dx) > 0.75 || Math.abs(res.dy) > 0.75 || Math.abs(res.scale - 1) > 1e-3)
     fail(label + `: misaligned ${res.S} vs ${res.O}: dx ${res.dx.toFixed(2)} dy ${res.dy.toFixed(2)} scale ${res.scale.toFixed(4)}`);
