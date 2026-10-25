@@ -1,0 +1,39 @@
+1.22.2: the D610 verified against LibRaw - image area, matrix, side choice
+
+A real D610 NEF (14-bit Nikon compressed, 6080x4028) settled three
+things 1.22.0 had guessed at.
+
+The image area. The D610's CropHiSpeed tag declares no crop
+("6080x4028 cropped to 6080x4028 at 0,0"), so bodies that declare
+nothing now get their image area from a small table keyed by model
+and raw size, a mismatch meaning no crop. The D600/D610 entry is
+measured on the file: 46 masked columns at the right (8 black
+reference columns, 6 junk, 32 dummies at 1) and no masked rows, so
+6034x4028, as LibRaw delivers; the other entries (D3200/D3300, D7000,
+D800, D90, D750) are the cameras' JPEG sizes from memory, which may
+trim a few picture columns and never show masked ones. Only the side
+of the masked band is read from the data, by the band's darkest line:
+a masked band always holds lines at the black level, a picture edge
+does not. The band's mean was tried first and misled on this very
+file (the junk columns lift it above a dark wall at the picture's
+left edge). A generic "find the black border" detector was tried and
+dropped too: it cropped a legitimately black edge column.
+
+The color matrix. The D610 entry in the NEF table was wrong (another
+body's numbers); it now carries the dcraw/LibRaw coefficients
+{8178,-2245,-609,-4857,12394,2776,-1207,2086,7298}. The other seven
+entries were checked against LibRaw's table and were right.
+
+The verification. Decoded scene-linear sRGB from polajuice against
+LibRaw's (camera WB, bilinear demosaic, no auto-bright, linear
+output) over the whole 24 MP frame: mean absolute difference 1.7e-5,
+99.9th percentile 5e-5, at LibRaw's 16-bit quantization; the few
+larger pixels are clipped highlights the two clip differently. The
+unverified flag on the NEF door comes off.
+
+Tests: the table lookup and the side choice on a 40x30 readout
+masked on either side; the bordered synthetic raws of 1.22.0 still
+decode to the bit as the plain files.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

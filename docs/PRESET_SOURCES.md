@@ -278,11 +278,22 @@ rows normalized to sum 1, inverted.
 
 NEF carries no color matrix. The table in `src/core/rawdec.c` holds
 Adobe-style matrices (x1e4) for the D610/D600, D3200, D3300, D750,
-D7000, D800 and D90 as recalled from dcraw's `adobe_coeff`; they were
-written from memory in the sandbox and have not been checked against a
-copy of the source. A wrong entry shifts hue a little, never brightness
-or neutrals (the recipe forces camera white to RGB white). Verify
-against dcraw.c before trusting a skin tone, and add models there.
+D7000, D800 and D90, checked against LibRaw's `colordata.cpp` (the
+dcraw `adobe_coeff` table) in 1.22.2; the D610 entry had been wrong
+before that. The D610 path as a whole - Nikon decoder, black (none:
+the D610 subtracts it in camera), as-shot WB, matrix, image-area crop
+- was then compared with LibRaw over a full 24 MP frame: mean absolute
+difference 1.7e-5 in linear sRGB, i.e. LibRaw's 16-bit quantization.
+A wrong entry shifts hue a little, never brightness or neutrals (the
+recipe forces camera white to RGB white). Add models from the same
+table.
+
+The image area of bodies that declare none in CropHiSpeed comes from
+a table keyed by model and raw size. The D600/D610 line is measured:
+of the 6080x4028 readout, the rightmost 46 columns are masked (8 black
+reference columns at 600, 6 junk columns, 32 dummy columns at 1) and
+no rows; the picture is 6034x4028, as LibRaw delivers. The side of the
+masked band is read from the samples by the band's darkest line.
 
 Opening raw one stop up is a choice, not a measurement: cameras place
 middle gray roughly 2.5-3.5 stops below sensor white, so +1 lands it

@@ -808,8 +808,8 @@ static bool decode_pixels(const Tiff *t, uint16_t *pix, unsigned spp,
  * provenance in docs/PRESET_SOURCES.md. */
 typedef struct { const char *model; short m[9]; } CamMatrix;
 static const CamMatrix cam_matrices[] = {
-    { "D610",  { 8178,-2577,-1137,-6219,13925,2511,-1527,2951,6721 } },
-    { "D600",  { 8178,-2577,-1137,-6219,13925,2511,-1527,2951,6721 } },
+    { "D610",  { 8178,-2245,-609,-4857,12394,2776,-1207,2086,7298 } },
+    { "D600",  { 8178,-2245,-609,-4857,12394,2776,-1207,2086,7298 } },
     { "D3200", { 7013,-1408,-635,-5268,12902,2640,-1470,2801,7379 } },
     { "D3300", { 6988,-1384,-714,-5631,13410,2447,-1485,2204,7318 } },
     { "D750",  { 9020,-2890,-715,-4535,12436,2348,-934,1919,7086 } },
@@ -982,12 +982,14 @@ const char *pj_raw_description(void) { return raw_description; }
 /* Sensor readouts of Nikon bodies that declare no crop (the D610 writes
  * CropHiSpeed as "6080x4028 cropped to 6080x4028 at 0,0"): the image
  * area every other converter delivers, keyed by model and raw size so
- * a mismatch means no crop rather than a wrong one. Image sizes are the
- * cameras' JPEG sizes; the raw sizes come from memory for all but the
- * D610 and are guarded by the match. */
+ * a mismatch means no crop rather than a wrong one. The D600/D610 entry
+ * is measured on a real file (46 masked columns at the right: 8 black
+ * reference columns, 6 junk, 32 dummies; no masked rows), matching
+ * LibRaw; the others are the cameras' JPEG sizes from memory, which
+ * may trim a few picture columns, never show masked ones. */
 typedef struct { const char *model; unsigned raw_w, raw_h, img_w, img_h; } NikonArea;
 static const NikonArea nikon_areas[] = {
-    {"D610", 6080, 4028, 6016, 4016}, {"D600", 6080, 4028, 6016, 4016},
+    {"D610", 6080, 4028, 6034, 4028}, {"D600", 6080, 4028, 6034, 4028},
     {"D3200", 6080, 4028, 6016, 4000}, {"D3300", 6080, 4028, 6016, 4000},
     {"D7000", 4992, 3280, 4928, 3264}, {"D800", 7424, 4924, 7360, 4912},
     {"D90", 4352, 2868, 4288, 2848}, {"D750", 6032, 4032, 6016, 4016},
@@ -1006,36 +1008,62 @@ bool pj_raw_nikon_image_area(const char *model, size_t raw_w, size_t raw_h,
     return false;
 }
 
-static double band_mean(const uint16_t *pix, size_t w, const double black[4],
-                        size_t x0, size_t x1, size_t y0, size_t y1)
+/* the darkest column (or row) of a band, as a mean above black: a
+ * masked band always holds lines at the black level (the dummy columns
+ * read a constant), while a picture edge, however dark, does not */
+static double band_min_col(const uint16_t *pix, size_t w, size_t h, const double black[4],
+                           size_t x0, size_t x1)
 {
-    double sum = 0; size_t n = 0;
-    for (size_t y = y0; y < y1; ++y)
-        for (size_t x = x0; x < x1; ++x, ++n) {
+    double best = -1;
+    for (size_t x = x0; x < x1; ++x) {
+        double sum = 0;
+        for (size_t y = 0; y < h; ++y) {
             double v = (double)pix[y * w + x] - black[(y & 1) * 2 + (x & 1)];
             if (v > 0) sum += v;
         }
-    return n ? sum / (double)n : 0.0;
+        sum /= (double)h;
+        if (best < 0 || sum < best) best = sum;
+    }
+    return best < 0 ? 0 : best;
 }
 
-/* Where the masked band sits, given how much of it there is: the
- * optically black columns read the black level along their whole
- * length, so of the two candidate bands the darker one is the mask.
- * Even offsets keep the CFA phase, which is how the sensors are laid
- * out; an odd margin is rounded down so the phase holds. */
+static double band_min_row(const uint16_t *pix, size_t w, const double black[4],
+                           size_t y0, size_t y1)
+{
+    double best = -1;
+    for (size_t y = y0; y < y1; ++y) {
+        double sum = 0;
+        for (size_t x = 0; x < w; ++x) {
+            double v = (double)pix[y * w + x] - black[(y & 1) * 2 + (x & 1)];
+            if (v > 0) sum += v;
+        }
+        sum /= (double)w;
+        if (best < 0 || sum < best) best = sum;
+    }
+    return best < 0 ? 0 : best;
+}
+
+/* Where the masked band sits, given how much of it there is. Of the
+ * two candidate bands the mask is the one whose darkest line sits at
+ * the black level (the D610's band mixes dummy columns at black with
+ * junk and reference columns well above it, so the band's mean would
+ * mislead; its darkest column does not). Ties go to the right and the
+ * bottom, where Nikon puts them. Even offsets keep the CFA phase, which
+ * is how the sensors are laid out; an odd margin is rounded down so
+ * the phase holds. */
 void pj_raw_choose_sides(const uint16_t *pix, size_t w, size_t h, const double black[4],
                          size_t img_w, size_t img_h, size_t *x0, size_t *y0)
 {
     *x0 = 0; *y0 = 0;
     size_t mx = w - img_w, my = h - img_h;
     if (mx) {
-        double left = band_mean(pix, w, black, 0, mx, 0, h);
-        double right = band_mean(pix, w, black, w - mx, w, 0, h);
+        double left = band_min_col(pix, w, h, black, 0, mx);
+        double right = band_min_col(pix, w, h, black, w - mx, w);
         if (left < right) *x0 = mx & ~(size_t)1;   /* the mask is on the left: the picture starts after it */
     }
     if (my) {
-        double top = band_mean(pix, w, black, 0, w, 0, my);
-        double bottom = band_mean(pix, w, black, 0, w, h - my, h);
+        double top = band_min_row(pix, w, black, 0, my);
+        double bottom = band_min_row(pix, w, black, h - my, h);
         if (top < bottom) *y0 = my & ~(size_t)1;
     }
 }

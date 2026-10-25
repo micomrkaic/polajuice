@@ -699,7 +699,7 @@ int main(void)
             {
                 size_t iw = 0, ih = 0;
                 assert(pj_raw_nikon_image_area("NIKON D610", 6080, 4028, &iw, &ih));
-                assert(iw == 6016 && ih == 4016);
+                assert(iw == 6034 && ih == 4028);
                 assert(!pj_raw_nikon_image_area("NIKON D610", 6016, 4016, &iw, &ih));
                 assert(!pj_raw_nikon_image_area("NIKON D5", 6080, 4028, &iw, &ih));
                 /* a 40x30 readout, 32x24 picture: masked right and bottom */
