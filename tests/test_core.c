@@ -676,6 +676,24 @@ int main(void)
          * where there is no demosaic to blur them */
         assert(memcmp(pj_image_pixels_const(decoded[0]), pj_image_pixels_const(decoded[1]),
                       64 * 48 * 3 * sizeof(float)) == 0);
+        /* the image area: the same pictures inside a larger sensor
+         * readout with a black border - a DNG with ActiveArea at an odd
+         * offset (the CFA phase shifts), a NEF with CropHiSpeed in the
+         * MakerNote - decode to the bit as the plain files */
+        {
+            PjImage *bd = pj_image_load("tests/raw/bayer_u16_border.dng", &error);
+            if (!bd) fprintf(stderr, "border dng: %s\n", error.message);
+            assert(bd && pj_image_width(bd) == 64 && pj_image_height(bd) == 48);
+            assert(memcmp(pj_image_pixels_const(bd), pj_image_pixels_const(decoded[0]),
+                          64 * 48 * 3 * sizeof(float)) == 0);
+            pj_image_free(bd);
+            PjImage *bn = pj_image_load("tests/raw/lossless14_border.nef", &error);
+            if (!bn) fprintf(stderr, "border nef: %s\n", error.message);
+            assert(bn && pj_image_width(bn) == 64 && pj_image_height(bn) == 48);
+            assert(memcmp(pj_image_pixels_const(bn), pj_image_pixels_const(decoded[3]),
+                          64 * 48 * 3 * sizeof(float)) == 0);
+            pj_image_free(bn);
+        }
 
         /* Through the pipeline: raw opens a stop up, so at --ev -1 the
          * gray card renders as the same scene would from an 8-bit file;

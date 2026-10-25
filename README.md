@@ -224,6 +224,12 @@ strongest from raw, where speculars still exist above white. Flash
 cameras (the instant presets) clip at the flash stage before halation,
 so they see less of the headroom.
 
+Sensors read out masked columns and rows around the picture (the D610
+delivers 6080x4028 for a 6016x4016 image), and the door cuts to the
+image area before anything sees the samples: DNG's ActiveArea and
+DefaultCrop tags, Nikon's CropHiSpeed in the MakerNote. The border
+never reaches the demosaic, the statistics or the print.
+
 The demosaic is bilinear, which fringes at hard high-contrast edges;
 the camera softness stage and film grain cover most of it, and an
 adaptive demosaic is on the roadmap. Clipped sensor channels are clipped

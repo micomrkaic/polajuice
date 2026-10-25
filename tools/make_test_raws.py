@@ -306,6 +306,43 @@ def build_bayer_u16():
     ents.sort(key=lambda e: e[0])
     return tiff(ents, {'data': data})
 
+def pad_plane(plane, width, height, left, top, right, bottom, fill):
+    """embed a Bayer plane in a larger sensor readout: a border of fill
+    (optically black) samples, the picture at (left, top). The CFA phase
+    of the picture must stay what the sensor's pattern says at that
+    offset, so the border is laid down with the sensor's pattern and the
+    picture's samples are simply placed - the decoder is expected to
+    derive the picture's pattern from the offset."""
+    pw, ph = width + left + right, height + top + bottom
+    out = [fill] * (pw * ph)
+    for y in range(height):
+        for x in range(width):
+            out[(y + top) * pw + (x + left)] = plane[y * width + x]
+    return out, pw, ph
+
+def build_bayer_u16_border():
+    """the uncompressed Bayer DNG inside a readout 8 columns and 6 rows
+    larger, ActiveArea at an odd offset (top 1, left 3): the decoder must
+    cut to the picture and shift the CFA phase, and the result must match
+    bayer_u16.dng to the bit"""
+    plane = bayer_plane(12)
+    left, top = 3, 1
+    padded, pw, ph = pad_plane(plane, W, H, left, top, 5, 5, BLACK)
+    # the sensor's pattern at (0,0) must put the picture's RGGB at (top, left):
+    # shifting RGGB by (1 row, 1 column) gives GBRG... but the picture was
+    # generated as RGGB at its own origin, so the sensor pattern is the
+    # picture's pattern shifted back: cell (y,x) of the sensor = picture cell
+    # ((y - top) & 1, (x - left) & 1)
+    sensor_cfa = [CFA[((y - top) & 1) * 2 + ((x - left) & 1)] for y in range(2) for x in range(2)]
+    data = b''.join(struct.pack('<H', v) for v in padded)
+    ents = dng_common(pw, ph, 1, 32803, 16) + [
+        (259, 3, [1]), (273, 4, [('blob', 'data')]), (278, 4, [ph]), (279, 4, [len(data)]),
+        (33421, 3, [2, 2]), (33422, 1, sensor_cfa), (50714, 4, [BLACK]),
+        (50829, 4, [top, left, top + H, left + W]),
+    ] + color_tags()
+    ents.sort(key=lambda e: e[0])
+    return tiff(ents, {'data': data})
+
 def build_bayer_lj92():
     plane = bayer_plane(12)
     tw, th = 32, 24
@@ -335,19 +372,28 @@ def build_linear_lj92():
     ents.sort(key=lambda e: e[0])
     return tiff(ents, {'t0': enc})
 
-def build_nef():
+def build_nef(border=False):
     bits = 14
     plane = bayer_plane(bits, white=16383)   # the curve's last entry is white
+    width, height = W, H
+    crop_entries = []
+    if border:
+        # the D610 layout in miniature: masked columns on the right and
+        # rows at the bottom, CropHiSpeed naming the picture at an even
+        # offset (6, 2) so the pattern is unchanged
+        left, top = 6, 2
+        plane, width, height = pad_plane(plane, W, H, left, top, 2, 2, BLACK << 2)
+        crop_entries = [(0x1b, 3, [0, width, height, W, H, left, top])]
     # the first two samples of each row pair are predicted from vpred,
     # which the encoder seeds with the actual first row values
-    data = nikon_encode(plane, W, H, [[0, 0], [0, 0]])
+    data = nikon_encode(plane, width, height, [[0, 0], [0, 0]])
     # makernote: "Nikon\0" 02 11 00 00 + TIFF header (big endian) + IFD
     csize = 1 << bits
     curve = struct.pack('>BB', 0x44, 0x40) + struct.pack('>HHHH', 0, 0, 0, 0) + struct.pack('>H', csize) \
           + b''.join(struct.pack('>H', i) for i in range(csize))
     wb = [(int(WB[0] * 256), 256), (int(WB[2] * 256), 256), (256, 256), (256, 256)]  # R B G G
     black14 = [BLACK << 2] * 4
-    mn_entries = [
+    mn_entries = crop_entries + [
         (0x0c, 5, wb),
         (0x3d, 3, black14),
         (0x96, 7, curve),
@@ -365,9 +411,9 @@ def build_nef():
     # Compose: IFD0 at 8, then exif ifd, then sub ifd, with offsets rebased.
     # Simplest: build everything as independent TIFFs and splice their IFDs
     # by rebasing offsets - instead assemble by hand.
-    return assemble_nef(bits, data, makernote)
+    return assemble_nef(bits, data, makernote, width, height)
 
-def assemble_nef(bits, data, makernote):
+def assemble_nef(bits, data, makernote, width=W, height=H):
     E = '>'
     def ifd_bytes(entries, base_off):
         """entries: (tag, type, bytes|list) with 'count' derived; values
@@ -407,8 +453,8 @@ def assemble_nef(bits, data, makernote):
         ], 8)
         exif, end1 = ifd_bytes([(37500, 7, makernote)], exif_off)
         sub, end2 = ifd_bytes([
-            (254, 4, [0]), (256, 4, [W]), (257, 4, [H]), (258, 3, [bits]), (259, 3, [34713]),
-            (262, 3, [32803]), (273, 4, [data_off]), (277, 3, [1]), (278, 4, [H]),
+            (254, 4, [0]), (256, 4, [width]), (257, 4, [height]), (258, 3, [bits]), (259, 3, [34713]),
+            (262, 3, [32803]), (273, 4, [data_off]), (277, 3, [1]), (278, 4, [height]),
             (279, 4, [len(data)]), (33421, 3, [2, 2]), (33422, 1, CFA),
         ], sub_off)
         return ifd0, end0, exif, end1, sub, end2
@@ -436,6 +482,8 @@ if __name__ == '__main__':
     os.makedirs(out, exist_ok=True)
     for name, fn in [('bayer_u16.dng', build_bayer_u16), ('bayer_lj92.dng', build_bayer_lj92),
                      ('linear_lj92.dng', build_linear_lj92), ('lossless14.nef', build_nef),
+                     ('bayer_u16_border.dng', build_bayer_u16_border),
+                     ('lossless14_border.nef', lambda: build_nef(border=True)),
                      ('linear16.png', build_png16)]:
         data = fn()
         with open(os.path.join(out, name), 'wb') as f: f.write(data)

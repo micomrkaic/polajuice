@@ -1,0 +1,26 @@
+1.22.0: the raw door cuts to the image area
+
+Sensors read out masked (optically black) columns and rows around the
+picture, and the raw door handed them over: a D610 NEF came out
+6080x4028 with a 64-column black stripe down one side, where every
+other converter gives 6016x4016. The decoder now cuts the samples to
+the image area before demosaic, statistics or anything else sees them:
+DNG's ActiveArea and DefaultCropOrigin/Size (parsed before, never
+applied), and for NEF the CropHiSpeed tag in the Nikon MakerNote,
+which names the full readout, the picture size and its offset. A crop
+at an odd offset shifts the CFA phase and the per-cell black level
+with it. ProRAW DNGs carry no crop and are unchanged; 8-bit input is
+untouched.
+
+Two synthetic files join tests/raw: the uncompressed Bayer DNG inside
+a larger readout with ActiveArea at (1,3), and the NEF inside a
+readout with masked columns right and rows bottom, CropHiSpeed naming
+the picture at (6,2). Both must decode to the bit as the plain files.
+tools/make_test_raws.py regenerates all of them; the earlier files are
+byte-identical to before.
+
+Also in this release: the guarded _DARWIN_C_SOURCE defines, the quiet
+serve-test cleanup and the fake-DOM localStorage (1.21.2).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

@@ -130,9 +130,9 @@ typedef struct {
     Entry cfa_pattern, cfa_dim;
     Entry lin_table, black, black_dim, white;
     Entry cm1, cm2, as_shot, illum1, illum2;
-    Entry active_area;
+    Entry active_area, crop_origin, crop_size;
     bool have_cfa_pattern, have_black, have_white, have_lin;
-    bool have_cm1, have_cm2, have_as_shot, have_active;
+    bool have_cm1, have_cm2, have_as_shot, have_active, have_crop_origin, have_crop_size;
 } Ifd;
 
 typedef struct {
@@ -213,6 +213,8 @@ static void parse_image_ifd(Tiff *t, size_t ifd, int depth)
                     d.as_shot = e; d.have_as_shot = true; break;
         case 50778: if (depth == 0) t->illum1_0 = e; d.illum1 = e; break;
         case 50779: if (depth == 0) t->illum2_0 = e; d.illum2 = e; break;
+        case 50719: d.crop_origin = e; d.have_crop_origin = true; break;
+        case 50720: d.crop_size = e; d.have_crop_size = true; break;
         case 50829: d.active_area = e; d.have_active = true; break;
         default: break;
         }
@@ -531,6 +533,8 @@ typedef struct {
     bool have_wb;
     unsigned black[4];     /* 0x3d, in the file's bit depth */
     bool have_black;
+    unsigned crop[6];      /* CropHiSpeed 0x1b: full w, h; crop w, h; left, top */
+    bool have_crop;
 } NikonMeta;
 
 /* Nikon type-3 MakerNote: "Nikon\0" + 4 bytes, then a TIFF header at +10
@@ -568,6 +572,12 @@ static bool nikon_makernote(const Tiff *t, NikonMeta *m, unsigned bps)
         } else if (e.tag == 0x96) {
             m->curve_off = e.value_off;
             m->curve_len = e.count;
+        } else if (e.tag == 0x1b && e.type == 3 && e.count == 7) {
+            /* the image area inside the sensor readout: Nikon leaves the
+             * masked columns and rows in the file (6080x4028 for the
+             * 6016x4016 D610) and records the crop here */
+            for (int k = 0; k < 6; ++k) m->crop[k] = (unsigned)entry_num(&mb, &e, (uint32_t)(k + 1));
+            m->have_crop = m->crop[2] > 0 && m->crop[3] > 0;
         }
     }
     if (m->curve_off && in_range(b, m->curve_off, 2)) {
@@ -1000,6 +1010,50 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
     unsigned nikon_white = 0;
     if (!decode_pixels(&t, pix, spp, &nikon_white, error)) { free(pix); free(data); return NULL; }
 
+    /* The image area. Sensors read out masked (optically black) columns
+     * and rows around the picture; DNG says where the picture is with
+     * ActiveArea and DefaultCropOrigin/Size, Nikon with CropHiSpeed in
+     * the MakerNote. Cut the samples down to it before anything else, so
+     * the demosaic, the statistics and the picture never see the black
+     * border; a crop at an odd offset shifts the CFA phase. */
+    size_t crop_x = 0, crop_y = 0, crop_w = w, crop_h = h;
+    {
+        const Bytes *cb = &t.b;
+        if (t.is_dng) {
+            if (d->have_active && d->active_area.count >= 4) {
+                size_t top = (size_t)entry_num(cb, &d->active_area, 0), left = (size_t)entry_num(cb, &d->active_area, 1);
+                size_t bottom = (size_t)entry_num(cb, &d->active_area, 2), right = (size_t)entry_num(cb, &d->active_area, 3);
+                if (left < right && top < bottom && right <= w && bottom <= h) {
+                    crop_x = left; crop_y = top; crop_w = right - left; crop_h = bottom - top;
+                }
+            }
+            if (d->have_crop_origin && d->have_crop_size &&
+                d->crop_origin.count >= 2 && d->crop_size.count >= 2) {
+                size_t ox = (size_t)entry_num(cb, &d->crop_origin, 0), oy = (size_t)entry_num(cb, &d->crop_origin, 1);
+                size_t sw = (size_t)entry_num(cb, &d->crop_size, 0), sh = (size_t)entry_num(cb, &d->crop_size, 1);
+                if (sw > 0 && sh > 0 && ox + sw <= crop_w && oy + sh <= crop_h) {
+                    crop_x += ox; crop_y += oy; crop_w = sw; crop_h = sh;
+                }
+            }
+        } else {
+            NikonMeta nm;
+            if (nikon_makernote(&t, &nm, d->bps) && nm.have_crop &&
+                nm.crop[0] == w && nm.crop[1] == h &&
+                nm.crop[4] + nm.crop[2] <= w && nm.crop[5] + nm.crop[3] <= h) {
+                crop_x = nm.crop[4]; crop_y = nm.crop[5]; crop_w = nm.crop[2]; crop_h = nm.crop[3];
+            }
+        }
+        if (crop_w < 4 || crop_h < 4) { crop_x = crop_y = 0; crop_w = w; crop_h = h; }
+    }
+    unsigned cfa_shift_x = (unsigned)(crop_x & 1), cfa_shift_y = (unsigned)(crop_y & 1);
+    if (crop_w != w || crop_h != h) {
+        /* compact in place: every destination lies at or before its source */
+        for (size_t y = 0; y < crop_h; ++y)
+            memmove(pix + y * crop_w * spp, pix + ((y + crop_y) * w + crop_x) * spp,
+                    crop_w * spp * sizeof *pix);
+        w = crop_w; h = crop_h;
+    }
+
     /* linearization, black and white levels */
     const Bytes *b = &t.b;
     double black[4] = {0, 0, 0, 0}, white = (double)((1u << (d->bps > 16 ? 16 : d->bps)) - 1);
@@ -1030,6 +1084,19 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
     unsigned cfa[4] = {0, 1, 1, 2};
     if (!linear_raw && d->have_cfa_pattern && d->cfa_pattern.count >= 4)
         for (int c = 0; c < 4; ++c) cfa[c] = (unsigned)entry_num(b, &d->cfa_pattern, (uint32_t)c) & 3;
+    if (cfa_shift_x || cfa_shift_y) {
+        /* the crop moved the origin: cell (y,x) of the picture is cell
+         * (y+sy, x+sx) of the sensor, for the pattern and the per-cell black */
+        unsigned cfa2[4]; double black2[4];
+        for (unsigned y = 0; y < 2; ++y)
+            for (unsigned x = 0; x < 2; ++x) {
+                unsigned from = ((y + cfa_shift_y) & 1) * 2 + ((x + cfa_shift_x) & 1);
+                cfa2[y * 2 + x] = cfa[from];
+                black2[y * 2 + x] = black[from];
+            }
+        memcpy(cfa, cfa2, sizeof cfa);
+        memcpy(black, black2, sizeof black);
+    }
 
     /* white balance multipliers and camera->sRGB matrix */
     double wb[3] = {1, 1, 1};
