@@ -924,6 +924,29 @@ int main(void)
             assert(!memcmp(pj_image_pixels(a), pj_image_pixels(b), 64 * 40 * 3 * sizeof(float)));
             pj_image_free(a); pj_image_free(b);
         }
+        /* the geometry the engine reports is the one it renders */
+        {
+            const char *cams[] = {"polaroid-600", "super8", "toy-camera-120", "35mm-negative", "technicolor-3strip", "polaroid-packfilm"};
+            for (size_t c = 0; c < sizeof cams / sizeof cams[0]; ++c)
+                for (int crop = PJ_CROP_CAMERA; crop <= PJ_CROP_FULL; ++crop) {
+                    PjGeometry g;
+                    assert(pj_render_geometry(cams[c], 64, 40, crop, &g));
+                    PjRenderOptions o = {.seed = 1, .strength = 1.0f, .crop = crop};
+                    PjImage *out = pj_render(wide, cams[c], &o, &error);
+                    assert(out);
+                    assert(pj_image_width(out) == g.out_w && pj_image_height(out) == g.out_h);
+                    assert(g.crop_x + g.crop_w <= 64 && g.crop_y + g.crop_h <= 40);
+                    assert(g.place_x + g.crop_w <= g.out_w && g.place_y + g.crop_h <= g.out_h);
+                    if (crop == PJ_CROP_FULL) assert(g.crop_w == 64 && g.crop_h == 40);
+                    pj_image_free(out);
+                }
+            assert(!pj_render_geometry("no-such-camera", 64, 40, 0, &(PjGeometry){0}));
+            char line[160];
+            PjGeometry g;
+            pj_render_geometry("polaroid-600", 64, 40, PJ_CROP_FULL, &g);
+            pj_geometry_format(&g, line, sizeof line);
+            assert(!strncmp(line, "# geometry in=64,40 crop=0,0,64,40 place=", 41));
+        }
         /* the recipe carries the crop and the new develop text */
         {
             PjRenderOptions o = {.seed = 3, .strength = 1.0f, .push = 3.0f, .crop = PJ_CROP_FULL};

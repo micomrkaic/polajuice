@@ -1325,53 +1325,88 @@ bool pj_grain_model_known(const char *name)
     return !name || !strcmp(name, "classic") || !strcmp(name, "silver");
 }
 
-static PjImage *square_crop(const PjImage *input, PjError *error)
+/* Where the picture lands: the crop taken from the input and, for an
+ * instant camera, where that crop sits inside the print's border. One
+ * arithmetic for the render and for anyone who needs to line the output
+ * up with the input (the page's wipe does). */
+static void aspect_rect(size_t in_w, size_t in_h, double aspect, PjGeometry *g)
 {
-    size_t side = input->width < input->height ? input->width : input->height;
-    size_t x0 = (input->width - side) / 2;
-    size_t y0 = (input->height - side) / 2;
-    PjImage *crop = pj_image_new(side, side, error);
-    if (!crop) return NULL;
-    for (size_t y = 0; y < side; ++y)
-        memcpy(&crop->rgb[y * side * 3],
-               &input->rgb[((y + y0) * input->width + x0) * 3],
-               side * 3 * sizeof(float));
-    return crop;
-}
-
-static PjImage *crop_aspect(const PjImage *input, double aspect, PjError *error)
-{
-    size_t width = input->width;
+    size_t width = in_w;
     size_t height = (size_t)lrint((double)width / aspect);
-    if (height > input->height) {
-        height = input->height;
+    if (height > in_h) {
+        height = in_h;
         width = (size_t)lrint((double)height * aspect);
     }
     if (width < 1) width = 1;
     if (height < 1) height = 1;
-    size_t x0 = (input->width - width) / 2;
-    size_t y0 = (input->height - height) / 2;
-    PjImage *crop = pj_image_new(width, height, error);
+    g->crop_x = (in_w - width) / 2;
+    g->crop_y = (in_h - height) / 2;
+    g->crop_w = width;
+    g->crop_h = height;
+}
+
+static void preset_geometry(const PjPreset *preset, size_t in_w, size_t in_h, int crop,
+                            PjGeometry *g)
+{
+    memset(g, 0, sizeof *g);
+    g->in_w = in_w; g->in_h = in_h;
+    g->crop_w = in_w; g->crop_h = in_h;
+    double img_w = preset->frame_image_w_mm > 0 ? preset->frame_image_w_mm : 78.94;
+    double img_h = preset->frame_image_h_mm > 0 ? preset->frame_image_h_mm : 76.80;
+    if (crop != PJ_CROP_FULL) {
+        if (preset->instant_frame)
+            aspect_rect(in_w, in_h, img_w / img_h, g);
+        else if (preset->square_crop) {
+            size_t side = in_w < in_h ? in_w : in_h;
+            g->crop_x = (in_w - side) / 2;
+            g->crop_y = (in_h - side) / 2;
+            g->crop_w = g->crop_h = side;
+        } else if (preset->crop_aspect > 0.0f)
+            aspect_rect(in_w, in_h, (double)preset->crop_aspect, g);
+    }
+    g->out_w = g->crop_w; g->out_h = g->crop_h;
+    if (preset->instant_frame) {
+        double out_w = preset->frame_outer_w_mm > 0 ? preset->frame_outer_w_mm : 88.47;
+        double out_h = preset->frame_outer_h_mm > 0 ? preset->frame_outer_h_mm : 107.52;
+        g->out_w = (size_t)lrint((double)g->crop_w * out_w / img_w);
+        g->out_h = (size_t)lrint((double)g->crop_h * out_h / img_h);
+        g->place_x = (g->out_w - g->crop_w) / 2;
+        g->place_y = g->place_x;
+    }
+}
+
+bool pj_render_geometry(const char *preset_name, size_t in_w, size_t in_h, int crop,
+                        PjGeometry *g)
+{
+    const PjPreset *preset = pj_find_preset(preset_name);
+    if (!preset || !g) return false;
+    preset_geometry(preset, in_w, in_h, crop, g);
+    return true;
+}
+
+size_t pj_geometry_format(const PjGeometry *g, char *buf, size_t size)
+{
+    int n = snprintf(buf, size, "# geometry in=%zu,%zu crop=%zu,%zu,%zu,%zu place=%zu,%zu out=%zu,%zu\n",
+                     g->in_w, g->in_h, g->crop_x, g->crop_y, g->crop_w, g->crop_h,
+                     g->place_x, g->place_y, g->out_w, g->out_h);
+    return n < 0 ? 0 : (size_t)n;
+}
+
+static PjImage *crop_to(const PjImage *input, const PjGeometry *g, PjError *error)
+{
+    PjImage *crop = pj_image_new(g->crop_w, g->crop_h, error);
     if (!crop) return NULL;
-    for (size_t y = 0; y < height; ++y)
-        memcpy(&crop->rgb[y * width * 3],
-               &input->rgb[((y + y0) * input->width + x0) * 3],
-               width * 3 * sizeof(float));
+    for (size_t y = 0; y < g->crop_h; ++y)
+        memcpy(&crop->rgb[y * g->crop_w * 3],
+               &input->rgb[((y + g->crop_y) * input->width + g->crop_x) * 3],
+               g->crop_w * 3 * sizeof(float));
     return crop;
 }
 
-static PjImage *instant_frame(const PjImage *input, const PjPreset *preset,
-                              PjError *error)
+static PjImage *instant_frame(const PjImage *input, const PjGeometry *g, PjError *error)
 {
-    double img_w = preset->frame_image_w_mm > 0 ? preset->frame_image_w_mm : 78.94;
-    double img_h = preset->frame_image_h_mm > 0 ? preset->frame_image_h_mm : 76.80;
-    double out_w = preset->frame_outer_w_mm > 0 ? preset->frame_outer_w_mm : 88.47;
-    double out_h = preset->frame_outer_h_mm > 0 ? preset->frame_outer_h_mm : 107.52;
-    size_t outer_width = (size_t)lrint((double)input->width * out_w / img_w);
-    size_t outer_height = (size_t)lrint((double)input->height * out_h / img_h);
-    size_t left = (outer_width - input->width) / 2;
-    size_t top = left;
-    PjImage *framed = pj_image_new(outer_width, outer_height, error);
+    size_t left = g->place_x, top = g->place_y;
+    PjImage *framed = pj_image_new(g->out_w, g->out_h, error);
     if (!framed) return NULL;
     size_t pixels = framed->width * framed->height;
     for (size_t i = 0; i < pixels; ++i) {
@@ -1406,20 +1441,13 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
 
     stage_mark(NULL);
     PjImage *image;
-    bool full_frame = options && options->crop == PJ_CROP_FULL;
-    if (full_frame)
+    PjGeometry geom;
+    preset_geometry(preset, input->width, input->height,
+                    options ? options->crop : PJ_CROP_CAMERA, &geom);
+    if (geom.crop_w == input->width && geom.crop_h == input->height)
         image = clone_image(input, error);
-    else if (preset->instant_frame) {
-        double img_w = preset->frame_image_w_mm > 0 ? preset->frame_image_w_mm : 78.94;
-        double img_h = preset->frame_image_h_mm > 0 ? preset->frame_image_h_mm : 76.80;
-        image = crop_aspect(input, img_w / img_h, error);
-    }
-    else if (preset->square_crop)
-        image = square_crop(input, error);
-    else if (preset->crop_aspect > 0.0f)
-        image = crop_aspect(input, (double)preset->crop_aspect, error);
     else
-        image = clone_image(input, error);
+        image = crop_to(input, &geom, error);
     if (!image) return NULL;
     image->scene_linear = input->scene_linear;   /* crops start fresh */
 
@@ -1520,7 +1548,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
 
     stage_mark("classic grain");
     if (preset->instant_frame) {
-        PjImage *framed = instant_frame(image, preset, error);
+        PjImage *framed = instant_frame(image, &geom, error);
         pj_image_free(image);
         return framed;
     }

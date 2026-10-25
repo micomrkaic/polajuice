@@ -1,0 +1,31 @@
+1.23.1: the wipe lines up in every format
+
+The wipe laid the comparison image in the render's box, which only
+lines up for cameras that neither crop nor frame: a Polaroid's print is
+the picture inside a border, a Super 8 gate is a band of the input, the
+126 square a column of it. The engine now reports where the picture
+landed - pj_render_geometry(): the crop taken from the input and where
+it sits in the output - and writes it as a comment line after the
+recipe in every JPEG ("# geometry in=W,H crop=X,Y,W,H place=X,Y
+out=W,H"; recipe readers skip comment lines, and the page strips it
+from the recipe box). The page lays the comparison image at the
+input's pixel scale so its crop rectangle coincides with the render's
+picture area, clipped to that area and to the divider; against A, A's
+picture area is mapped onto the current's the same way, so two
+cameras with different formats compare on the picture, not the box.
+The crop and frame code in the pipeline now runs off the same geometry
+struct, and renders are pixel-identical to 1.20.0 across every format
+(checked), so the geometry it reports is the geometry it renders.
+
+Also: the viewport's image rule capped overlays at the view's size,
+which squashed the comparison image wherever it had to extend past the
+render (gate and square crops); overlays are exempt now.
+
+Tests: core checks the reported geometry against the rendered size
+for six cameras in both crop modes; the wasm test checks the comment
+line; the Chromium test checks the overlay is laid taller than the
+view on super8 and clipped to the gate, and that no geometry line
+reaches the recipe box.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

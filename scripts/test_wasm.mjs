@@ -132,8 +132,10 @@ try {
   const fullFrame = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, crop: "full" });
   if (Buffer.compare(Buffer.from(fullFrame), Buffer.from(out)) === 0)
       throw new Error("crop=full had no effect on the super8 gate");
-  if (!/crop=full/.test(new TextDecoder("latin1").decode(fullFrame.subarray(0, 4096))))
-      throw new Error("crop=full missing from the embedded recipe");
+  const head = new TextDecoder("latin1").decode(fullFrame.subarray(0, 4096));
+  if (!/crop=full/.test(head)) throw new Error("crop=full missing from the embedded recipe");
+  if (!/# geometry in=\d+,\d+ crop=\d+,\d+,\d+,\d+ place=\d+,\d+ out=\d+,\d+/.test(head))
+      throw new Error("geometry line missing from the embedded comment");
   if (!cameras.find(c => c.name === "super8").format) throw new Error("super8 reports no format label");
   if (cameras.find(c => c.name === "35mm-negative").format) throw new Error("35mm-negative reports a format crop");
   console.log("push+4 differs from +2, push+5 refused, crop=full, format labels ok");

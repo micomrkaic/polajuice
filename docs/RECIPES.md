@@ -36,6 +36,12 @@ render. `key=value` sources into a shell, which is why it is not JSON.
 | seed | integer |
 | crop | `camera` (the camera's own format cut from the middle) or `full` (keep the whole input frame; an instant camera borders the full frame) |
 
+A JPEG's comment carries one more line after the recipe,
+`# geometry in=W,H crop=X,Y,W,H place=X,Y out=W,H`: the crop the camera
+took from the input and where it sits in the output (inside an instant
+print's border, say). It is a comment, so recipe readers skip it; the
+page uses it to line comparisons up.
+
 Every key is optional: a partial recipe sets what it names and leaves
 the rest to the defaults, or to flags.
 

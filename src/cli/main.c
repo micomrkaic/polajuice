@@ -466,12 +466,21 @@ static int apply(int argc, char **argv)
         fprintf(stderr, "  %-22s %6.1f ms\n", "load (decode)",
                 ((double)t1.tv_sec - (double)t0.tv_sec) * 1000.0 + ((double)t1.tv_nsec - (double)t0.tv_nsec) / 1e6);
     }
+    PjGeometry geom;
+    pj_render_geometry(camera, pj_image_width(source), pj_image_height(source), options.crop, &geom);
     PjImage *result = pj_render(source, camera, &options, &error);
     pj_image_free(source);
     pj_lut3d_free(lut);
     pj_lut3d_free(print_lut);
     if (!result) return fail(&error);
-    pj_image_set_comment(result, recipe_text);
+    {
+        /* the JPEG comment carries the recipe and, after it, where the
+         * picture landed (a comment line, so recipe readers skip it) */
+        char comment[1200];
+        size_t n = (size_t)snprintf(comment, sizeof comment, "%s", recipe_text);
+        if (n < sizeof comment) pj_geometry_format(&geom, comment + n, sizeof comment - n);
+        pj_image_set_comment(result, comment);
+    }
     if (profiling) timespec_get(&t0, TIME_UTC);
     bool saved = pj_image_save(result, output, &error);
     if (profiling) {

@@ -474,7 +474,11 @@ Four tools on the view, all page-side (renders are unchanged):
 
 - **Wipe** (`w`): a divider dragged across the view, the current look
   on the right and the original - or the look pinned as A - on the
-  left.
+  left. The comparison image is laid on the picture, not the box: the
+  engine writes where the picture landed (crop and placement) as a
+  comment line after the recipe in every JPEG, so a Polaroid's border,
+  a Super 8 gate or the 126 square all line up, and two cameras with
+  different formats compare on the picture.
 - **Histogram and clipping**: a per-channel log histogram of what is
   shown, with the share of pixels clipped at white per channel and
   crushed at black; the *clipping* button paints them on the view, red

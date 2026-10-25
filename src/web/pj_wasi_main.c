@@ -166,17 +166,21 @@ static int render(int argc, char **argv)
         fprintf(stderr, "unknown crop mode '%s'\n", argv[20]);
         return 1;
     }
+    PjGeometry geom;
+    pj_render_geometry(camera, pj_image_width(image), pj_image_height(image), options.crop, &geom);
     PjImage *result = pj_render(image, camera, &options, &error);
     pj_image_free(image);
     pj_lut3d_free(lut);
     pj_lut3d_free(print_lut);
     if (!result) { fprintf(stderr, "%s\n", error.message); return 1; }
     /* the recipe rides in the JPEG, as from the CLI: the page reads it
-     * back from the bytes, so the engine is the one source of its text */
+     * back from the bytes, so the engine is the one source of its text;
+     * after it, where the picture landed, for the page's wipe */
     {
-        char recipe[1024];
-        pj_recipe_format(camera, lut ? options.film_stem : "none", print_stem,
-                         &options, recipe, sizeof recipe);
+        char recipe[1200];
+        size_t n = pj_recipe_format(camera, lut ? options.film_stem : "none", print_stem,
+                                    &options, recipe, sizeof recipe);
+        if (n < sizeof recipe) pj_geometry_format(&geom, recipe + n, sizeof recipe - n);
         pj_image_set_comment(result, recipe);
     }
     bool saved = pj_image_save(result, out_path, &error);

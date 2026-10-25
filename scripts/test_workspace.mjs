@@ -69,7 +69,19 @@ await page.mouse.down();
 await page.mouse.move(vp.x + vp.w * 0.25, vp.y + vp.h * 0.5 + 2);
 await page.mouse.up();
 const clip = await page.$eval("#wipeimg", e => e.style.clipPath);
-if (!/inset\(0(px)? 7[45]\.\d+% 0(px)? 0(px)?\)/.test(clip)) fail("wipe divider did not follow the pointer: " + clip);
+const ovW = await page.$eval("#wipeimg", e => parseFloat(e.style.width));
+const insetR = parseFloat((clip.match(/inset\([^ ]+ ([\d.]+)px/) || [])[1]);
+if (!(insetR > ovW * 0.6)) fail("wipe divider did not follow the pointer to 25%: " + clip + " of " + ovW);
+// the comparison image is laid at the input's scale on the render's
+// picture area: for super8 (a gate crop of a 4:3 photo) it is taller than
+// the view and clipped top and bottom; the recipe carries no geometry line
+if (/# geometry/.test(await page.$eval("#recipe", e => e.value))) fail("geometry line leaked into the recipe box");
+const ovH = await page.$eval("#wipeimg", e => parseFloat(e.style.height));
+const viewH = await page.$eval("#view", e => e.clientHeight);
+if (!(ovH > viewH * 1.05)) fail(`wipe image not laid at input scale on super8: overlay ${ovH} vs view ${viewH}`);
+const ovClip = await page.$eval("#wipeimg", e => e.style.clipPath);
+const insetT = parseFloat((ovClip.match(/inset\(([\d.]+)px/) || [])[1]);
+if (!(insetT > 50)) fail("wipe clip does not cut the rows outside the gate: " + ovClip);
 await page.selectOption("#wipeagainst", "A");
 if (!/blob:/.test(await page.$eval("#wipeimg", e => e.src))) fail("wipe against A shows no image");
 await page.keyboard.press("w");

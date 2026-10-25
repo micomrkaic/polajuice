@@ -139,10 +139,17 @@ PjImage *look_render(Look *look, const PjImage *source, size_t max_dim,
         if (!small) return NULL;
         in = small;
     }
+    PjGeometry geom;
+    pj_render_geometry(look->camera, pj_image_width(in), pj_image_height(in), look->options.crop, &geom);
     PjImage *result = pj_render(in, look->camera, &look->options, error);
     pj_image_free(small);
     if (!result) return NULL;
-    pj_image_set_comment(result, look->recipe);
+    {
+        char comment[1200];
+        size_t n = (size_t)snprintf(comment, sizeof comment, "%s", look->recipe);
+        if (n < sizeof comment) pj_geometry_format(&geom, comment + n, sizeof comment - n);
+        pj_image_set_comment(result, comment);
+    }
     return result;
 }
 

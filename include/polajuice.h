@@ -114,6 +114,23 @@ typedef struct {
 int pj_crop_parse(const char *name);
 const char *pj_crop_name(int crop);
 
+/* Where the picture lands in a render: the crop taken from an in_w x
+ * in_h input (full input when the camera has no format crop or crop is
+ * PJ_CROP_FULL) and where that crop sits in the out_w x out_h output -
+ * at the origin, except inside an instant print's border. Crop and
+ * output are at the input's pixel scale. */
+typedef struct {
+    size_t in_w, in_h;
+    size_t crop_x, crop_y, crop_w, crop_h;
+    size_t place_x, place_y;
+    size_t out_w, out_h;
+} PjGeometry;
+bool pj_render_geometry(const char *preset, size_t in_w, size_t in_h, int crop,
+                        PjGeometry *g);
+/* One comment line for a JPEG's recipe comment:
+ * "# geometry in=W,H crop=X,Y,W,H place=X,Y out=W,H\n" */
+size_t pj_geometry_format(const PjGeometry *g, char *buf, size_t size);
+
 #define PJ_PUSH_MIN (-3.0f)
 #define PJ_PUSH_MAX (4.0f)
 /* Development mode text <-> options: "normal", "cross", "push+N",

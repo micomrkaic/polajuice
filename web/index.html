@@ -78,8 +78,8 @@
              border-top:1px solid var(--line); min-height:1.6rem; }
   #before, #after { display:none; }
   /* overlays sit on the displayed image's own rectangle (set from script) */
-  #viewport .overlay { position:absolute; display:none; }
-  #wipeimg { object-fit:contain; background:#111; pointer-events:none; }
+  #viewport .overlay { position:absolute; display:none; max-width:none; max-height:none; }
+  #wipeimg { object-fit:fill; background:#111; pointer-events:none; }
   #wipebar { width:0; border-left:2px solid var(--paper); box-shadow:0 0 0 1px rgba(0,0,0,0.6);
              cursor:ew-resize; }
   #wipebar::after { content:"◂ ▸"; position:absolute; top:50%; left:-1.4rem; width:2.8rem; text-align:center;
@@ -400,7 +400,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.23.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.23.1";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -454,6 +454,18 @@ function readJpegComment(bytes) {
   }
   return null;
 }
+
+/* the geometry line the engine writes after the recipe: where the
+ * picture landed in the render, for lining up a comparison image */
+function parseGeometry(text) {
+  const m = text && text.match(/^# geometry in=(\d+),(\d+) crop=(\d+),(\d+),(\d+),(\d+) place=(\d+),(\d+) out=(\d+),(\d+)$/m);
+  if (!m) return null;
+  const n = m.slice(1).map(Number);
+  return { inW: n[0], inH: n[1], cropX: n[2], cropY: n[3], cropW: n[4], cropH: n[5],
+           placeX: n[6], placeY: n[7], outW: n[8], outH: n[9] };
+}
+function stripGeometry(text) { return text ? text.replace(/^# geometry .*\n?/m, "") : text; }
+let renderGeometry = null;   /* of the last render() that returned */
 
 function parseRecipe(text) {
   const r = {};
@@ -856,7 +868,8 @@ async function render(maxDim, overrides, quiet) {
     $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "") +
       (maxDim ? ` (preview, long edge ${maxDim}px)` : " (full size)");
     const recipe = readJpegComment(out);
-    if (recipe) showRecipe(recipe);
+    renderGeometry = parseGeometry(recipe);
+    if (recipe) showRecipe(stripGeometry(recipe));
     return new Blob([out], { type: "image/jpeg" });
   } catch (e) {
     if (!quiet) setStatus(e.message, true);
@@ -888,7 +901,7 @@ async function renderPreview() {
     const blob = await render(previewSize());
     if (blob) {
       const url = URL.createObjectURL(blob);
-      lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent };
+      lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
       $("after").src = url;
       fullRender = null;   /* the loupe's full-size render is of the old look now */
       if (view !== "original") showView("B");
@@ -1044,7 +1057,7 @@ $("render").addEventListener("click", async () => {
   const blob = await render(1400);
   if (blob) {
     const url = URL.createObjectURL(blob);
-    lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent };
+    lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
     $("after").src = url;
     showView("B");
   }
@@ -1053,7 +1066,7 @@ $("download").addEventListener("click", async () => {
   const blob = await render(0);
   if (!blob) return;
   const url = URL.createObjectURL(blob);
-  lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent };
+  lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
   $("after").src = url;
   showView("B");
   const link = document.createElement("a");
@@ -1095,15 +1108,53 @@ function placeOverlay(el, r) {
   el.style.left = r.left + "px"; el.style.top = r.top + "px";
   el.style.width = r.width + "px"; el.style.height = r.height + "px";
 }
+/* geometry of the image on view: the current render's, or A's */
+function shownGeometry() {
+  if (view === "A" && pinned) return pinned.geometry || null;
+  return (lastRender && lastRender.geometry) || null;
+}
 function layoutOverlays() {
   const r = viewRect();
   if (!r.width) return;
-  placeOverlay($("wipeimg"), r);
   placeOverlay($("clipcanvas"), r);
   const bar = $("wipebar");
   bar.style.left = (r.left + r.width * wipeX) + "px"; bar.style.top = r.top + "px";
   bar.style.height = r.height + "px";
-  $("wipeimg").style.clipPath = `inset(0 ${((1 - wipeX) * 100).toFixed(3)}% 0 0)`;
+  const ov = $("wipeimg");
+  const g = shownGeometry();
+  const againstA = $("wipeagainst").value === "A" && pinned && pinned.url;
+  const gA = againstA ? pinned.geometry : null;
+  if (!g || (againstA && !gA)) {
+    /* no geometry known: the comparison image fills the view's box */
+    placeOverlay(ov, r);
+    ov.style.clipPath = `inset(0 ${((1 - wipeX) * 100).toFixed(3)}% 0 0)`;
+    return;
+  }
+  /* The comparison image is laid at the input's pixel scale so that its
+   * picture coincides with the picture inside the render: the original's
+   * crop rectangle lands on the render's place rectangle (inside an
+   * instant border, say), and A's picture area lands on the current's.
+   * Everything is in the render's output pixels times the view scale. */
+  const sc = r.width / g.outW;
+  let W, H, dx, dy, vis;
+  if (againstA) {
+    W = gA.outW; H = gA.outH;
+    dx = g.placeX - g.cropX + gA.cropX - gA.placeX;
+    dy = g.placeY - g.cropY + gA.cropY - gA.placeY;
+    vis = [0, 0, g.outW, g.outH];
+  } else {
+    W = g.inW; H = g.inH;
+    dx = g.placeX - g.cropX; dy = g.placeY - g.cropY;
+    vis = [g.placeX, g.placeY, g.cropW, g.cropH];
+  }
+  ov.style.left = (r.left + dx * sc) + "px"; ov.style.top = (r.top + dy * sc) + "px";
+  ov.style.width = (W * sc) + "px"; ov.style.height = (H * sc) + "px";
+  /* visible: the picture area, within the view, left of the divider */
+  const x0 = Math.max(vis[0], 0), y0 = Math.max(vis[1], 0);
+  const x1 = Math.min(vis[0] + vis[2], g.outW, wipeX * g.outW), y1 = Math.min(vis[1] + vis[3], g.outH);
+  const insetL = Math.max(0, (x0 - dx) * sc), insetT = Math.max(0, (y0 - dy) * sc);
+  const insetR = Math.max(0, W * sc - (x1 - dx) * sc), insetB = Math.max(0, H * sc - (y1 - dy) * sc);
+  ov.style.clipPath = `inset(${insetT.toFixed(2)}px ${insetR.toFixed(2)}px ${insetB.toFixed(2)}px ${insetL.toFixed(2)}px)`;
 }
 
 /* wipe: the left of the divider shows the original (or A), the right the
