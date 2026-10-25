@@ -1,0 +1,10 @@
+1.21.1: macOS build fix
+
+parallel.c asked for strict POSIX (_POSIX_C_SOURCE 200809L), which on
+macOS hides _SC_NPROCESSORS_ONLN, so the thread count failed to compile
+there from 1.18.0 on. The file now also defines _DARWIN_C_SOURCE, as
+serve.c already did, and the Makefile adds -D_DARWIN_C_SOURCE on Darwin
+so no future file trips on the same thing. No change to rendering.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

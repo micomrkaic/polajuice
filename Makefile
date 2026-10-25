@@ -8,6 +8,11 @@ CFLAGS += -std=c17 -Wall -Wextra -Wpedantic -pthread
 # different PjPreset layout, which manifests as garbage at runtime.
 CFLAGS += -MMD -MP
 LDLIBS += -lm -pthread
+# macOS hides XSI extensions (_SC_NPROCESSORS_ONLN, strdup's friends) once a
+# file asks for strict POSIX; ask for the Darwin superset everywhere
+ifeq ($(shell uname -s),Darwin)
+CPPFLAGS += -D_DARWIN_C_SOURCE
+endif
 
 CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/recipe.c src/core/rawdec.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)

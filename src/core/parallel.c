@@ -15,6 +15,7 @@
  * overrides the core count (1 = serial), for benchmarks and bisection.
  */
 #define _POSIX_C_SOURCE 200809L
+#define _DARWIN_C_SOURCE   /* macOS hides _SC_NPROCESSORS_ONLN behind POSIX strictness */
 
 #include "internal.h"
 
