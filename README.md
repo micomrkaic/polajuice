@@ -472,9 +472,10 @@ super8ify take the same files.
 
 Four tools on the view, all page-side (renders are unchanged):
 
-- **Wipe** (`w`): a divider dragged across the view, the current look
-  on the right and the original - or the look pinned as A - on the
-  left. The comparison image is laid on the picture, not the box: the
+- **Wipe** (`w`): a divider dragged across the view, the image on view
+  on the right and the original, the look pinned as A or the current
+  look on the left (when the choice is what is on view, its natural
+  counterpart). The comparison image is laid on the picture, not the box: the
   engine writes where the picture landed (crop and placement) as a
   comment line after the recipe in every JPEG, so a Polaroid's border,
   a Super 8 gate or the 126 square all line up, and two cameras with
@@ -486,9 +487,10 @@ Four tools on the view, all page-side (renders are unchanged):
   reports the sensor's own numbers (mean in stops below sensor white,
   share at sensor white), so print clipping and sensor clipping are
   told apart.
-- **Loupe** (`l`): a 320 px window at 1:1 of the full-size render under
-  the pointer, for judging grain and edge effects without rendering
-  full size by hand; the full-size render is made once per look.
+- **Loupe** (`l`): a 320 px window at 1:1 of what is on view at full
+  size - the current look, A, or the original (a raw's straight print)
+  - for judging grain and edge effects without rendering full size by
+  hand; each full-size image is made once per look.
 - **Bracket**: nine renders of the current look stepping one knob
   (exposure, develop, strength, age, halation, edge) in a grid over
   the view; click a cell to take that value. On the native engine the

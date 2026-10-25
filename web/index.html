@@ -345,6 +345,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
     <select id="wipeagainst" class="small" style="display:none" title="what the left side of the wipe shows">
       <option value="original">vs original</option>
       <option value="A">vs A</option>
+      <option value="B">vs current</option>
     </select>
     <button id="loupe-btn" class="small secondary" title="loupe: a 1:1 window of the full-size render under the pointer; key l">loupe</button>
     <button id="bracket" class="small secondary" title="bracket: nine renders of the current look stepping one knob, click one to take it">bracket</button>
@@ -400,7 +401,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.23.1";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.23.2";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -821,54 +822,77 @@ function previewSize() {
   return Math.max(800, Math.min(2000, Math.round(Math.max(w, h) * dpr)));
 }
 
-async function render(maxDim, overrides, quiet) {
+/* the look as render parameters: from the controls, or from a recipe
+ * object (what parseRecipe gives) for renders of a pinned look */
+function lookFromRecipe(r) {
+  const stem = r.film === "none" || r.film === "auto" || !r.film ? null : r.film;
+  return {
+    camera: r.camera, stem, filmStem: stem, filmChoice: r.film === "none" ? "none" : stem ? "stem" : "auto",
+    custom: !!(customCube && stem && customCube.stem === stem),
+    printStem: r.print && r.print !== "none" ? r.print : null,
+    filter: r.filter && r.filter !== "none" ? r.filter : null,
+    strength: parseFloat(r.strength ?? 1), seed: parseInt(r.seed ?? 42, 10) || 0,
+    age: parseFloat(r.age ?? 0), develop: r.develop || "normal",
+    grainModel: r.grain || "classic", edge: parseFloat(r.edge ?? 0),
+    ev: parseFloat(r.ev ?? 0), halation: parseFloat(r.halation ?? 1),
+    crop: r.crop === "full" ? "full" : "camera" };
+}
+function lookFromControls() {
+  const stem = customCube ? customCube.stem : resolveFilmStem();
+  const filmChoice = $("film").value === "__none__" ? "none" : $("film").value === "__auto__" ? "auto" : "stem";
+  return {
+    camera: $("camera").value, stem, filmStem: stem, filmChoice, custom: !!customCube,
+    printStem: $("print") && $("print").value !== "__none__" ? $("print").value : null,
+    filter: $("filter").value || null,
+    strength: parseFloat($("strength").value), seed: parseInt($("seed").value, 10) || 0,
+    age: parseFloat($("age").value), develop: $("develop").value,
+    grainModel: $("grain").value, edge: parseFloat($("edge").value),
+    ev: parseFloat($("ev").value), halation: parseFloat($("halation").value),
+    crop: $("crop").value === "full" ? "full" : "camera" };
+}
+
+/* maxDim 0 = full size; overrides patch the look (brackets); quiet
+ * skips status, caption and the recipe box (brackets, the loupe);
+ * fromRecipe renders a recipe object instead of the controls (A) */
+async function render(maxDim, overrides, quiet, fromRecipe) {
   if ((!inputBytes && !inputServerName) || !engine) return null;
   overrides = overrides || {};
   if (!quiet) setStatus("rendering…");
   await new Promise(r => setTimeout(r, 20));
   try {
-    const stem = customCube ? customCube.stem : resolveFilmStem();
+    const look = fromRecipe ? lookFromRecipe(fromRecipe) : lookFromControls();
+    const stem = look.stem;
     /* a custom cube is text the server has no file for: the wasm engine
      * takes that render; everything else goes to the engine in charge */
     let eng = engine;
-    if (customCube && engine.native) {
+    if (look.custom && engine.native) {
       eng = wasmEngine;
       if (!inputBytes) inputBytes = new Uint8Array(await (await fetch(engine.fileUrl(inputServerName))).arrayBuffer());
     }
     const cubeText = eng.native ? null
-                   : customCube ? customCube.text : (stem ? await loadFilmCube(stem) : null);
-    const filmChoice = $("film").value === "__none__" ? "none" : $("film").value === "__auto__" ? "auto" : "stem";
-    const family = (!customCube && stem)
+                   : look.custom ? customCube.text : (stem ? await loadFilmCube(stem) : null);
+    const family = (!look.custom && stem)
         ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
     const filmProcess = family ? familyToken(family) : null;
-    const printStem = $("print") && $("print").value !== "__none__"
-        ? $("print").value : null;
-    const printCubeText = printStem && !eng.native ? await loadFilmCube(printStem) : null;
+    const printCubeText = look.printStem && !eng.native ? await loadFilmCube(look.printStem) : null;
     const t0 = performance.now();
     const params = {
       inputBytes, ext: inputExt, name: eng.native ? inputServerName : null,
-      camera: $("camera").value, cubeText, filmChoice,
+      camera: look.camera, cubeText, filmChoice: look.filmChoice,
       filmProcess, filmStem: stem, printCubeText,
-      filter: $("filter").value || null,
-      strength: parseFloat($("strength").value),
-      seed: parseInt($("seed").value, 10) || 0,
-      age: parseFloat($("age").value),
-      develop: $("develop").value, maxDim,
-      grainModel: $("grain").value,
-      edge: parseFloat($("edge").value),
-      ev: parseFloat($("ev").value),
-      halation: parseFloat($("halation").value),
-      printStem, crop: $("crop").value === "full" ? "full" : "camera" };
+      filter: look.filter, strength: look.strength, seed: look.seed, age: look.age,
+      develop: look.develop, maxDim, grainModel: look.grainModel, edge: look.edge,
+      ev: look.ev, halation: look.halation, printStem: look.printStem, crop: look.crop };
     Object.assign(params, overrides);
     const out = await eng.render(params);
+    const recipe = readJpegComment(out);
+    renderGeometry = parseGeometry(recipe);
     if (quiet) return new Blob([out], { type: "image/jpeg" });
     const secs = ((performance.now() - t0) / 1000).toFixed(secs_digits(performance.now() - t0));
     setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine") +
               (eng.native ? "" : (engine.native ? " (wasm, custom cube)" : "")));
-    $("aftercap").textContent = `rendered — ${$("camera").value}` + (stem ? ` / ${stem}` : "") +
+    $("aftercap").textContent = `rendered — ${look.camera}` + (stem ? ` / ${stem}` : "") +
       (maxDim ? ` (preview, long edge ${maxDim}px)` : " (full size)");
-    const recipe = readJpegComment(out);
-    renderGeometry = parseGeometry(recipe);
     if (recipe) showRecipe(stripGeometry(recipe));
     return new Blob([out], { type: "image/jpeg" });
   } catch (e) {
@@ -892,6 +916,8 @@ function showView(which) {
   else if (lastRender) $("aftercap").textContent = lastRender.caption;
   if (src) updateHistogram(src);
   syncWipe();
+  $("loupe").style.display = "none";
+  if (loupeOn && src) ensureFull(shownKind());
 }
 
 async function renderPreview() {
@@ -903,7 +929,6 @@ async function renderPreview() {
       const url = URL.createObjectURL(blob);
       lastRender = { blob, url, recipe: $("recipe").value, caption: $("aftercap").textContent, geometry: renderGeometry };
       $("after").src = url;
-      fullRender = null;   /* the loupe's full-size render is of the old look now */
       if (view !== "original") showView("B");
     }
   } finally {
@@ -985,7 +1010,7 @@ function selectImage(i) {
   lastRender = null;
   $("before").src = im.url;
   $("render").disabled = $("download").disabled = false;
-  fullRender = null;
+  fullCache.clear();
   refreshThumbs();
   refreshRecipeFromControls();
   showView("original");
@@ -1092,7 +1117,6 @@ $("one2one").addEventListener("click", () => {
 });
 
 /* ---- comparison tools: wipe, histogram and clipping, loupe, bracket --- */
-let fullRender = null;    /* {url, w, h, key} full-size render of the current look, for the loupe */
 let wipeOn = false, wipeX = 0.5, wipeDrag = false;
 let clipOn = false, loupeOn = false;
 let histSrc = null;
@@ -1108,11 +1132,55 @@ function placeOverlay(el, r) {
   el.style.left = r.left + "px"; el.style.top = r.top + "px";
   el.style.width = r.width + "px"; el.style.height = r.height + "px";
 }
-/* geometry of the image on view: the current render's, or A's */
-function shownGeometry() {
-  if (view === "A" && pinned) return pinned.geometry || null;
-  return (lastRender && lastRender.geometry) || null;
+/* ---- the three images and where their pictures sit -------------------
+ * Every image on the page is the input seen through some geometry: the
+ * original is the input itself (identity), a render is a crop of the
+ * input placed in an output (inside a border, for a print). Geometries
+ * are brought to one input scale, so a preview and a full-size render
+ * of the same input compare. */
+function identityGeometry(w, h) {
+  return { inW: w, inH: h, cropX: 0, cropY: 0, cropW: w, cropH: h, placeX: 0, placeY: 0, outW: w, outH: h };
 }
+function scaleGeometry(g, k) {
+  if (!g || k === 1) return g;
+  const o = {};
+  for (const key of Object.keys(g)) o[key] = g[key] * k;
+  return o;
+}
+/* the input's size as the current render saw it; the original's own
+ * pixel size when nothing has been rendered yet */
+function referenceInput() {
+  if (lastRender && lastRender.geometry) return [lastRender.geometry.inW, lastRender.geometry.inH];
+  if (pinned && pinned.geometry) return [pinned.geometry.inW, pinned.geometry.inH];
+  const v = $("view");
+  return [v.naturalWidth || v.clientWidth || 1, v.naturalHeight || v.clientHeight || 1];
+}
+function imageInfo(kind) {
+  const [rw, rh] = referenceInput();
+  if (kind === "original") return originalUrl ? { kind, url: originalUrl, geometry: identityGeometry(rw, rh) } : null;
+  if (kind === "A") {
+    if (!(pinned && pinned.url)) return null;
+    const g = pinned.geometry ? scaleGeometry(pinned.geometry, rw / pinned.geometry.inW) : identityGeometry(rw, rh);
+    return { kind, url: pinned.url, geometry: g };
+  }
+  if (!(lastRender && lastRender.url)) return null;
+  const g = lastRender.geometry ? scaleGeometry(lastRender.geometry, rw / lastRender.geometry.inW) : identityGeometry(rw, rh);
+  return { kind: "B", url: lastRender.url, geometry: g };
+}
+function shownInfo() { return imageInfo(view === "A" ? "A" : view === "original" ? "original" : "B"); }
+/* the wipe's other image: the choice in the dropdown, and when that is
+ * what is on view already, the natural counterpart */
+function otherInfo() {
+  const want = $("wipeagainst").value || "original";
+  const shown = view === "A" ? "A" : view === "original" ? "original" : "B";
+  let kind = want;
+  if (kind === shown) kind = shown === "B" ? "original" : "B";
+  let info = imageInfo(kind);
+  if (!info && kind !== "original") info = imageInfo("original");
+  if (info && info.kind === shown) return null;
+  return info;
+}
+
 function layoutOverlays() {
   const r = viewRect();
   if (!r.width) return;
@@ -1121,60 +1189,45 @@ function layoutOverlays() {
   bar.style.left = (r.left + r.width * wipeX) + "px"; bar.style.top = r.top + "px";
   bar.style.height = r.height + "px";
   const ov = $("wipeimg");
-  const g = shownGeometry();
-  const againstA = $("wipeagainst").value === "A" && pinned && pinned.url;
-  const gA = againstA ? pinned.geometry : null;
-  if (!g || (againstA && !gA)) {
-    /* no geometry known: the comparison image fills the view's box */
-    placeOverlay(ov, r);
-    ov.style.clipPath = `inset(0 ${((1 - wipeX) * 100).toFixed(3)}% 0 0)`;
-    return;
-  }
-  /* The comparison image is laid at the input's pixel scale so that its
-   * picture coincides with the picture inside the render: the original's
-   * crop rectangle lands on the render's place rectangle (inside an
-   * instant border, say), and A's picture area lands on the current's.
-   * Everything is in the render's output pixels times the view scale. */
-  const sc = r.width / g.outW;
-  let W, H, dx, dy, vis;
-  if (againstA) {
-    W = gA.outW; H = gA.outH;
-    dx = g.placeX - g.cropX + gA.cropX - gA.placeX;
-    dy = g.placeY - g.cropY + gA.cropY - gA.placeY;
-    vis = [0, 0, g.outW, g.outH];
-  } else {
-    W = g.inW; H = g.inH;
-    dx = g.placeX - g.cropX; dy = g.placeY - g.cropY;
-    vis = [g.placeX, g.placeY, g.cropW, g.cropH];
-  }
+  const shown = shownInfo(), other = otherInfo();
+  if (!shown || !other) { ov.style.display = "none"; return; }
+  if (ov.src !== other.url) ov.src = other.url;
+  /* Lay the other image at the input's pixel scale so its picture
+   * coincides with the picture on view: other pixel u is input pixel
+   * u - placeO + cropO, which is shown pixel u - placeO + cropO - cropS
+   * + placeS. Visible: both pictures' areas, within the view, left of
+   * the divider. All in shown-output pixels times the view scale. */
+  const gS = shown.geometry, gO = other.geometry;
+  const sc = r.width / gS.outW;
+  const dx = gS.placeX - gS.cropX + gO.cropX - gO.placeX;
+  const dy = gS.placeY - gS.cropY + gO.cropY - gO.placeY;
+  const W = gO.outW, H = gO.outH;
   ov.style.left = (r.left + dx * sc) + "px"; ov.style.top = (r.top + dy * sc) + "px";
   ov.style.width = (W * sc) + "px"; ov.style.height = (H * sc) + "px";
-  /* visible: the picture area, within the view, left of the divider */
-  const x0 = Math.max(vis[0], 0), y0 = Math.max(vis[1], 0);
-  const x1 = Math.min(vis[0] + vis[2], g.outW, wipeX * g.outW), y1 = Math.min(vis[1] + vis[3], g.outH);
+  const x0 = Math.max(gS.placeX, gO.placeX + dx, 0);
+  const y0 = Math.max(gS.placeY, gO.placeY + dy, 0);
+  const x1 = Math.min(gS.placeX + gS.cropW, gO.placeX + gO.cropW + dx, gS.outW, wipeX * gS.outW);
+  const y1 = Math.min(gS.placeY + gS.cropH, gO.placeY + gO.cropH + dy, gS.outH);
   const insetL = Math.max(0, (x0 - dx) * sc), insetT = Math.max(0, (y0 - dy) * sc);
   const insetR = Math.max(0, W * sc - (x1 - dx) * sc), insetB = Math.max(0, H * sc - (y1 - dy) * sc);
   ov.style.clipPath = `inset(${insetT.toFixed(2)}px ${insetR.toFixed(2)}px ${insetB.toFixed(2)}px ${insetL.toFixed(2)}px)`;
+  ov.style.display = x1 > x0 && y1 > y0 ? "block" : "none";
 }
 
-/* wipe: the left of the divider shows the original (or A), the right the
- * view as selected; the divider follows the pointer while pressed */
+/* wipe: the view on the right of the divider, the chosen other image on
+ * the left (original, A or current - whichever is not on view) */
 function syncWipe() {
-  const canA = !!(pinned && pinned.url);
-  const against = $("wipeagainst").value === "A" && canA ? "A" : "original";
-  const src = against === "A" ? pinned.url : originalUrl;
-  const show = wipeOn && !!src;
-  $("wipeimg").style.display = show ? "block" : "none";
+  const other = wipeOn ? otherInfo() : null;
+  const show = !!other;
   $("wipebar").style.display = show ? "block" : "none";
   $("wipeagainst").style.display = wipeOn ? "" : "none";
   $("viewport").className = ($("viewport").className.replace(/\bwiping\b/, "").trim() + (show ? " wiping" : "")).trim();
   $("wipe").className = wipeOn ? "small on" : "small secondary";
-  if (show && $("wipeimg").src !== src) $("wipeimg").src = src;
-  if (show) layoutOverlays();
+  if (!show) { $("wipeimg").style.display = "none"; return; }
+  layoutOverlays();
 }
 function setWipe(on) {
   wipeOn = on;
-  if (on && view === "original") showView("B");
   syncWipe();
 }
 $("wipe").addEventListener("click", () => setWipe(!wipeOn));
@@ -1288,32 +1341,61 @@ $("clipwarn").addEventListener("click", () => {
   if (histSrc) updateHistogram(histSrc);
 });
 
-/* loupe: a 320 px window at 1:1 of the full-size render, following the
- * pointer; the full-size render is made once per look and reused */
-async function ensureFullRender() {
-  const key = inputName + "|" + $("recipe").value;
-  if (fullRender && fullRender.key === key) return fullRender;
-  if (fullRender && fullRender.pending === key) return null;
-  fullRender = { pending: key };
-  setStatus("loupe: rendering full size…");
-  const blob = await render(0, {}, true);
-  if (!blob) { fullRender = null; return null; }
-  const url = URL.createObjectURL(blob);
-  const dims = await new Promise(resolve => {
+/* loupe: a 320 px window at 1:1 of what is on view, full size: the
+ * current look rendered full size, A's recipe rendered full size, or
+ * the original itself (a raw's straight print at full size). Each is
+ * made once and kept until the look or the image changes. */
+const fullCache = new Map();   /* key -> {url, w, h} | "pending" */
+function fullKeyFor(kind) {
+  if (kind === "original") return "original|" + inputName + "." + inputExt;
+  if (kind === "A") return "A|" + inputName + "|" + (pinned ? pinned.recipe : "");
+  return "B|" + inputName + "|" + $("recipe").value;
+}
+async function imageDims(url) {
+  return new Promise(resolve => {
     if (typeof Image !== "function") { resolve({ w: 0, h: 0 }); return; }
     const im = new Image();
     im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
     im.onerror = () => resolve({ w: 0, h: 0 });
     im.src = url;
   });
-  fullRender = { key, url, w: dims.w, h: dims.h };
-  setStatus(`loupe: full size ${dims.w}×${dims.h} ready`);
-  return fullRender;
 }
+async function ensureFull(kind) {
+  const key = fullKeyFor(kind);
+  const have = fullCache.get(key);
+  if (have === "pending") return null;
+  if (have) return have;
+  fullCache.set(key, "pending");
+  let url = null;
+  try {
+    if (kind === "original") {
+      const raw = /^(nef|dng)$/i.test(inputExt);
+      if (!raw) url = originalUrl;                       /* the file itself is full size */
+      else if (engine && engine.native && inputServerName) url = engine.developUrl(inputServerName, 0);
+      else if (inputBytes) {
+        setStatus("loupe: developing the raw at full size…");
+        const jpg = await wasmEngine.develop({ inputBytes, ext: inputExt, maxDim: 0 });
+        url = URL.createObjectURL(new Blob([jpg], { type: "image/jpeg" }));
+      }
+    } else {
+      setStatus(`loupe: rendering ${kind === "A" ? "A" : "the current look"} at full size…`);
+      const blob = await render(0, {}, true, kind === "A" ? parseRecipe(pinned.recipe) : null);
+      if (blob) url = URL.createObjectURL(blob);
+    }
+  } catch (e) { url = null; }
+  if (!url) { fullCache.delete(key); setStatus("loupe: full size unavailable", true); return null; }
+  const dims = await imageDims(url);
+  const entry = { url, w: dims.w, h: dims.h };
+  fullCache.set(key, entry);
+  setStatus(`loupe: full size ${dims.w}×${dims.h} ready` + (kind === "B" ? "" : ` (${kind})`));
+  return entry;
+}
+function shownKind() { return view === "A" ? "A" : view === "original" ? "original" : "B"; }
 async function moveLoupe(e) {
   const lp = $("loupe");
-  const fr = await ensureFullRender();
-  if (!fr || !fr.w) { lp.style.display = "none"; return; }
+  const kind = shownKind();
+  const fr = await ensureFull(kind);
+  if (!fr || !fr.w || !loupeOn || shownKind() !== kind) { lp.style.display = "none"; return; }
   const r = viewRect(), vp = $("viewport");
   const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
   const fx = (e.clientX - rect.left + (vp.scrollLeft || 0) - r.left) / (r.width || 1);
@@ -1327,14 +1409,14 @@ async function moveLoupe(e) {
   const wh = (typeof window !== "undefined" && window.innerHeight) || 1000;
   lp.style.left = Math.min(e.clientX + 24, ww - size - 8) + "px";
   lp.style.top = Math.min(e.clientY + 24, wh - size - 8) + "px";
-  $("loupecap").textContent = `1:1 of ${fr.w}×${fr.h} at ${Math.round(fx * fr.w)},${Math.round(fy * fr.h)}`;
+  $("loupecap").textContent = `${kind === "B" ? "current" : kind} 1:1 of ${fr.w}×${fr.h} at ${Math.round(fx * fr.w)},${Math.round(fy * fr.h)}`;
   lp.style.display = "block";
 }
 function setLoupe(on) {
   loupeOn = on;
   $("loupe-btn").className = on ? "small on" : "small secondary";
   if (!on) $("loupe").style.display = "none";
-  else if (lastRender || originalUrl) ensureFullRender();
+  else if (lastRender || originalUrl) ensureFull(shownKind());
 }
 $("loupe-btn").addEventListener("click", () => setLoupe(!loupeOn));
 
@@ -1394,6 +1476,8 @@ $("bracket").addEventListener("click", runBracket);
 $("sheetclose").addEventListener("click", closeSheet);
 
 if (typeof window !== "undefined" && window.addEventListener) {
+  /* a hook for the Chromium test to check the wipe's placement */
+  window.__polajuice = { imageInfo, shownInfo, otherInfo, viewRect };
   window.addEventListener("resize", layoutOverlays);
   if (typeof ResizeObserver === "function") new ResizeObserver(layoutOverlays).observe($("view"));
   $("view").addEventListener("load", layoutOverlays);
@@ -1478,16 +1562,6 @@ $("batch").addEventListener("click", async () => {
 });
 
 /* the look as the native engine wants it, from the controls */
-function lookFromControls() {
-  const stem = resolveFilmStem();
-  return { camera: $("camera").value, filmStem: stem,
-    filmChoice: $("film").value === "__none__" ? "none" : $("film").value === "__auto__" ? "auto" : "stem",
-    printStem: $("print") && $("print").value !== "__none__" ? $("print").value : null,
-    filter: $("filter").value || null, strength: parseFloat($("strength").value),
-    seed: parseInt($("seed").value, 10) || 0, age: parseFloat($("age").value),
-    develop: $("develop").value, grainModel: $("grain").value, edge: parseFloat($("edge").value),
-    ev: parseFloat($("ev").value), halation: parseFloat($("halation").value) };
-}
 
 if (typeof document.addEventListener === "function") {
   let glance = false;

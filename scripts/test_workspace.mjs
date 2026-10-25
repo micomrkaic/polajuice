@@ -86,6 +86,59 @@ await page.selectOption("#wipeagainst", "A");
 if (!/blob:/.test(await page.$eval("#wipeimg", e => e.src))) fail("wipe against A shows no image");
 await page.keyboard.press("w");
 if (await page.$eval("#wipeimg", e => e.style.display) !== "none") fail("w key did not close the wipe");
+
+// Placement across views, comparisons and formats: for the image on
+// view S and the other image O, the input's center pixel must land on
+// the same screen point through both. A is the polaroid pinned above
+// (instant border, 1.03:1 crop); the current goes through every format.
+async function checkWipeAlignment(label) {
+  const res = await page.evaluate(() => {
+    const H = window.__polajuice;
+    const S = H.shownInfo(), O = H.otherInfo();
+    if (!S || !O) return { skip: true };
+    const r = H.viewRect();
+    const ov = document.getElementById("wipeimg");
+    if (ov.style.display !== "block") return { hidden: true, S: S.kind, O: O.kind };
+    const sc = r.width / S.geometry.outW;
+    const p = [S.geometry.inW / 2, S.geometry.inH / 2];            /* input center */
+    const viaS = [r.left + (S.geometry.placeX + p[0] - S.geometry.cropX) * sc,
+                  r.top + (S.geometry.placeY + p[1] - S.geometry.cropY) * sc];
+    const ovL = parseFloat(ov.style.left), ovT = parseFloat(ov.style.top), ovW = parseFloat(ov.style.width);
+    const so = ovW / O.geometry.outW;
+    const viaO = [ovL + (O.geometry.placeX + p[0] - O.geometry.cropX) * so,
+                  ovT + (O.geometry.placeY + p[1] - O.geometry.cropY) * so];
+    return { S: S.kind, O: O.kind, dx: viaS[0] - viaO[0], dy: viaS[1] - viaO[1], scale: so / sc };
+  });
+  if (res.skip) fail(label + ": no images to compare");
+  if (res.hidden) fail(label + `: wipe hidden for ${res.S} vs ${res.O}`);
+  if (Math.abs(res.dx) > 0.75 || Math.abs(res.dy) > 0.75 || Math.abs(res.scale - 1) > 1e-3)
+    fail(label + `: misaligned ${res.S} vs ${res.O}: dx ${res.dx.toFixed(2)} dy ${res.dy.toFixed(2)} scale ${res.scale.toFixed(4)}`);
+  return `${res.S}/${res.O}`;
+}
+const formats = [["35mm-negative", "camera"], ["toy-camera-120", "camera"], ["super8", "camera"],
+                 ["polaroid-600", "camera"], ["polaroid-600", "full"], ["polaroid-packfilm", "full"]];
+let checked = [];
+for (const [cam, crop] of formats) {
+  await page.selectOption("#camera", cam);
+  if (!await page.$eval("#crop", e => e.disabled)) await page.selectOption("#crop", crop);
+  await page.waitForFunction(([c, k]) => new RegExp("camera=" + c + "\\n").test(document.getElementById("recipe").value) &&
+      new RegExp("crop=" + k + "\\n").test(document.getElementById("recipe").value) &&
+      /rendered in/.test(document.getElementById("status").textContent), [cam, crop], { timeout: 60000 });
+  await page.waitForTimeout(300);
+  await page.click("#wipe");
+  for (const v of ["viewB", "viewOriginal", "viewA"]) {
+    await page.click("#" + v);
+    for (const against of ["original", "A", "B"]) {
+      await page.selectOption("#wipeagainst", against);
+      checked.push(await checkWipeAlignment(`${cam}/${crop} view=${v} vs=${against}`));
+    }
+  }
+  await page.click("#wipe");
+}
+await page.click("#viewB");
+await page.selectOption("#camera", "super8");
+await page.waitForFunction(() => /camera=super8\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+console.log(`wipe placement ok: ${formats.length} formats x 3 views x 3 comparisons (${[...new Set(checked)].join(", ")})`);
 await page.selectOption("#bracketaxis", "ev");
 await page.click("#bracket");
 await page.waitForFunction(() => /bracket: ev — click/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
@@ -102,6 +155,20 @@ await page.mouse.move(vp.x + vp.w * 0.5 + 3, vp.y + vp.h * 0.5);
 await page.waitForFunction(() => document.getElementById("loupe").style.display === "block", null, { timeout: 10000 });
 const bg = await page.$eval("#loupe", e => e.style.backgroundSize);
 if (!/\d+px \d+px/.test(bg)) fail("loupe has no full-size image: " + bg);
+// the loupe shows what is on view: the original at its own full size, A at full size
+await page.click("#viewOriginal");
+await page.waitForFunction(() => /loupe: full size \d+×\d+ ready \(original\)/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
+await page.mouse.move(vp.x + vp.w * 0.5, vp.y + vp.h * 0.5);
+await page.mouse.move(vp.x + vp.w * 0.5 + 3, vp.y + vp.h * 0.5);
+await page.waitForFunction(() => /^original 1:1 of/.test(document.getElementById("loupecap").textContent), null, { timeout: 10000 });
+const origNat = await page.$eval("#view", e => e.naturalWidth + "×" + e.naturalHeight);
+if (!(await page.$eval("#loupecap", e => e.textContent)).includes(origNat)) fail("loupe over the original is not the original's size");
+await page.click("#viewA");
+await page.waitForFunction(() => /loupe: full size \d+×\d+ ready \(A\)/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
+await page.mouse.move(vp.x + vp.w * 0.5, vp.y + vp.h * 0.5);
+await page.mouse.move(vp.x + vp.w * 0.5 + 3, vp.y + vp.h * 0.5);
+await page.waitForFunction(() => /^A 1:1 of/.test(document.getElementById("loupecap").textContent), null, { timeout: 10000 });
+await page.click("#viewB");
 await page.keyboard.press("l");
 await page.$eval("#ev", e => { e.value = "1"; e.dispatchEvent(new Event("input", { bubbles: true })); });
 await page.waitForFunction(() => /\nev=1\n/.test(document.getElementById("recipe").value), null, { timeout: 60000 });

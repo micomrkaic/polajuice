@@ -1,0 +1,37 @@
+1.23.2: wipe and loupe follow the view, in every format and pairing
+
+The wipe and the loupe were written around the current render; this
+makes them about whatever is on view.
+
+Every image on the page - the original, the look pinned as A, the
+current render - is the input seen through a geometry (the original's
+is the identity), brought to one input scale so a preview and a
+full-size render compare. The wipe lays any pair of them by one
+mapping: the other image's picture area onto the shown image's, clipped
+to both and to the divider. The dropdown offers original, A and
+current; when the choice is what is on view already, the natural
+counterpart is used (current when viewing the original, the original
+when viewing the current). So the original view wipes against a
+Polaroid full-frame render on the picture, and A (a Polaroid) wipes
+against a Super 8 current inside the border.
+
+The loupe shows what is on view at full size: the current look
+rendered full size, A's recipe rendered full size (render() now takes
+a recipe object as the look), or the original itself - the file for a
+JPEG, the straight print at full size for a raw. Each is made once and
+kept until the look or the image changes.
+
+Also: the native export and batch had been sending the look without
+the Format choice (the page had two lookFromControls, and the older
+one predated crop), so "Export next to source" and "Apply to folder"
+ignored full frame. One function now, with crop.
+
+Tests: the Chromium test checks the wipe's placement for six formats
+(no crop, square, gate, instant crop, instant full, pack-film full)
+in all three views against all three comparison choices - 54 cases,
+the input's center pixel landing on the same screen point through
+both images within 0.75 px - and the loupe's caption and size over the
+original and over A.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs
