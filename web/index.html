@@ -481,7 +481,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.25.1";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.25.2";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -1024,10 +1024,12 @@ function showView(which) {
   view = which;
   for (const [id, v] of [["viewOriginal", "original"], ["viewA", "A"], ["viewB", "B"]])
     $(id).className = v === which ? "on" : "";
-  const src = which === "original" ? originalUrl
-            : which === "A" ? (pinned && pinned.url)
-            : (lastRender && lastRender.url) || originalUrl;
-  if (src) $("view").src = src;
+  let src = which === "original" ? originalUrl
+          : which === "A" ? (pinned && pinned.url)
+          : (lastRender && lastRender.url) || originalUrl;
+  const full = src ? fullFor(which === "A" ? "A" : which === "original" ? "original" : "B") : null;
+  if (full) src = full.url;
+  if (src && $("view").src !== src) $("view").src = src;
   if (which === "A" && pinned) $("aftercap").textContent = "A — " + pinned.caption;
   else if (which === "original") $("aftercap").textContent = "original — " + inputName + "." + inputExt;
   else if (lastRender) $("aftercap").textContent = lastRender.caption;
@@ -1253,9 +1255,11 @@ $("pinA").addEventListener("click", () => {
 });
 $("one2one").addEventListener("click", () => {
   const vp = $("viewport");
-  const on = vp.className !== "one2one";
+  const on = !oneToOne();
   vp.className = on ? "one2one" : "";
   $("one2one").className = on ? "small on" : "small secondary";
+  if (on) setStatus("1:1 — the pixels of the full-size render (made once per look)");
+  showView(view);
 });
 
 /* ---- comparison tools: wipe, histogram and clipping, loupe, bracket --- */
@@ -1298,7 +1302,23 @@ function referenceInput() {
   const v = $("view");
   return [v.naturalWidth || v.clientWidth || 1, v.naturalHeight || v.clientHeight || 1];
 }
+function oneToOne() { return /\bone2one\b/.test($("viewport").className); }
+/* at 1:1 the page shows full-size renders: the entry for a kind when it
+ * has been made (and asks for it when not) */
+function fullFor(kind) {
+  if (!oneToOne()) return null;
+  const have = fullCache.get(fullKeyFor(kind));
+  if (have && have !== "pending" && have.w) return have;
+  if (!have) ensureFull(kind);
+  return null;
+}
 function imageInfo(kind) {
+  const full = fullFor(kind);
+  if (full && full.geometry) {
+    /* full-size pixels: geometries in the full render's own units */
+    const g = { ...full.geometry };
+    return { kind, url: full.url, geometry: g, full: true };
+  }
   const [rw, rh] = referenceInput();
   if (kind === "original") return originalUrl ? { kind, url: originalUrl, geometry: identityGeometry(rw, rh) } : null;
   if (kind === "A") {
@@ -1356,7 +1376,10 @@ function composeStage() {
   /* with trims: left pixel u is file pixel u - placeL + cropL + trimL, which
    * is shown pixel that - trimS - cropS + placeS; a difference in
    * straightening is a rotation of the left image about the file's center */
-  const gS = shown.geometry, gL = left.geometry;
+  const gS = shown.geometry;
+  /* the left image's geometry in the shown image's units (a full-size
+   * shown against a preview left, or the reverse) */
+  const gL = scaleGeometry(left.geometry, gS.origW / left.geometry.origW);
   const dx = gS.placeX - gS.cropX - gS.trimX + gL.trimX + gL.cropX - gL.placeX;
   const dy = gS.placeY - gS.cropY - gS.trimY + gL.trimY + gL.cropY - gL.placeY;
   const rotDiff = (gS.rot || 0) - (gL.rot || 0);
@@ -1553,8 +1576,10 @@ async function ensureFull(kind) {
   } catch (e) { url = null; }
   if (!url) { fullCache.delete(key); setStatus("loupe: full size unavailable", true); return null; }
   const dims = await imageDims(url);
-  const entry = { url, w: dims.w, h: dims.h };
+  const entry = { url, w: dims.w, h: dims.h,
+                  geometry: kind === "original" ? identityGeometry(dims.w, dims.h) : renderGeometry };
   fullCache.set(key, entry);
+  if (oneToOne()) { showView(view); }   /* 1:1 shows full-size pixels as soon as they exist */
   setStatus(`loupe: full size ${dims.w}×${dims.h} ready` + (kind === "B" ? "" : ` (${kind})`));
   return entry;
 }

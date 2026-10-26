@@ -1,0 +1,20 @@
+1.25.2: 1:1 shows the full-size render; npm bookkeeping ignored
+
+Page:
+- the 1:1 button now shows the pixels of the full-size render, for the
+  view and for both sides of the wipe. It used to switch the viewport to
+  scale 1 but keep the preview image, so a Polaroid (or any format) at
+  1:1 stayed at the preview's reduced size. The full render is made once
+  per look (the loupe already used it) and is reused by the loupe.
+- imageInfo() reports which image is on screen (preview or full) so the
+  wipe composer lays the left image in the same frame at the same scale.
+
+Tests:
+- test_workspace.mjs: 1:1 block (Polaroid, full render against preview,
+  wipe at scale 1); the loupe checks tolerate an already-cached full
+  render.
+
+Repo:
+- .gitignore and release.sh ignore node_modules, scripts/package.json and
+  scripts/package-lock.json so a machine with Playwright installed still
+  has a clean tree at release time.

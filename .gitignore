@@ -34,4 +34,6 @@ looks/__test_serve__.recipe
 # synthetic raw test files (tools/make_test_raws.py), a few KB each;
 # this must stay below the raw ignores above, since the last match wins
 node_modules
+scripts/package.json
+scripts/package-lock.json
 !tests/raw/*

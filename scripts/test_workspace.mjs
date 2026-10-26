@@ -151,6 +151,24 @@ for (const [cam, crop] of formats) {
   }
   await page.click("#wipe");
 }
+// 1:1 shows the full-size render, not the preview: on the Polaroid the
+// view grows past the preview's width, and the wipe lays the original
+// (at its own full size) on it
+await page.selectOption("#camera", "polaroid-600");
+await page.waitForFunction(() => /camera=polaroid-600\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+const previewW = await page.$eval("#view", e => e.naturalWidth);
+await page.click("#one2one");
+await page.waitForFunction(w => document.getElementById("view").naturalWidth > w * 1.2, previewW, { timeout: 120000 });
+const fullW = await page.$eval("#view", e => e.naturalWidth);
+await page.click("#wipe"); await page.selectOption("#wipeagainst", "original");
+await page.waitForFunction(() => { const H = window.__polajuice; const f = H.frame(); const O = H.imageInfo(H.leftKind());
+  return f && H.shownInfo().full && O && O.full && f.sc === 1; }, null, { timeout: 60000 });
+checked.push(await checkWipeAlignment("1:1 polaroid view=B vs=original"));
+if (Math.abs(await page.evaluate(() => window.__polajuice.frame().sc) - 1) > 1e-6) fail("1:1 wipe frame is not at scale 1");
+await page.click("#wipe");
+await page.click("#one2one");
+await page.waitForFunction(w => document.getElementById("view").naturalWidth === w, previewW, { timeout: 60000 });
+console.log(`1:1 ok: full render ${fullW}px wide against a ${previewW}px preview, wipe at scale 1`);
 await page.click("#viewB");
 await page.selectOption("#camera", "super8");
 await page.waitForFunction(() => /camera=super8\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
@@ -203,17 +221,20 @@ const bg = await page.$eval("#loupe", e => e.style.backgroundSize);
 if (!/\d+px \d+px/.test(bg)) fail("loupe has no full-size image: " + bg);
 // the loupe shows what is on view: the original at its own full size, A at full size
 await page.click("#viewOriginal");
-await page.waitForFunction(() => /loupe: full size \d+×\d+ ready \(original\)/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
-await page.mouse.move(vp.x + vp.w * 0.5, vp.y + vp.h * 0.5);
-await page.mouse.move(vp.x + vp.w * 0.5 + 3, vp.y + vp.h * 0.5);
-await page.waitForFunction(() => /^original 1:1 of/.test(document.getElementById("loupecap").textContent), null, { timeout: 10000 });
+/* the original's full size may already be cached (1:1 used it), so wait on the loupe itself */
+for (let i = 0; i < 40 && !/^original 1:1 of/.test(await page.$eval("#loupecap", e => e.textContent)); ++i) {
+  await page.mouse.move(vp.x + vp.w * 0.5 + (i % 2), vp.y + vp.h * 0.5);
+  await page.waitForTimeout(500);
+}
+if (!/^original 1:1 of/.test(await page.$eval("#loupecap", e => e.textContent))) fail("loupe over the original never showed");
 const origNat = await page.$eval("#view", e => e.naturalWidth + "×" + e.naturalHeight);
 if (!(await page.$eval("#loupecap", e => e.textContent)).includes(origNat)) fail("loupe over the original is not the original's size");
 await page.click("#viewA");
-await page.waitForFunction(() => /loupe: full size \d+×\d+ ready \(A\)/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
-await page.mouse.move(vp.x + vp.w * 0.5, vp.y + vp.h * 0.5);
-await page.mouse.move(vp.x + vp.w * 0.5 + 3, vp.y + vp.h * 0.5);
-await page.waitForFunction(() => /^A 1:1 of/.test(document.getElementById("loupecap").textContent), null, { timeout: 10000 });
+for (let i = 0; i < 240 && !/^A 1:1 of/.test(await page.$eval("#loupecap", e => e.textContent)); ++i) {
+  await page.mouse.move(vp.x + vp.w * 0.5 + (i % 2), vp.y + vp.h * 0.5);
+  await page.waitForTimeout(500);
+}
+if (!/^A 1:1 of/.test(await page.$eval("#loupecap", e => e.textContent))) fail("loupe over A never showed");
 await page.click("#viewB");
 await page.keyboard.press("l");
 await page.$eval("#ev", e => { e.value = "1"; e.dispatchEvent(new Event("input", { bubbles: true })); });
