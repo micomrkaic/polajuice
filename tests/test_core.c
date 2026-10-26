@@ -36,6 +36,15 @@ static float luma_at(const PjImage *image, size_t x, size_t y)
            0.0722f * pixels[i + 2];
 }
 
+/* mean luminance of an n x n patch at (x, y) */
+static float patch_luma(const PjImage *image, size_t x, size_t y, size_t n)
+{
+    float acc = 0.0f;
+    for (size_t yy = y; yy < y + n; ++yy)
+        for (size_t xx = x; xx < x + n; ++xx) acc += luma_at(image, xx, yy);
+    return acc / (float)(n * n);
+}
+
 static PjLut3D *make_identity_lut(PjError *error)
 {
     const char *path = "/tmp/polajuice-identity.cube";
@@ -1024,17 +1033,15 @@ int main(void)
             /* a patch that lands just above the default knee after the
              * raw stop: ~0.81 of display white; averaged over 5x5 so the
              * grain cancels */
-            #define PATCH(img) ({ float acc = 0; for (int yy = 18; yy < 23; ++yy) for (int xx = 25; xx < 30; ++xx) acc += luma_at((img), (size_t)xx, (size_t)yy); acc / 25.0f; })
-            float knee_ref = PATCH(raw_ref);
+            float knee_ref = patch_luma(raw_ref, 25, 18, 5);
             o = base; o.highlights = -1.0f;
             out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
-            assert(PATCH(out) < knee_ref - 0.01f);
+            assert(patch_luma(out, 25, 18, 5) < knee_ref - 0.01f);
             pj_image_free(out);
             o = base; o.highlights = 1.0f;
             out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
-            assert(PATCH(out) > knee_ref + 0.002f);
+            assert(patch_luma(out, 25, 18, 5) > knee_ref + 0.002f);
             pj_image_free(out);
-            #undef PATCH
             pj_image_free(raw_ref);
             pj_image_free(ref);
             pj_image_free(scene);
