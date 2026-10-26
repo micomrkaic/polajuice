@@ -11,6 +11,16 @@
 import { WASI, WASIProcExit, File, PreopenDirectory, ConsoleStdout }
     from "./vendor/browser_wasi_shim/index.js";
 
+/* the scene adjustments as the engine's one argument: "k=v,k=v", "-" for none */
+export const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
+                           "denoise", "distortion", "devignette", "rotate", "trimx", "trimy", "trimw", "trimh"];
+function sceneArg(scene) {
+    if (!scene) return "-";
+    const parts = SCENE_KEYS.filter(k => scene[k] !== undefined && scene[k] !== null && Number(scene[k]) !== 0)
+                            .map(k => k + "=" + String(scene[k]));
+    return parts.length ? parts.join(",") : "-";
+}
+
 export async function createEngine(wasmBytes) {
     const module = await WebAssembly.compile(wasmBytes);
 
@@ -82,7 +92,7 @@ async function run(args, workFiles) {
                        filmStem = null, printCubeText = null, filter = null,
                        strength = 1.0, seed = 42, age = 0, develop = "normal",
                        maxDim = 0, grainModel = "classic", edge = 0,
-                       ev = 0, halation = 1, printStem = null, crop = "camera" }) {
+                       ev = 0, halation = 1, printStem = null, crop = "camera", scene = null }) {
             const inName = "in." + inputExtension(ext);
             const workFiles = { [inName]: inputBytes };
             let filmArg = "-";
@@ -103,7 +113,7 @@ async function run(args, workFiles) {
                  develop, String(maxDim), "work/out.jpg",
                  grainModel || "classic", String(edge),
                  String(ev), String(halation), printStem || "-",
-                 crop || "camera"], workFiles);
+                 crop || "camera", sceneArg(scene)], workFiles);
             if (r.code !== 0)
                 throw new Error(r.stderr.trim() || `render failed (${r.code})`);
             const out = r.files.get("out.jpg");
@@ -150,13 +160,19 @@ export function createNativeEngine(base, info) {
         try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) { /* not json */ }
         throw new Error(msg);
     }
+    function sceneParams(scene) {
+        const out = {};
+        if (!scene) return out;
+        for (const k of SCENE_KEYS) if (scene[k] !== undefined && scene[k] !== null && Number(scene[k]) !== 0) out[k] = scene[k];
+        return out;
+    }
     function lookParams(o) {
         return { camera: o.camera, film: filmParam(o.cubeText, o.filmStem, o.filmChoice),
                  print: o.printStem || "none", filter: o.filter || "none",
                  strength: o.strength ?? 1, develop: o.develop || "normal", age: o.age ?? 0,
                  grain: o.grainModel || "classic", edge: o.edge ?? 0, ev: o.ev ?? 0,
                  halation: o.halation ?? 1, seed: (o.seed ?? 42) >>> 0,
-                 crop: o.crop || "camera" };
+                 crop: o.crop || "camera", ...sceneParams(o.scene) };
     }
     return {
         native: true,

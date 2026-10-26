@@ -1,0 +1,41 @@
+1.25.0: lens and framing - denoise, distortion, devignette, straighten, trim
+
+The second batch of input work, before the scene adjustments: the
+input is prepared, and everything after sees that frame. denoise
+blurs the color differences and leaves luminance exactly as it was
+(the weighted sum of the differences is zero and a blur of zero is
+zero), about 2 px per unit at full size, for high-ISO raw before the
+grain models add theirs. distortion is a radial correction, + undoing
+barrel (r' = r(1 - k r^2) in half-diagonals), - pincushion; devignette
+lifts the corners by that many stops with r^2; rotate straightens in
+degrees, + clockwise, on the same canvas with black corners; and
+trimx/trimy/trimw/trimh cut a window of the frame in fractions before
+the camera's format crop. Rotation, distortion and devignette are one
+bilinear resample pass, threaded; all identity at 0, so renders
+without them are byte-identical to 1.24.
+
+The geometry reports the prepared frame and adds orig (the file's
+frame), trim (where the prepared frame sits in it) and rot, so the
+page's wipe lays the original over a straightened, trimmed render
+turned about the file's center and offset by the trim; A and current
+with different straightening compare by the difference. The scene key
+table grows to 17 keys and every front end follows: --denoise and
+friends on both CLIs, the recipe, the server's query, the wasm's
+SCENE argument, DENOISE= and friends in super8ify, a Lens & framing
+group in the page (the trim as four margins), brackets for straighten
+and distortion. The CLI recipe reader's key list is sized for the
+table (it had room for 16 and dropped the 17th).
+
+Tests: core checks the trim's frame and geometry, rotation's
+direction and black corners, distortion's pull at the edge, the
+devignette on the flat blue plane, denoise spreading a speck's
+chroma while luminance holds, the key table and the recipe; compat
+round-trips the lens keys through a JPEG and checks the geometry
+line; serve renders a lens query byte-identical to the CLI; wasm
+checks the keys and geometry in the comment; the page test maps trim
+margins to x,y,w,h; Chromium wipes a straightened, trimmed render
+against the original, the left image turned 5 degrees, centers
+coinciding.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

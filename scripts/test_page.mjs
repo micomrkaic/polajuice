@@ -152,6 +152,30 @@ if (!/--crop full/.test(elems["cli"].textContent) || !/--develop push\+3/.test(e
   throw new Error("CLI line lacks the new flags: " + elems["cli"].textContent);
 elems["crop"].value = "camera"; elems["develop"].value = "normal";
 console.log("format control follows the camera; crop and develop ride in the recipe and CLI line");
+// 1.24: the scene sliders ride in the recipe and the CLI line
+for (const id of ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos"])
+  if (!elems[id]) throw new Error(id + " slider absent");
+elems["temp"].value = "0.5"; elems["grad"].value = "1.5"; elems["gradangle"].value = "90";
+elems["temp"].handlers["input"]();
+await new Promise(r => setTimeout(r, 400));
+if (!/\ntemp=0.5\n/.test(elems["recipe"].value) || !/\ngrad=1.5\n/.test(elems["recipe"].value) || !/\ngradangle=90\n/.test(elems["recipe"].value))
+  throw new Error("recipe lacks the scene keys:\n" + elems["recipe"].value);
+if (!/--temp 0.5 .*--grad 1.5 --gradangle 90/.test(elems["cli"].textContent)) throw new Error("CLI line lacks scene flags: " + elems["cli"].textContent);
+elems["temp"].value = "0"; elems["grad"].value = "0"; elems["gradangle"].value = "0";
+console.log("scene sliders present; keys in the recipe and the CLI line");
+// 1.25: trim margins become x,y,w,h; rotate rides along
+for (const id of ["denoise", "distortion", "devignette", "rotate", "trimleft", "trimtop", "trimright", "trimbottom"])
+  if (!elems[id]) throw new Error(id + " control absent");
+elems["trimleft"].value = "10"; elems["trimtop"].value = "5"; elems["trimright"].value = "20"; elems["trimbottom"].value = "15";
+elems["rotate"].value = "-2.5";
+elems["trimleft"].handlers["input"]();
+await new Promise(r => setTimeout(r, 400));
+if (!/\ntrimx=0.1\n/.test(elems["recipe"].value) || !/\ntrimy=0.05\n/.test(elems["recipe"].value) ||
+    !/\ntrimw=0.7\n/.test(elems["recipe"].value) || !/\ntrimh=0.8\n/.test(elems["recipe"].value) || !/\nrotate=-2.5\n/.test(elems["recipe"].value))
+  throw new Error("recipe lacks the framing keys:\n" + elems["recipe"].value);
+if (!/--rotate -2.5/.test(elems["cli"].textContent) || !/--trimw 0.7/.test(elems["cli"].textContent)) throw new Error("CLI line lacks framing flags: " + elems["cli"].textContent);
+elems["trimleft"].value = "0"; elems["trimtop"].value = "0"; elems["trimright"].value = "0"; elems["trimbottom"].value = "0"; elems["rotate"].value = "0";
+console.log("lens and framing controls present; trim margins map to x,y,w,h in the recipe and CLI line");
 
 // THE regression: pick an instant camera, then click a sample that suggests
 // a slide camera; the film dropdown must be rebuilt for the new camera.

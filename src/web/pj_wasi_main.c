@@ -11,7 +11,8 @@
  *   polajuice.wasm --version
  *   polajuice.wasm render IN CAMERA FILM|- PROCESS|- FILMSTEM|- PRINT|-
  *                         FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM OUT
- *                         GRAIN EDGE EV HALATION PRINTSTEM|- CROP
+ *                         GRAIN EDGE EV HALATION PRINTSTEM|- CROP SCENE|-
+ *       SCENE: "temp=0.3,grad=1.5,..." scene adjustments, or - for none
  *   polajuice.wasm develop IN MAX_DIM OUT
  *       the straight print of a raw (.nef/.dng) input: scene-linear
  *       decode, a stop up, shoulder, JPEG - what the page shows as the
@@ -58,10 +59,10 @@ static int list_cameras(void)
 
 static int render(int argc, char **argv)
 {
-    if (argc != 21) {
+    if (argc != 22) {
         fprintf(stderr, "args: render IN CAMERA FILM|- PROCESS|- FILMSTEM|- "
                         "PRINT|- FILTER|- STRENGTH SEED AGE DEVELOP MAX_DIM "
-                        "OUT GRAIN EDGE EV HALATION PRINTSTEM|- CROP\n");
+                        "OUT GRAIN EDGE EV HALATION PRINTSTEM|- CROP SCENE|-\n");
         return 2;
     }
     const char *in_path = argv[2], *camera = argv[3], *film = argv[4];
@@ -166,8 +167,29 @@ static int render(int argc, char **argv)
         fprintf(stderr, "unknown crop mode '%s'\n", argv[20]);
         return 1;
     }
+    /* scene adjustments as "key=value,key=value" ("-" for none) */
+    if (strcmp(argv[21], "-")) {
+        char buf[512];
+        snprintf(buf, sizeof buf, "%s", argv[21]);
+        /* a hand-rolled split: WASI libc builds strictly, without strtok_r */
+        char *tok = buf;
+        while (tok && *tok) {
+            char *comma = strchr(tok, ',');
+            if (comma) *comma = '\0';
+            char *next = comma ? comma + 1 : NULL;
+            char *eq = strchr(tok, '=');
+            if (!eq) { tok = next; continue; }
+            *eq = '\0';
+            if (!pj_scene_set(&options, tok, eq + 1)) {
+                pj_image_free(image); pj_lut3d_free(lut); pj_lut3d_free(print_lut);
+                fprintf(stderr, "scene: %s=%s out of range\n", tok, eq + 1);
+                return 1;
+            }
+            tok = next;
+        }
+    }
     PjGeometry geom;
-    pj_render_geometry(camera, pj_image_width(image), pj_image_height(image), options.crop, &geom);
+    pj_render_geometry_opt(camera, pj_image_width(image), pj_image_height(image), &options, &geom);
     PjImage *result = pj_render(image, camera, &options, &error);
     pj_image_free(image);
     pj_lut3d_free(lut);

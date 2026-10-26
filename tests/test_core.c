@@ -947,6 +947,208 @@ int main(void)
             pj_geometry_format(&g, line, sizeof line);
             assert(!strncmp(line, "# geometry in=64,40 crop=0,0,64,40 place=", 41));
         }
+        /* 1.24: scene adjustments. Each is identity at 0 (the reference
+         * images above already prove the defaults), moves the picture the
+         * way its name says, and round-trips through the key table. */
+        {
+            PjImage *scene = pj_image_new(64, 48, &error);
+            assert(scene);
+            fill_test_pattern(scene);
+            /* display-referred here (no extra stop, no shoulder), so the
+             * pattern's dark corner (0,0) is dark and (40,30) a midtone */
+            PjRenderOptions base = {.seed = 1, .strength = 1.0f, .color_lut = identity, .film_process = "negative"};
+            PjImage *ref = pj_render(scene, "35mm-negative", &base, &error);
+            assert(ref);
+            const float *rp = pj_image_pixels_const(ref);
+            size_t mid = (30 * 64 + 40) * 3;
+            const size_t DX = 1, DY = 1, MX = 40, MY = 30;
+            float gray_r = rp[mid], gray_b = rp[mid + 2];
+            /* temp +1: red up, blue down, relative to green */
+            PjRenderOptions o = base; o.temp = 1.0f;
+            PjImage *out = pj_render(scene, "35mm-negative", &o, &error);
+            assert(out);
+            {
+                const float *p = pj_image_pixels_const(out);
+                assert(p[mid] / p[mid + 1] > gray_r / rp[mid + 1] * 1.2f);
+                assert(p[mid + 2] / p[mid + 1] < gray_b / rp[mid + 1] * 0.85f);
+            }
+            pj_image_free(out);
+            /* tint +1: green down against both */
+            o = base; o.tint = 1.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            assert(pj_image_pixels_const(out)[mid + 1] / pj_image_pixels_const(out)[mid] < rp[mid + 1] / rp[mid] * 0.8f);
+            pj_image_free(out);
+            /* shadows +1 lifts the dark corner, leaves the midtone */
+            o = base; o.shadows = 1.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            assert(luma_at(out, DX, DY) > luma_at(ref, DX, DY) * 1.15f);
+            assert(fabsf(luma_at(out, MX, MY) - luma_at(ref, MX, MY)) < 0.03f);
+            pj_image_free(out);
+            /* black +0.05 sends the dark corner toward black, -0.05 fogs it */
+            o = base; o.black = 0.05f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            float crushed = luma_at(out, DX, DY);
+            pj_image_free(out);
+            o = base; o.black = -0.05f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            float fogged = luma_at(out, DX, DY);
+            pj_image_free(out);
+            assert(crushed < luma_at(ref, DX, DY) && fogged > luma_at(ref, DX, DY));
+            /* contrast +1 spreads dark and midtone apart, -1 pulls them in */
+            float spread0 = luma_at(ref, MX, MY) - luma_at(ref, DX, DY);
+            o = base; o.contrast = 1.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            float spread_plus = luma_at(out, MX, MY) - luma_at(out, DX, DY);
+            pj_image_free(out);
+            o = base; o.contrast = -1.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            float spread_minus = luma_at(out, MX, MY) - luma_at(out, DX, DY);
+            pj_image_free(out);
+            assert(spread_plus > spread0 && spread_minus < spread0);
+            /* grad 2 stops from the top darkens the top row, leaves the bottom */
+            o = base; o.grad = 2.0f; o.grad_angle = 0.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            assert(luma_at(out, 32, 2) < luma_at(ref, 32, 2) * 0.6f);
+            assert(fabsf(luma_at(out, 32, 45) - luma_at(ref, 32, 45)) < 0.01f);
+            pj_image_free(out);
+            /* ... and from the right with angle 90 */
+            o.grad_angle = 90.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            assert(luma_at(out, 62, 24) < luma_at(ref, 62, 24) * 0.6f);
+            assert(fabsf(luma_at(out, 2, 24) - luma_at(ref, 2, 24)) < 0.01f);
+            pj_image_free(out);
+            /* highlights -1 rolls the bright patch lower than the default
+             * knee - a raw's business, so through the scene-linear door */
+            scene->scene_linear = true;
+            PjImage *raw_ref = pj_render(scene, "35mm-negative", &base, &error); assert(raw_ref);
+            /* a patch that lands just above the default knee after the
+             * raw stop: ~0.81 of display white; averaged over 5x5 so the
+             * grain cancels */
+            #define PATCH(img) ({ float acc = 0; for (int yy = 18; yy < 23; ++yy) for (int xx = 25; xx < 30; ++xx) acc += luma_at((img), (size_t)xx, (size_t)yy); acc / 25.0f; })
+            float knee_ref = PATCH(raw_ref);
+            o = base; o.highlights = -1.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            assert(PATCH(out) < knee_ref - 0.01f);
+            pj_image_free(out);
+            o = base; o.highlights = 1.0f;
+            out = pj_render(scene, "35mm-negative", &o, &error); assert(out);
+            assert(PATCH(out) > knee_ref + 0.002f);
+            pj_image_free(out);
+            #undef PATCH
+            pj_image_free(raw_ref);
+            pj_image_free(ref);
+            pj_image_free(scene);
+            /* the key table */
+            PjRenderOptions t = {0};
+            assert(pj_scene_is_key("temp") && pj_scene_is_key("gradpos") && !pj_scene_is_key("ev"));
+            assert(pj_scene_set(&t, "temp", "0.5") && t.temp == 0.5f);
+            assert(pj_scene_set(&t, "gradangle", "270") && t.grad_angle == 270.0f);
+            assert(!pj_scene_set(&t, "temp", "3") && !pj_scene_set(&t, "grad", "-1") && !pj_scene_set(&t, "black", "x"));
+            assert(pj_scene_get(&t, "temp") == 0.5f);
+            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 17);
+            char text[2048];
+            pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
+            assert(strstr(text, "\ntemp=0.5\n") && strstr(text, "\ngradangle=270\n") && strstr(text, "\ngrad=0\n"));
+        }
+        /* 1.25: lens and framing. Trim changes the frame the camera sees
+         * and the geometry says so; rotate turns the picture clockwise
+         * and blackens the corners; distortion moves the corners; the
+         * devignette lifts them; chroma denoise keeps luminance. */
+        {
+            PjImage *src = pj_image_new(64, 48, &error);
+            assert(src);
+            fill_test_pattern(src);
+            PjRenderOptions base = {.seed = 1, .strength = 1.0f, .color_lut = identity, .film_process = "negative"};
+            PjImage *ref = pj_render(src, "35mm-negative", &base, &error);
+            assert(ref);
+            /* trim: a 50% x 50% window from (25%, 25%) -> 32x24, geometry agrees */
+            PjRenderOptions o = base; o.trim_x = 0.25f; o.trim_y = 0.25f; o.trim_w = 0.5f; o.trim_h = 0.5f;
+            PjImage *out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+            assert(pj_image_width(out) == 32 && pj_image_height(out) == 24);
+            PjGeometry g;
+            assert(pj_render_geometry_opt("35mm-negative", 64, 48, &o, &g));
+            assert(g.in_w == 32 && g.in_h == 24 && g.trim_x == 16 && g.trim_y == 12 && g.orig_w == 64 && g.out_w == 32);
+            /* the trimmed render equals the middle of the full one, except
+             * for the stages that look at the frame (vignette, grain seed
+             * positions): compare the pattern-driven channel ratio instead */
+            {
+                const float *a = pj_image_pixels_const(out), *b = pj_image_pixels_const(ref);
+                float ra = a[(12 * 32 + 16) * 3] / fmaxf(a[(12 * 32 + 16) * 3 + 1], 1e-4f);
+                float rb = b[(24 * 64 + 32) * 3] / fmaxf(b[(24 * 64 + 32) * 3 + 1], 1e-4f);
+                assert(fabsf(ra - rb) < 0.15f * fmaxf(ra, rb) + 0.02f);
+            }
+            pj_image_free(out);
+            /* rotate 10 degrees: the corners are black, the center is not */
+            o = base; o.rotate = 10.0f;
+            out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+            assert(luma_at(out, 0, 0) < 0.02f && luma_at(out, 63, 47) < 0.02f);
+            assert(luma_at(out, 32, 24) > 0.05f);
+            assert(pj_render_geometry_opt("35mm-negative", 64, 48, &o, &g) && g.rotate == 10.0f);
+            {
+                char line[200];
+                pj_geometry_format(&g, line, sizeof line);
+                assert(strstr(line, " orig=64,48 trim=0,0 rot=10\n"));
+            }
+            pj_image_free(out);
+            /* rotate +: clockwise, so the left edge moves up and what is
+             * seen at the left-middle came from lower down; the pattern's
+             * green rises with y, so the left-middle gets greener */
+            {
+                o = base; o.rotate = 8.0f;
+                out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+                const float *a = pj_image_pixels_const(out), *b = pj_image_pixels_const(ref);
+                float gA = a[(24 * 64 + 4) * 3 + 1], gB = b[(24 * 64 + 4) * 3 + 1];
+                assert(gA > gB);
+                pj_image_free(out);
+            }
+            /* distortion +: corners sampled inward, so the corner pixel takes
+             * the value of a pixel nearer the center (less red at the
+             * right edge, since red rises with x) */
+            o = base; o.distortion = 0.2f;
+            out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+            assert(pj_image_pixels_const(out)[(24 * 64 + 63) * 3] < pj_image_pixels_const(ref)[(24 * 64 + 63) * 3]);
+            pj_image_free(out);
+            /* devignette lifts the corner, leaves the center */
+            o = base; o.devignette = 1.0f;
+            out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+            {
+                /* the pattern's corners are red or green to the point of
+                 * clipping: judge by the blue plane, flat at 0.25 everywhere */
+                const float *a = pj_image_pixels_const(out), *b = pj_image_pixels_const(ref);
+                assert(a[(1 * 64 + 1) * 3 + 2] > b[(1 * 64 + 1) * 3 + 2] * 1.5f);
+                assert(fabsf(a[(24 * 64 + 32) * 3 + 2] - b[(24 * 64 + 32) * 3 + 2]) < 0.01f);
+            }
+            pj_image_free(out);
+            /* chroma denoise: luminance of a flat patch unchanged, a lone
+             * colored pixel's chroma spread out */
+            {
+                PjImage *flat = pj_image_new(32, 32, &error); assert(flat);
+                fill_uniform(flat, 0.3f);
+                float *fp = pj_image_pixels(flat);
+                fp[(16 * 32 + 16) * 3] = 0.9f;   /* a red speck */
+                PjRenderOptions dn = {.seed = 1, .strength = 1.0f, .color_lut = identity, .film_process = "negative", .denoise = 2.0f};
+                PjRenderOptions nn = dn; nn.denoise = 0.0f;
+                PjImage *d = pj_render(flat, "35mm-negative", &dn, &error);
+                PjImage *n = pj_render(flat, "35mm-negative", &nn, &error);
+                assert(d && n);
+                const float *dp = pj_image_pixels_const(d), *np = pj_image_pixels_const(n);
+                size_t sp = (16 * 32 + 16) * 3, nb = (16 * 32 + 19) * 3;
+                assert(dp[sp] < np[sp]);             /* the speck's red spread */
+                assert(dp[nb] > np[nb] + 1e-4f);     /* into its neighbors */
+                pj_image_free(d); pj_image_free(n); pj_image_free(flat);
+            }
+            /* the key table knows them and the recipe writes them */
+            PjRenderOptions t = {0};
+            assert(pj_scene_set(&t, "rotate", "-3.5") && t.rotate == -3.5f);
+            assert(pj_scene_set(&t, "trimw", "0.5") && t.trim_w == 0.5f);
+            assert(!pj_scene_set(&t, "rotate", "20") && !pj_scene_set(&t, "distortion", "0.5"));
+            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 17);
+            char text[2048];
+            pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
+            assert(strstr(text, "\nrotate=-3.5\n") && strstr(text, "\ntrimw=0.5\n") && strstr(text, "\ndenoise=0\n"));
+            pj_image_free(ref);
+            pj_image_free(src);
+        }
         /* the recipe carries the crop and the new develop text */
         {
             PjRenderOptions o = {.seed = 3, .strength = 1.0f, .push = 3.0f, .crop = PJ_CROP_FULL};

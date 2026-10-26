@@ -1,0 +1,43 @@
+1.24.0: the scene - white balance, tone, graduated ND before the camera
+
+Nine adjustments on the light before the camera stage, all
+scene-linear, all identity at 0 (renders with none of them set are
+byte-identical to 1.23): temp and tint (white balance in stops of
+channel ratio; +1 temp a stop warmer, +1 tint a stop toward magenta),
+black (the black point: crush or fog, in scene units), shadows (lift or
+drop the bottom stops with a soft knee, full effect four stops under
+middle gray, hue and saturation kept), highlights (the raw shoulder's
+knee, 0.5..0.9 of display white; scene-linear input only, a JPEG has
+no headroom), contrast (a log gamma about middle gray on luminance,
+color ratios kept), and a graduated neutral-density filter - grad
+(density in stops at the dark edge), gradangle (0 top, 90 right, 180
+bottom, 270 left) and gradpos (the transition's center as an offset
+from the frame center; it feathers over a quarter of the frame).
+Order in the pipeline: white balance and the filter on the light, then
+exposure, then black, shadows and contrast, then the knee at the
+shoulder.
+
+One table of the scene keys (name, range) in the core -
+pj_scene_keys, pj_scene_is_key, pj_scene_set, pj_scene_get - is the
+reader for every front end: --temp and friends on polajuice and
+superjuice, the recipe keys, the server's query, the wasm's one SCENE
+argument ("k=v,k=v"), and TEMP= and friends in super8ify. The page
+has the nine in the Scene group with labels in their units, writes
+them into the recipe and the CLI line, and brackets warm/cool,
+shadows, contrast and grad. The recipe gains nine keys; readers from
+before 1.24 ignore them with a note.
+
+Tests: core checks each stage moves the picture the way its name
+says on the test pattern (white balance on channel ratios, shadows on
+the dark corner against a midtone, black both ways, contrast on the
+spread, the grad from the top and from the right, the knee both ways
+through the scene-linear door) and the key table's parsing, ranges and
+formatting; compat round-trips all nine through a recipe file and a
+JPEG, refuses an out-of-range value and checks zero is identity;
+serve renders a scene query byte-identical to the CLI and refuses
+temp=5; wasm checks effect, embedded recipe, identity at zero and
+range; the page tests check the sliders, the recipe and the CLI line,
+and Chromium a slider's re-render.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Gvp1v9vQeKeGn7zLwXBnVs

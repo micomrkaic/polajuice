@@ -54,6 +54,16 @@ static void usage(FILE *stream)
         "                          pull-N stops (-3..+4, halves allowed:\n"
         "                          push+1.5), cross (E-6 in C-41), or\n"
         "                          cross+N; not applicable to instant cameras\n"
+        "  Scene adjustments, on the light before the camera (all 0 = off):\n"
+        "      --temp STOPS        white balance warm(+)/cool(-), -2..2\n"
+        "      --tint STOPS        magenta(+)/green(-), -1..1\n"
+        "      --black LEVEL       black point: crush(+)/fog(-), -0.1..0.1\n"
+        "      --shadows STOPS     lift(+)/drop(-) the shadows, -2..2\n"
+        "      --highlights N      raw shoulder knee: softer(-)/harder(+), -1..1\n"
+        "      --contrast N        scene contrast about middle gray, -1..1\n"
+        "      --grad STOPS        graduated ND density at the dark edge, 0..3\n"
+        "      --gradangle DEG     dark edge: 0 top, 90 right, 180 bottom, 270 left\n"
+        "      --gradpos OFFSET    transition center, -0.5..0.5 of the frame\n"
         "      --crop MODE         camera (default): the camera's own format\n"
         "                          cut from the middle (square, instant\n"
         "                          print, Super 8 gate); full: keep the whole\n"
@@ -76,13 +86,15 @@ static void usage(FILE *stream)
         "                          recipe rides in it); flags given after\n"
         "                          override it line by line\n"
         "      --save-recipe FILE  write the look used as a recipe file\n"
-        "  -h, --help              show this help\n\n"
+        "  -h, --help              show this help\n\n",
+        pj_version_string());
+    fputs(
         "Raw input: .nef and .dng files open through a scene-linear door -\n"
         "the sensor's white sits a stop above display white and the top stop\n"
         "rolls in through a shoulder, so halation and the film curve see real\n"
         "highlights. JPEG/PNG input renders exactly as before.\n\n"
         "Film library: $POLAJUICE_FILMS, else ./data/luts ('make fetch-luts').\n",
-        pj_version_string());
+        stream);
 }
 
 static int fail(const PjError *error)
@@ -241,6 +253,16 @@ static int apply(int argc, char **argv)
                 fprintf(stderr, "invalid develop mode '%s' "
                         "(normal, push+N, pull-N, cross, cross+N; N in %g..%g stops)\n",
                         dev, (double)PJ_PUSH_MIN, (double)PJ_PUSH_MAX);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (argv[i][0] == '-' && argv[i][1] == '-' && pj_scene_is_key(argv[i] + 2) && i + 1 < argc) {
+            const char *key = argv[i] + 2;
+            if (!pj_scene_set(&options, key, argv[++i])) {
+                size_t n; const PjSceneKey *k = pj_scene_keys(&n);
+                for (size_t j = 0; j < n; ++j)
+                    if (!strcmp(k[j].key, key))
+                        fprintf(stderr, "invalid --%s '%s' (%g..%g)\n", key, argv[i], (double)k[j].lo, (double)k[j].hi);
                 return EXIT_FAILURE;
             }
         }
@@ -467,7 +489,7 @@ static int apply(int argc, char **argv)
                 ((double)t1.tv_sec - (double)t0.tv_sec) * 1000.0 + ((double)t1.tv_nsec - (double)t0.tv_nsec) / 1e6);
     }
     PjGeometry geom;
-    pj_render_geometry(camera, pj_image_width(source), pj_image_height(source), options.crop, &geom);
+    pj_render_geometry_opt(camera, pj_image_width(source), pj_image_height(source), &options, &geom);
     PjImage *result = pj_render(source, camera, &options, &error);
     pj_image_free(source);
     pj_lut3d_free(lut);

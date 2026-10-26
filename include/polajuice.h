@@ -99,6 +99,53 @@ typedef struct {
                     (border, fringe and Eberhard effects). Nonlinear and
                     asymmetric, unlike an unsharp mask; uniform areas are
                     untouched. Ignored for instant cameras. */
+    /* Scene adjustments, applied to the light before the camera stage:
+     * all scene-linear, all identity at 0, so zeroed options render as
+     * before. They describe the scene and the framing; the film is left
+     * to do what it does. */
+    float temp;     /* white balance, warm/cool: stops of red-to-blue ratio,
+                    +1 a stop warmer (R x sqrt2, B / sqrt2); -2..+2 */
+    float tint;     /* green/magenta: +1 a stop toward magenta (G halved
+                    against R and B); -1..+1 */
+    float black;    /* black point, in scene units of display white: positive
+                    crushes (0.02 sends the bottom 2% to black and rescales),
+                    negative fogs (lifts everything by that much); -0.1..0.1 */
+    float shadows;  /* lift (+) or drop (-) the shadows, in stops at four
+                    stops below middle gray, fading to nothing at gray;
+                    hue and saturation kept; -2..+2 */
+    float highlights; /* moves the raw shoulder's knee: 0 keeps it at 0.75 of
+                    display white, -1 brings it down to 0.5 (more headroom
+                    rolled in, softer top), +1 raises it to 0.9 (harder);
+                    scene-linear input only, since display-referred input
+                    has no headroom; -1..+1 */
+    float contrast; /* scene contrast: a log gamma about middle gray, +1 is
+                    gamma 1.41, -1 is 0.71; applied to luminance, color
+                    ratios kept; -1..+1 */
+    float grad;     /* graduated neutral-density filter: density in stops at
+                    the dark edge, 0..3; the filter you would have put on
+                    the lens for that sky */
+    float grad_angle; /* where the dark edge is: 0 top, 90 right, 180
+                    bottom, 270 left; degrees */
+    float grad_pos; /* the transition's center, as an offset from the frame
+                    center along the gradient, -0.5..0.5 of the frame; the
+                    transition feathers over a quarter of the frame */
+    /* Lens and framing, before the scene adjustments: the input is
+     * corrected, straightened and trimmed, and everything after sees that
+     * frame. All identity at 0. */
+    float denoise;  /* chroma denoise, 0..3: the color planes blurred over
+                    about 2 px per unit at full size, luminance untouched;
+                    for high-ISO raw before the grain models add theirs */
+    float distortion; /* radial lens correction, -0.3..0.3: positive undoes
+                    barrel (corners pulled in by the lens), negative
+                    pincushion; r' = r(1 - k r^2), r in half-diagonals */
+    float devignette; /* undo the lens's corner falloff, 0..2 stops at the
+                    corners, rising with r^2 */
+    float rotate;   /* straighten, degrees, -15..15, positive clockwise;
+                    the canvas stays, corners outside come in black - trim
+                    them */
+    float trim_x, trim_y, trim_w, trim_h; /* a crop of the frame in
+                    fractions 0..1 (x, y, width, height), before the
+                    camera's format crop; width or height 0 = no trim */
     int crop;       /* PJ_CROP_CAMERA (0): the camera's own format - the
                     square of the 126 cartridge, the 1.03:1 instant print,
                     the Super 8 gate - cut from the middle of the input,
@@ -120,16 +167,33 @@ const char *pj_crop_name(int crop);
  * at the origin, except inside an instant print's border. Crop and
  * output are at the input's pixel scale. */
 typedef struct {
-    size_t in_w, in_h;
+    size_t in_w, in_h;          /* the prepared frame (after rotate and trim) */
     size_t crop_x, crop_y, crop_w, crop_h;
     size_t place_x, place_y;
     size_t out_w, out_h;
+    size_t orig_w, orig_h;      /* the file's frame, before preparation */
+    size_t trim_x, trim_y;      /* where the prepared frame sits in it */
+    float rotate;               /* degrees clockwise applied about its center */
 } PjGeometry;
 bool pj_render_geometry(const char *preset, size_t in_w, size_t in_h, int crop,
                         PjGeometry *g);
+/* The same with the lens and framing options applied first (rotate and
+ * trim change the frame the camera sees). */
+bool pj_render_geometry_opt(const char *preset, size_t in_w, size_t in_h,
+                            const PjRenderOptions *options, PjGeometry *g);
 /* One comment line for a JPEG's recipe comment:
  * "# geometry in=W,H crop=X,Y,W,H place=X,Y out=W,H\n" */
 size_t pj_geometry_format(const PjGeometry *g, char *buf, size_t size);
+
+/* The scene adjustments as named, ranged floats, for every front end
+ * that reads them as text: pj_scene_keys() lists them, pj_scene_set()
+ * parses "key=value" style pairs into the options (false when the key
+ * is not a scene key or the value is out of range). */
+typedef struct { const char *key; float lo, hi; } PjSceneKey;
+const PjSceneKey *pj_scene_keys(size_t *count);
+bool pj_scene_is_key(const char *key);
+bool pj_scene_set(PjRenderOptions *o, const char *key, const char *value);
+float pj_scene_get(const PjRenderOptions *o, const char *key);
 
 #define PJ_PUSH_MIN (-3.0f)
 #define PJ_PUSH_MAX (4.0f)

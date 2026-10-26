@@ -11,6 +11,9 @@ typedef struct {
     float strength, age, edge, ev, halation;
     unsigned long long seed;
     int crop;
+    PjRenderOptions scene;         /* the scene keys the recipe set, by name */
+    const char *scene_keys[32];
+    size_t nscene;
     bool has_camera, has_film, has_print, has_filter, has_develop, has_grain;
     bool has_strength, has_age, has_edge, has_ev, has_halation, has_seed, has_crop;
 } Recipe;

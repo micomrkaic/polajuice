@@ -140,7 +140,7 @@ PjImage *look_render(Look *look, const PjImage *source, size_t max_dim,
         in = small;
     }
     PjGeometry geom;
-    pj_render_geometry(look->camera, pj_image_width(in), pj_image_height(in), look->options.crop, &geom);
+    pj_render_geometry_opt(look->camera, pj_image_width(in), pj_image_height(in), &look->options, &geom);
     PjImage *result = pj_render(in, look->camera, &look->options, error);
     pj_image_free(small);
     if (!result) return NULL;
@@ -182,6 +182,9 @@ bool look_from_params(Look *look, const LookParam *params, size_t count,
             if (!pj_develop_parse(v, &look->options.push, &look->options.cross_process)) {
                 say(msg, msgsize, "%s: unknown develop '%s'", tool, v); return false;
             }
+        }
+        else if (pj_scene_is_key(k)) {
+            if (!pj_scene_set(&look->options, k, v)) { say(msg, msgsize, "%s: %s=%s out of range", tool, k, v); return false; }
         }
         else if (!strcmp(k, "crop")) {
             look->options.crop = pj_crop_parse(v);

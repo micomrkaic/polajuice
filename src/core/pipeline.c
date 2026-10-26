@@ -337,6 +337,17 @@ static void gain_band(size_t y0, size_t y1, void *vctx)
     for (size_t i = y0 * w * 3; i < y1 * w * 3; ++i) c->image->rgb[i] *= gain;
 }
 
+static void gain3_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    size_t w = c->image->width;
+    const float r = c->f[0], g = c->f[1], b = c->f[2];
+    for (size_t i = y0 * w; i < y1 * w; ++i) {
+        float *p = c->image->rgb + i * 3;
+        p[0] *= r; p[1] *= g; p[2] *= b;
+    }
+}
+
 static void apply_gain(PjImage *image, float gain)
 {
     Ctx ctx = {.image = image, .f = {gain}};
@@ -362,7 +373,7 @@ static void shoulder_band(size_t y0, size_t y1, void *vctx)
 {
     Ctx *c = vctx;
     PjImage *image = c->image;
-    const float knee = 0.75f;
+    const float knee = c->f[0] > 0.0f ? c->f[0] : 0.75f;
     for (size_t i = y0 * image->width * 3; i < y1 * image->width * 3; ++i) {
         float x = image->rgb[i];
         if (x > knee)
@@ -372,8 +383,111 @@ static void shoulder_band(size_t y0, size_t y1, void *vctx)
 
 static void apply_scene_shoulder(PjImage *image)
 {
-    Ctx ctx = {.image = image};
+    Ctx ctx = {.image = image, .f = {0.75f}};
     pj_parallel_rows(image->height, shoulder_band, &ctx);
+}
+
+/* the shoulder with a movable knee: highlights -1..+1 -> knee 0.5..0.9 */
+static void apply_scene_shoulder_at(PjImage *image, float highlights)
+{
+    if (highlights == 0.0f) { apply_scene_shoulder(image); return; }
+    float h = fmaxf(-1.0f, fminf(1.0f, highlights));
+    float knee = h < 0.0f ? 0.75f + 0.25f * h : 0.75f + 0.15f * h;
+    Ctx ctx = {.image = image, .f = {knee}};
+    pj_parallel_rows(image->height, shoulder_band, &ctx);
+}
+
+/* ---- scene adjustments: the light before the camera ------------------ */
+
+/* white balance: R and B against G, in stops; tint moves G against both */
+static void apply_white_balance(PjImage *image, float temp, float tint)
+{
+    if (temp == 0.0f && tint == 0.0f) return;
+    float r = exp2f(temp * 0.5f + tint * 0.25f);
+    float g = exp2f(-tint * 0.5f);
+    float b = exp2f(-temp * 0.5f + tint * 0.25f);
+    Ctx ctx = {.image = image, .f = {r, g, b}};
+    pj_parallel_rows(image->height, gain3_band, &ctx);
+}
+
+static void scene_tone_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const float black = c->f[0], shadows = c->f[1], gamma = c->f[2];
+    const bool do_black = black != 0.0f, do_shadows = shadows != 0.0f, do_gamma = gamma != 1.0f;
+    const float scale = 1.0f / (1.0f - black);
+    const float mid = 0.18f, lmid = log2f(0.18f);
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
+        float *p = image->rgb + i * 3;
+        if (do_black)
+            for (int ch = 0; ch < 3; ++ch) {
+                float v = (p[ch] - black) * scale;
+                p[ch] = v < 0.0f ? 0.0f : v;
+            }
+        if (!do_shadows && !do_gamma) continue;
+        float y = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+        if (y <= 1e-6f) continue;
+        float gain = 1.0f;
+        if (do_shadows) {
+            /* full effect four stops under middle gray, none at gray */
+            float t = (lmid - log2f(y)) * 0.25f;
+            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+            gain *= exp2f(shadows * t);
+        }
+        if (do_gamma) {
+            float y2 = mid * exp2f((log2f(y) - lmid) * gamma);
+            gain *= y2 / y;
+        }
+        p[0] *= gain; p[1] *= gain; p[2] *= gain;
+    }
+}
+
+static void apply_scene_tone(PjImage *image, float black, float shadows, float contrast)
+{
+    if (black == 0.0f && shadows == 0.0f && contrast == 0.0f) return;
+    black = fmaxf(-0.1f, fminf(0.1f, black));
+    float gamma = exp2f(fmaxf(-1.0f, fminf(1.0f, contrast)) * 0.5f);
+    Ctx ctx = {.image = image, .f = {black, shadows, gamma}};
+    pj_parallel_rows(image->height, scene_tone_band, &ctx);
+}
+
+/* graduated ND: density rises across a band a quarter of the frame wide,
+ * centered where grad_pos puts it, toward the edge grad_angle names */
+static void grad_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const float stops = c->f[0], dirx = c->f[1], diry = c->f[2], pos = c->f[3];
+    const float w = image->width, h = image->height;
+    const float half = 0.125f;   /* the transition: +-1/8 of the frame */
+    for (size_t y = y0; y < y1; ++y) {
+        float fy = ((float)y + 0.5f) / h - 0.5f;
+        for (size_t x = 0; x < image->width; ++x) {
+            float fx = ((float)x + 0.5f) / w - 0.5f;
+            /* signed distance along the gradient: positive toward the dark edge */
+            float d = fx * dirx + fy * diry - pos;
+            float t = (d + half) / (2.0f * half);
+            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+            t = t * t * (3.0f - 2.0f * t);
+            if (t <= 0.0f) continue;
+            float g = exp2f(-stops * t);
+            float *p = image->rgb + (y * image->width + x) * 3;
+            p[0] *= g; p[1] *= g; p[2] *= g;
+        }
+    }
+}
+
+static void apply_grad_nd(PjImage *image, float stops, float angle_deg, float pos)
+{
+    if (stops <= 0.0f) return;
+    stops = fminf(stops, 3.0f);
+    /* angle 0: dark edge at the top, so the gradient points up (-y) */
+    double a = (double)angle_deg * 3.14159265358979323846 / 180.0;
+    float dirx = (float)sin(a), diry = (float)-cos(a);
+    pos = fmaxf(-0.5f, fminf(0.5f, pos));
+    Ctx ctx = {.image = image, .f = {stops, dirx, diry, pos}};
+    pj_parallel_rows(image->height, grad_band, &ctx);
 }
 
 /* A straight print from scene-linear input: the stop the pipeline opens
@@ -1375,20 +1489,190 @@ static void preset_geometry(const PjPreset *preset, size_t in_w, size_t in_h, in
     }
 }
 
+/* the frame after rotate (same canvas) and trim, in the file's pixels */
+static void trim_rect(size_t in_w, size_t in_h, const PjRenderOptions *o,
+                      size_t *x, size_t *y, size_t *w, size_t *h)
+{
+    *x = 0; *y = 0; *w = in_w; *h = in_h;
+    if (!o || o->trim_w <= 0.0f || o->trim_h <= 0.0f) return;
+    double tx = fmax(0.0, fmin(1.0, (double)o->trim_x)), ty = fmax(0.0, fmin(1.0, (double)o->trim_y));
+    double tw = fmax(0.0, fmin(1.0 - tx, (double)o->trim_w)), th = fmax(0.0, fmin(1.0 - ty, (double)o->trim_h));
+    size_t cx = (size_t)lrint(tx * (double)in_w), cy = (size_t)lrint(ty * (double)in_h);
+    size_t cw = (size_t)lrint(tw * (double)in_w), ch = (size_t)lrint(th * (double)in_h);
+    if (cw < 4 || ch < 4 || cx + cw > in_w || cy + ch > in_h) return;
+    *x = cx; *y = cy; *w = cw; *h = ch;
+}
+
+static bool needs_resample(const PjRenderOptions *o)
+{
+    return o && (o->rotate != 0.0f || o->distortion != 0.0f || o->devignette != 0.0f);
+}
+
 bool pj_render_geometry(const char *preset_name, size_t in_w, size_t in_h, int crop,
                         PjGeometry *g)
 {
     const PjPreset *preset = pj_find_preset(preset_name);
     if (!preset || !g) return false;
     preset_geometry(preset, in_w, in_h, crop, g);
+    g->orig_w = in_w; g->orig_h = in_h;
     return true;
+}
+
+bool pj_render_geometry_opt(const char *preset_name, size_t in_w, size_t in_h,
+                            const PjRenderOptions *options, PjGeometry *g)
+{
+    const PjPreset *preset = pj_find_preset(preset_name);
+    if (!preset || !g) return false;
+    size_t tx, ty, tw, th;
+    trim_rect(in_w, in_h, options, &tx, &ty, &tw, &th);
+    preset_geometry(preset, tw, th, options ? options->crop : PJ_CROP_CAMERA, g);
+    g->orig_w = in_w; g->orig_h = in_h;
+    g->trim_x = tx; g->trim_y = ty;
+    g->rotate = options ? options->rotate : 0.0f;
+    return true;
+}
+
+static PjImage *crop_to(const PjImage *input, const PjGeometry *g, PjError *error);
+
+/* ---- preparing the input: denoise, lens, straighten, trim -------------- */
+
+typedef struct {
+    const PjImage *in; PjImage *out;
+    double cx, cy;            /* center */
+    double cosr, sinr;        /* inverse rotation */
+    double k;                 /* distortion */
+    double vig;               /* devignette stops */
+    double inv_halfdiag;
+} ResampleCtx;
+
+static void resample_band(size_t y0, size_t y1, void *vctx)
+{
+    ResampleCtx *c = vctx;
+    const PjImage *in = c->in;
+    PjImage *out = c->out;
+    size_t w = in->width, h = in->height;
+    for (size_t y = y0; y < y1; ++y) {
+        for (size_t x = 0; x < w; ++x) {
+            double dx = (double)x + 0.5 - c->cx, dy = (double)y + 0.5 - c->cy;
+            /* undo the rotation: the output is the input turned clockwise */
+            double rx = c->cosr * dx + c->sinr * dy;
+            double ry = -c->sinr * dx + c->cosr * dy;
+            /* undo the distortion: sample closer in for barrel */
+            double r2 = (rx * rx + ry * ry) * c->inv_halfdiag * c->inv_halfdiag;
+            double s = 1.0 - c->k * r2;
+            double sx = c->cx + rx * s - 0.5, sy = c->cy + ry * s - 0.5;
+            float *o = out->rgb + (y * w + x) * 3;
+            if (sx < 0.0 || sy < 0.0 || sx > (double)(w - 1) || sy > (double)(h - 1)) {
+                o[0] = o[1] = o[2] = 0.0f;
+                continue;
+            }
+            size_t x0 = (size_t)sx, y0s = (size_t)sy;
+            size_t x1 = x0 + 1 < w ? x0 + 1 : x0, y1s = y0s + 1 < h ? y0s + 1 : y0s;
+            float fx = (float)(sx - (double)x0), fy = (float)(sy - (double)y0s);
+            const float *p00 = in->rgb + (y0s * w + x0) * 3, *p01 = in->rgb + (y0s * w + x1) * 3;
+            const float *p10 = in->rgb + (y1s * w + x0) * 3, *p11 = in->rgb + (y1s * w + x1) * 3;
+            float gain = 1.0f;
+            if (c->vig != 0.0) {
+                double sr2 = ((sx + 0.5 - c->cx) * (sx + 0.5 - c->cx) + (sy + 0.5 - c->cy) * (sy + 0.5 - c->cy))
+                             * c->inv_halfdiag * c->inv_halfdiag;
+                gain = exp2f((float)(c->vig * sr2));
+            }
+            for (int ch = 0; ch < 3; ++ch) {
+                float top = p00[ch] + (p01[ch] - p00[ch]) * fx;
+                float bot = p10[ch] + (p11[ch] - p10[ch]) * fx;
+                o[ch] = (top + (bot - top) * fy) * gain;
+            }
+        }
+    }
+}
+
+typedef struct { PjImage *image; float *chroma; } DenoiseCtx;
+
+static void chroma_split_band(size_t y0, size_t y1, void *vctx)
+{
+    DenoiseCtx *c = vctx;
+    size_t w = c->image->width;
+    for (size_t i = y0 * w; i < y1 * w; ++i) {
+        const float *p = c->image->rgb + i * 3;
+        float y = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+        float *q = c->chroma + i * 3;
+        q[0] = p[0] - y; q[1] = p[1] - y; q[2] = p[2] - y;
+    }
+}
+
+static void chroma_join_band(size_t y0, size_t y1, void *vctx)
+{
+    DenoiseCtx *c = vctx;
+    size_t w = c->image->width;
+    for (size_t i = y0 * w; i < y1 * w; ++i) {
+        float *p = c->image->rgb + i * 3;
+        const float *q = c->chroma + i * 3;
+        float y = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+        for (int ch = 0; ch < 3; ++ch) {
+            float v = y + q[ch];
+            p[ch] = v < 0.0f ? 0.0f : v;
+        }
+    }
+}
+
+/* chroma denoise: the color differences blurred, luminance kept exactly
+ * (the weighted sum of the differences is zero, and a blur of zero is
+ * zero) */
+static void apply_chroma_denoise(PjImage *image, float amount)
+{
+    if (amount <= 0.0f) return;
+    unsigned radius = (unsigned)lrintf(fminf(amount, 3.0f) * 2.0f);
+    if (radius == 0) return;
+    float *chroma = scratch_frame(image->width, image->height);
+    if (!chroma) return;
+    DenoiseCtx ctx = {image, chroma};
+    pj_parallel_rows(image->height, chroma_split_band, &ctx);
+    box_blur(chroma, image->width, image->height, radius);
+    box_blur(chroma, image->width, image->height, radius);
+    pj_parallel_rows(image->height, chroma_join_band, &ctx);
+    scratch_put(chroma);
+}
+
+/* The input as the camera will see it: denoised, lens-corrected,
+ * straightened, trimmed. NULL options or all-zero fields hand back a
+ * clone, so renders without them are untouched. */
+static PjImage *prepare_input(const PjImage *input, const PjRenderOptions *o, PjError *error)
+{
+    PjImage *work = NULL;
+    if (needs_resample(o)) {
+        work = pj_image_new(input->width, input->height, error);
+        if (!work) return NULL;
+        work->scene_linear = input->scene_linear;
+        double a = (double)o->rotate * 3.14159265358979323846 / 180.0;
+        double hd = 0.5 * sqrt((double)input->width * (double)input->width + (double)input->height * (double)input->height);
+        ResampleCtx rc = {input, work, 0.5 * (double)input->width, 0.5 * (double)input->height,
+                          cos(a), sin(a), (double)o->distortion, (double)o->devignette, 1.0 / hd};
+        pj_parallel_rows(input->height, resample_band, &rc);
+    }
+    size_t tx, ty, tw, th;
+    trim_rect(input->width, input->height, o, &tx, &ty, &tw, &th);
+    const PjImage *src = work ? work : input;
+    PjImage *result;
+    if (tw != input->width || th != input->height) {
+        PjGeometry t = {.crop_x = tx, .crop_y = ty, .crop_w = tw, .crop_h = th};
+        result = crop_to(src, &t, error);
+        if (result) result->scene_linear = input->scene_linear;
+        pj_image_free(work);
+    } else if (work) result = work;
+    else result = clone_image(input, error);
+    if (!result) return NULL;
+    if (o) apply_chroma_denoise(result, o->denoise);
+    return result;
 }
 
 size_t pj_geometry_format(const PjGeometry *g, char *buf, size_t size)
 {
-    int n = snprintf(buf, size, "# geometry in=%zu,%zu crop=%zu,%zu,%zu,%zu place=%zu,%zu out=%zu,%zu\n",
+    int n = snprintf(buf, size, "# geometry in=%zu,%zu crop=%zu,%zu,%zu,%zu place=%zu,%zu out=%zu,%zu"
+                                " orig=%zu,%zu trim=%zu,%zu rot=%g\n",
                      g->in_w, g->in_h, g->crop_x, g->crop_y, g->crop_w, g->crop_h,
-                     g->place_x, g->place_y, g->out_w, g->out_h);
+                     g->place_x, g->place_y, g->out_w, g->out_h,
+                     g->orig_w ? g->orig_w : g->in_w, g->orig_h ? g->orig_h : g->in_h,
+                     g->trim_x, g->trim_y, (double)g->rotate);
     return n < 0 ? 0 : (size_t)n;
 }
 
@@ -1440,16 +1724,21 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     strength = clamp01(strength);
 
     stage_mark(NULL);
+    PjImage *prepared = prepare_input(input, options, error);
+    if (!prepared) return NULL;
     PjImage *image;
     PjGeometry geom;
-    preset_geometry(preset, input->width, input->height,
+    preset_geometry(preset, prepared->width, prepared->height,
                     options ? options->crop : PJ_CROP_CAMERA, &geom);
-    if (geom.crop_w == input->width && geom.crop_h == input->height)
-        image = clone_image(input, error);
-    else
-        image = crop_to(input, &geom, error);
+    if (geom.crop_w == prepared->width && geom.crop_h == prepared->height)
+        image = prepared;
+    else {
+        image = crop_to(prepared, &geom, error);
+        pj_image_free(prepared);
+    }
     if (!image) return NULL;
     image->scene_linear = input->scene_linear;   /* crops start fresh */
+    stage_mark("prepare");
 
     bool temporal = options && options->temporal;
     int64_t frame = options ? options->frame : 0;
@@ -1461,11 +1750,17 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_flicker(image, preset->flicker_ev * strength * motion,
                       seed, frame);
     }
+    if (options) {
+        /* the light: white balance and the filter on the lens */
+        apply_white_balance(image, options->temp, options->tint);
+        apply_grad_nd(image, options->grad, options->grad_angle, options->grad_pos);
+    }
     {
         float ev = options ? options->ev : 0.0f;
         if (image->scene_linear) ev += 1.0f;   /* raw opens a stop up */
         apply_exposure(image, ev);
     }
+    if (options) apply_scene_tone(image, options->black, options->shadows, options->contrast);
     stage_mark("crop+clone+exposure");
     apply_contrast_filter(image,
                           options ? options->contrast_filter : NULL,
@@ -1483,7 +1778,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
                        preset->halation_radius);
     }
     stage_mark("halation");
-    if (image->scene_linear) apply_scene_shoulder(image);
+    if (image->scene_linear) apply_scene_shoulder_at(image, options ? options->highlights : 0.0f);
     apply_input_balance(image, preset, strength);
     stage_mark("shoulder+balance");
     if (lut)

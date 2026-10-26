@@ -108,6 +108,8 @@ static void usage(FILE *stream)
         "      --develop MODE      normal, push+N, pull-N (-3..+4 stops), cross,\n"
         "                          cross+N\n"
         "      --crop MODE         camera (default, the gate crop) or full\n"
+        "      --temp --tint --black --shadows --highlights --contrast\n"
+        "      --grad --gradangle --gradpos   scene adjustments, as polajuice\n"
         "      --age NUMBER        0..1\n"
         "      --strength NUMBER   0..1\n"
         "      --grain MODEL       classic (default) or silver (grain from\n"
@@ -204,6 +206,13 @@ int main(int argc, char **argv)
                 fprintf(stderr, "invalid develop mode '%s' (normal, push+N, pull-N, "
                         "cross, cross+N; N in %g..%g stops)\n",
                         dev, (double)PJ_PUSH_MIN, (double)PJ_PUSH_MAX);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (argv[i][0] == '-' && argv[i][1] == '-' && pj_scene_is_key(argv[i] + 2) && i + 1 < argc) {
+            const char *key = argv[i] + 2;
+            if (!pj_scene_set(&options, key, argv[++i])) {
+                fprintf(stderr, "invalid --%s '%s'\n", key, argv[i]);
                 return EXIT_FAILURE;
             }
         }

@@ -89,6 +89,11 @@ bool recipe_load(const char *path, Recipe *r, const char *tool)
         else if (!strcmp(key, "print")) { snprintf(r->print, sizeof r->print, "%s", val); r->has_print = *val != 0; }
         else if (!strcmp(key, "filter")) { snprintf(r->filter, sizeof r->filter, "%s", val); r->has_filter = *val != 0; }
         else if (!strcmp(key, "develop")) { snprintf(r->develop, sizeof r->develop, "%s", val); r->has_develop = *val != 0; }
+        else if (pj_scene_is_key(key)) {
+            if (!pj_scene_set(&r->scene, key, val)) { fprintf(stderr, "%s: recipe: %s=%s out of range\n", tool, key, val); ok = false; }
+            else if (r->nscene < 32) r->scene_keys[r->nscene++] = key;
+            else { fprintf(stderr, "%s: recipe: too many scene keys\n", tool); ok = false; }
+        }
         else if (!strcmp(key, "crop")) {
             r->crop = pj_crop_parse(val);
             if (r->crop < 0) { fprintf(stderr, "%s: recipe: unknown crop '%s'\n", tool, val); ok = false; }
@@ -137,6 +142,11 @@ bool recipe_apply(const Recipe *r, PjRenderOptions *o, const char **camera,
         }
     }
     if (r->has_crop) o->crop = r->crop;
+    for (size_t i = 0; i < r->nscene; ++i) {
+        char v[32];
+        snprintf(v, sizeof v, "%.6g", (double)pj_scene_get(&r->scene, r->scene_keys[i]));
+        pj_scene_set(o, r->scene_keys[i], v);
+    }
     if (r->has_grain) {
         if (!pj_grain_model_known(r->grain)) {
             fprintf(stderr, "%s: recipe: unknown grain model '%s'\n", tool, r->grain);

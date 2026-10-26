@@ -114,13 +114,14 @@ async function checkWipeAlignment(label) {
     if (ov.style.display !== "block") return { hidden: true, S: S.kind, O: O.kind };
     if (!(r.width > 0)) return { hidden: true, S: S.kind, O: O.kind };
     const sc = r.width / S.geometry.outW;
-    const p = [S.geometry.inW / 2, S.geometry.inH / 2];            /* input center */
-    const viaS = [r.left + (S.geometry.placeX + p[0] - S.geometry.cropX) * sc,
-                  r.top + (S.geometry.placeY + p[1] - S.geometry.cropY) * sc];
+    /* the file's center: invariant under straightening, which is about it */
+    const p = [S.geometry.origW / 2, S.geometry.origH / 2];
+    const viaS = [r.left + (S.geometry.placeX + p[0] - S.geometry.trimX - S.geometry.cropX) * sc,
+                  r.top + (S.geometry.placeY + p[1] - S.geometry.trimY - S.geometry.cropY) * sc];
     const ovL = parseFloat(ov.style.left), ovT = parseFloat(ov.style.top), ovW = parseFloat(ov.style.width);
     const so = ovW / O.geometry.outW;
-    const viaO = [ovL + (O.geometry.placeX + p[0] - O.geometry.cropX) * so,
-                  ovT + (O.geometry.placeY + p[1] - O.geometry.cropY) * so];
+    const viaO = [ovL + (O.geometry.placeX + p[0] - O.geometry.trimX - O.geometry.cropX) * so,
+                  ovT + (O.geometry.placeY + p[1] - O.geometry.trimY - O.geometry.cropY) * so];
     return { S: S.kind, O: O.kind, dx: viaS[0] - viaO[0], dy: viaS[1] - viaO[1], scale: so / sc };
   });
   if (res.skip) fail(label + ": no images to compare");
@@ -154,6 +155,34 @@ await page.click("#viewB");
 await page.selectOption("#camera", "super8");
 await page.waitForFunction(() => /camera=super8\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
 console.log(`wipe placement ok: ${formats.length} formats x 3 views x 3 comparisons (${[...new Set(checked)].join(", ")})`);
+// 1.24: a scene slider re-renders, lands in the recipe, and brackets
+await page.$eval("#temp", e => { e.value = "0.6"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.waitForFunction(() => /\ntemp=0.6\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+if (!/--temp 0.6/.test(await page.$eval("#cli", e => e.textContent))) fail("CLI line lacks --temp");
+await page.$eval("#temp", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.waitForFunction(() => /\ntemp=0\n/.test(document.getElementById("recipe").value), null, { timeout: 60000 });
+// 1.25: a straightened, trimmed render wipes against the original with the
+// left image rotated back about the file's center and offset by the trim
+await page.$eval("#rotate", e => { e.value = "5"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.$eval("#trimleft", e => { e.value = "10"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.waitForFunction(() => /\nrotate=5\n/.test(document.getElementById("recipe").value) && /\ntrimx=0.1\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+await page.waitForTimeout(300);
+await page.click("#wipe"); await page.selectOption("#wipeagainst", "original");
+await page.waitForTimeout(300);
+{
+  const t = await page.$eval("#wipeimg", e => e.style.transform);
+  if (!/rotate\(5deg\)/.test(t)) fail("left image not turned with the straightened render: " + t);
+  const fr = await page.evaluate(() => window.__polajuice.frame());
+  const S = await page.evaluate(() => window.__polajuice.shownInfo().geometry);
+  if (!(S.trimX > 0 && S.rot === 5)) fail("shown geometry lacks trim/rot: " + JSON.stringify(S));
+  if (!fr) fail("no frame while wiping a trimmed render");
+  const al = await checkWipeAlignment("rotate+trim view=B vs=original");
+  if (!al) fail("alignment check skipped for the trimmed render");
+}
+await page.click("#wipe");
+await page.$eval("#rotate", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.$eval("#trimleft", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.waitForFunction(() => /\nrotate=0\n/.test(document.getElementById("recipe").value) && /\ntrimw=0\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
 await page.selectOption("#bracketaxis", "ev");
 await page.click("#bracket");
 await page.waitForFunction(() => /bracket: ev — click/.test(document.getElementById("status").textContent), null, { timeout: 120000 });

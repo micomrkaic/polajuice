@@ -33,6 +33,10 @@
 #                                   cross, cross+N
 #   CROP     [camera]              camera = the gate crop (1.36:1 for
 #                                   super8); full = keep the whole frame
+#   TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS
+#   DENOISE DISTORTION DEVIGNETTE ROTATE TRIMX TRIMY TRIMW TRIMH
+#            [0]                   scene, lens and framing, as polajuice's
+#                                   --temp etc.; only set ones are passed
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
 #                                   2 = worn projector, 0 = tripod-locked
 #   SOUND    [stripe]              stripe = audiotard tape mangle;
@@ -64,6 +68,16 @@ SET_CAMERA=${CAMERA+x}; SET_FILM=${FILM+x}; SET_AGE=${AGE+x}; SET_SEED=${SEED+x}
 SET_FILTER=${FILTER+x}; SET_GRAIN=${GRAIN+x}; SET_EDGE=${EDGE+x}
 SET_EV=${EV+x}; SET_HALATION=${HALATION+x}
 SET_DEVELOP=${DEVELOP+x}; SET_CROP=${CROP+x}
+scene_args() {
+    for k in TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS DENOISE DISTORTION DEVIGNETTE ROTATE TRIMX TRIMY TRIMW TRIMH; do
+        eval "v=\${$k+x}"
+        if [ -n "$v" ]; then
+            eval "val=\$$k"
+            flag=$(printf '%s' "$k" | tr 'A-Z' 'a-z')
+            q "--$flag"; q "$val"
+        fi
+    done
+}
 CAMERA=${CAMERA:-super8}
 FILM=${FILM:-}
 
@@ -149,6 +163,7 @@ sj_args() {
         [ -n "$SET_HALATION" ] && { q --halation; q "$HALATION"; }
         [ -n "$SET_DEVELOP" ] && { q --develop; q "$DEVELOP"; }
         [ -n "$SET_CROP" ] && { q --crop; q "$CROP"; }
+        scene_args
     else
         q -c; q "$CAMERA"
         case "$FILM" in none) q --no-film ;; "") ;; *) q -f; q "$FILM" ;; esac
@@ -156,6 +171,7 @@ sj_args() {
         [ -n "$FILTER" ] && { q --filter; q "$FILTER"; }
         q --grain; q "$GRAIN"; q --edge; q "$EDGE"; q --ev; q "$EV"; q --halation; q "$HALATION"
         q --develop; q "$DEVELOP"; q --crop; q "$CROP"
+        scene_args
     fi
     q --motion-scale; q "$MOTION"
     return 0

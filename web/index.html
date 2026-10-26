@@ -70,6 +70,8 @@
   .toolbar select { width:auto; font-size:0.8rem; padding:0.2rem 0.3rem; }
   .toolbar .wipeside { font-size:0.8rem; color:var(--muted); display:inline-flex; gap:0.3rem; align-items:center; }
   .toolbar .wipeside .muted { color:var(--faint); }
+  .trimgrid { display:grid; grid-template-columns:3.2rem 1fr; gap:0.15rem 0.4rem; align-items:center; }
+  .trimgrid label { font-size:0.7rem; color:var(--muted); text-transform:none; letter-spacing:0; }
   #viewport { flex:1; min-height:20rem; overflow:auto; background:#2b2823;
               display:flex; align-items:center; justify-content:center; position:relative; }
   #viewport img { max-width:100%; max-height:100%; object-fit:contain; display:block;
@@ -169,6 +171,71 @@ through the film base as a red-orange glow. 0 off, 1 the camera's own,
 2 double. Strongest with raw input, where speculars still exist above
 white.">Halation <span class="val" id="halval">1.0</span></label>
       <input id="halation" type="range" min="0" max="2" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label for="temp" title="White balance, warm/cool: stops of red-to-blue ratio. +1 is a stop warmer.">Warm / cool <span class="val" id="tempval">0</span></label>
+      <input id="temp" type="range" min="-2" max="2" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="tint" title="Green/magenta: +1 a stop toward magenta.">Tint <span class="val" id="tintval">0</span></label>
+      <input id="tint" type="range" min="-1" max="1" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="black" title="Black point in scene units: positive crushes the bottom into black and rescales, negative fogs (lifts everything).">Black point <span class="val" id="blackval">0</span></label>
+      <input id="black" type="range" min="-0.1" max="0.1" step="0.005" value="0">
+    </div>
+    <div class="field">
+      <label for="shadows" title="Lift (+) or drop (-) the shadows, in stops at four stops below middle gray, fading to nothing at gray; hue and saturation kept.">Shadows <span class="val" id="shadowsval">0</span></label>
+      <input id="shadows" type="range" min="-2" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="highlights" title="Moves the raw shoulder's knee: - rolls more headroom in (softer top), + keeps it harder. Scene-linear input only; a JPEG has no headroom.">Highlights (raw) <span class="val" id="highlightsval">0</span></label>
+      <input id="highlights" type="range" min="-1" max="1" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="contrast" title="Scene contrast: a log gamma about middle gray, on luminance, color ratios kept.">Contrast <span class="val" id="contrastval">0</span></label>
+      <input id="contrast" type="range" min="-1" max="1" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="grad" title="Graduated neutral density: the filter you would have put on the lens. Density in stops at the dark edge; the transition feathers over a quarter of the frame.">Grad ND <span class="val" id="gradval">off</span></label>
+      <input id="grad" type="range" min="0" max="3" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="gradangle" title="Where the dark edge is: 0 top, 90 right, 180 bottom, 270 left.">Grad edge <span class="val" id="gradangleval">top</span></label>
+      <input id="gradangle" type="range" min="0" max="360" step="15" value="0">
+    </div>
+    <div class="field">
+      <label for="gradpos" title="The transition's center, as an offset from the frame center along the gradient.">Grad position <span class="val" id="gradposval">center</span></label>
+      <input id="gradpos" type="range" min="-0.5" max="0.5" step="0.025" value="0">
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Lens &amp; framing</summary>
+    <div class="field">
+      <label for="denoise" title="Chroma denoise: the color planes blurred over about 2 px per unit at full size, luminance untouched. For high-ISO raw before the grain models add their own.">Chroma denoise <span class="val" id="denoiseval">off</span></label>
+      <input id="denoise" type="range" min="0" max="3" step="0.5" value="0">
+    </div>
+    <div class="field">
+      <label for="distortion" title="Radial lens correction: + undoes barrel (corners pulled in by a wide lens), - undoes pincushion. A 24 mm zoom at the wide end wants about +0.05..0.1.">Distortion <span class="val" id="distortionval">0</span></label>
+      <input id="distortion" type="range" min="-0.3" max="0.3" step="0.01" value="0">
+    </div>
+    <div class="field">
+      <label for="devignette" title="Undo the lens's corner falloff: stops of lift at the corners, rising with the square of the radius.">De-vignette <span class="val" id="devignetteval">off</span></label>
+      <input id="devignette" type="range" min="0" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="rotate" title="Straighten: degrees, + clockwise. The canvas stays; the corners outside come in black - trim them below.">Straighten <span class="val" id="rotateval">0°</span></label>
+      <input id="rotate" type="range" min="-15" max="15" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label title="Trim the frame before the camera's own format crop: margins in percent of the frame.">Trim <span class="val" id="trimval">none</span></label>
+      <div class="trimgrid">
+        <label for="trimleft">left</label><input id="trimleft" type="range" min="0" max="45" step="0.5" value="0">
+        <label for="trimtop">top</label><input id="trimtop" type="range" min="0" max="45" step="0.5" value="0">
+        <label for="trimright">right</label><input id="trimright" type="range" min="0" max="45" step="0.5" value="0">
+        <label for="trimbottom">bottom</label><input id="trimbottom" type="range" min="0" max="45" step="0.5" value="0">
+      </div>
     </div>
   </details>
 
@@ -363,6 +430,12 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
       <option value="age">age</option>
       <option value="halation">halation</option>
       <option value="edge">edge</option>
+      <option value="temp">warm / cool</option>
+      <option value="shadows">shadows</option>
+      <option value="contrast">contrast</option>
+      <option value="grad">grad ND</option>
+      <option value="rotate">straighten</option>
+      <option value="distortion">distortion</option>
     </select>
     <span class="spacer"></span>
     <button id="render" class="secondary" disabled>Render preview</button>
@@ -408,7 +481,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.23.4";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.25.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -467,11 +540,12 @@ function readJpegComment(bytes) {
 /* the geometry line the engine writes after the recipe: where the
  * picture landed in the render, for lining up a comparison image */
 function parseGeometry(text) {
-  const m = text && text.match(/^# geometry in=(\d+),(\d+) crop=(\d+),(\d+),(\d+),(\d+) place=(\d+),(\d+) out=(\d+),(\d+)$/m);
+  const m = text && text.match(/^# geometry in=(\d+),(\d+) crop=(\d+),(\d+),(\d+),(\d+) place=(\d+),(\d+) out=(\d+),(\d+)(?: orig=(\d+),(\d+) trim=(\d+),(\d+) rot=(-?[\d.]+))?$/m);
   if (!m) return null;
-  const n = m.slice(1).map(Number);
+  const n = m.slice(1).map(x => x === undefined ? undefined : Number(x));
   return { inW: n[0], inH: n[1], cropX: n[2], cropY: n[3], cropW: n[4], cropH: n[5],
-           placeX: n[6], placeY: n[7], outW: n[8], outH: n[9] };
+           placeX: n[6], placeY: n[7], outW: n[8], outH: n[9],
+           origW: n[10] ?? n[0], origH: n[11] ?? n[1], trimX: n[12] ?? 0, trimY: n[13] ?? 0, rot: n[14] ?? 0 };
 }
 function stripGeometry(text) { return text ? text.replace(/^# geometry .*\n?/m, "") : text; }
 let renderGeometry = null;   /* of the last render() that returned */
@@ -491,6 +565,31 @@ function parseRecipe(text) {
 
 /* what the page would send: a recipe built from the controls, for the
  * CLI line before any render has happened */
+const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
+                    "denoise", "distortion", "devignette", "rotate", "trimx", "trimy", "trimw", "trimh"];
+/* the trim is four margins in the page (left, top, right, bottom, in %)
+ * and x, y, width, height in fractions in the recipe */
+function trimFromControls() {
+  const l = parseFloat($("trimleft").value) / 100 || 0, t = parseFloat($("trimtop").value) / 100 || 0;
+  const r = parseFloat($("trimright").value) / 100 || 0, b = parseFloat($("trimbottom").value) / 100 || 0;
+  const w = Math.max(0, 1 - l - r), h = Math.max(0, 1 - t - b);
+  const any = l || t || r || b;
+  return { trimx: any ? +l.toFixed(4) : 0, trimy: any ? +t.toFixed(4) : 0, trimw: any ? +w.toFixed(4) : 0, trimh: any ? +h.toFixed(4) : 0 };
+}
+function trimToControls(r) {
+  const x = parseFloat(r.trimx ?? 0) || 0, y = parseFloat(r.trimy ?? 0) || 0;
+  const w = parseFloat(r.trimw ?? 0) || 0, h = parseFloat(r.trimh ?? 0) || 0;
+  const on = w > 0 && h > 0;
+  $("trimleft").value = on ? (x * 100).toFixed(1) : "0";
+  $("trimtop").value = on ? (y * 100).toFixed(1) : "0";
+  $("trimright").value = on ? ((1 - x - w) * 100).toFixed(1) : "0";
+  $("trimbottom").value = on ? ((1 - y - h) * 100).toFixed(1) : "0";
+}
+function sceneFromControls() {
+  const o = {};
+  for (const k of SCENE_KEYS) if (!k.startsWith("trim")) o[k] = parseFloat($(k).value) || 0;
+  return { ...o, ...trimFromControls() };
+}
 function recipeFromControls() {
   const stem = customCube ? customCube.stem : resolveFilmStem();
   const printStem = $("print") && $("print").value !== "__none__" ? $("print").value : "none";
@@ -502,7 +601,8 @@ function recipeFromControls() {
     grain: $("grain").value, edge: String(parseFloat($("edge").value)),
     ev: String(parseFloat($("ev").value)), halation: String(parseFloat($("halation").value)),
     seed: String(parseInt($("seed").value, 10) || 0),
-    crop: $("crop").value === "full" ? "full" : "camera" };
+    crop: $("crop").value === "full" ? "full" : "camera",
+    ...Object.fromEntries(Object.entries(sceneFromControls()).map(([k, v]) => [k, String(v)])) };
 }
 
 function cliLine(r) {
@@ -521,6 +621,7 @@ function cliLine(r) {
   if (r.halation !== undefined && parseFloat(r.halation) !== 1) parts.push("--halation", r.halation);
   if (r.seed !== undefined) parts.push("--seed", r.seed);
   if (r.crop === "full") parts.push("--crop", "full");
+  for (const k of SCENE_KEYS) if (r[k] !== undefined && parseFloat(r[k]) !== 0) parts.push("--" + k, r[k]);
   return parts.join(" ");
 }
 
@@ -528,7 +629,8 @@ function recipeText(r) {
   return ["# polajuice recipe 1", `camera=${r.camera}`, `film=${r.film}`, `print=${r.print}`,
           `filter=${r.filter}`, `strength=${r.strength}`, `develop=${r.develop}`,
           `age=${r.age}`, `grain=${r.grain}`, `edge=${r.edge}`, `ev=${r.ev}`,
-          `halation=${r.halation}`, `seed=${r.seed}`, `crop=${r.crop || "camera"}`, ""].join("\n");
+          `halation=${r.halation}`, `seed=${r.seed}`, `crop=${r.crop || "camera"}`,
+          ...SCENE_KEYS.map(k => `${k}=${r[k] ?? 0}`), ""].join("\n");
 }
 
 function showRecipe(text) {
@@ -576,6 +678,8 @@ function applyRecipe(r) {
     }
   }
   if (r.crop !== undefined) $("crop").value = r.crop === "full" ? "full" : "camera";
+  for (const k of SCENE_KEYS) if (r[k] !== undefined && !k.startsWith("trim")) $(k).value = r[k];
+  if (r.trimw !== undefined || r.trimx !== undefined) trimToControls(r);
   if (r.age !== undefined) $("age").value = r.age;
   if (r.grain !== undefined) $("grain").value = r.grain;
   if (r.edge !== undefined) $("edge").value = r.edge;
@@ -844,7 +948,8 @@ function lookFromRecipe(r) {
     age: parseFloat(r.age ?? 0), develop: r.develop || "normal",
     grainModel: r.grain || "classic", edge: parseFloat(r.edge ?? 0),
     ev: parseFloat(r.ev ?? 0), halation: parseFloat(r.halation ?? 1),
-    crop: r.crop === "full" ? "full" : "camera" };
+    crop: r.crop === "full" ? "full" : "camera",
+    scene: Object.fromEntries(SCENE_KEYS.map(k => [k, parseFloat(r[k] ?? 0) || 0])) };
 }
 function lookFromControls() {
   const stem = customCube ? customCube.stem : resolveFilmStem();
@@ -857,7 +962,7 @@ function lookFromControls() {
     age: parseFloat($("age").value), develop: $("develop").value,
     grainModel: $("grain").value, edge: parseFloat($("edge").value),
     ev: parseFloat($("ev").value), halation: parseFloat($("halation").value),
-    crop: $("crop").value === "full" ? "full" : "camera" };
+    crop: $("crop").value === "full" ? "full" : "camera", scene: sceneFromControls() };
 }
 
 /* maxDim 0 = full size; overrides patch the look (brackets); quiet
@@ -891,8 +996,11 @@ async function render(maxDim, overrides, quiet, fromRecipe) {
       filmProcess, filmStem: stem, printCubeText,
       filter: look.filter, strength: look.strength, seed: look.seed, age: look.age,
       develop: look.develop, maxDim, grainModel: look.grainModel, edge: look.edge,
-      ev: look.ev, halation: look.halation, printStem: look.printStem, crop: look.crop };
-    Object.assign(params, overrides);
+      ev: look.ev, halation: look.halation, printStem: look.printStem, crop: look.crop,
+      scene: { ...look.scene } };
+    /* a bracket's override of a scene key goes into the scene */
+    for (const [k, v] of Object.entries(overrides))
+      if (SCENE_KEYS.includes(k)) params.scene[k] = v; else params[k] = v;
     const out = await eng.render(params);
     const recipe = readJpegComment(out);
     renderGeometry = parseGeometry(recipe);
@@ -972,6 +1080,27 @@ function syncValueLabels() {
   $("evval").textContent = (ev > 0 ? "+" : "") + ev.toFixed(1);
   const hal = parseFloat($("halation").value);
   $("halval").textContent = hal === 0 ? "off" : hal.toFixed(1);
+  const signed = (v, d) => (v > 0 ? "+" : "") + v.toFixed(d);
+  $("tempval").textContent = signed(parseFloat($("temp").value), 2);
+  $("tintval").textContent = signed(parseFloat($("tint").value), 2);
+  $("blackval").textContent = signed(parseFloat($("black").value), 3);
+  $("shadowsval").textContent = signed(parseFloat($("shadows").value), 1);
+  $("highlightsval").textContent = signed(parseFloat($("highlights").value), 1);
+  $("contrastval").textContent = signed(parseFloat($("contrast").value), 2);
+  const grad = parseFloat($("grad").value);
+  $("gradval").textContent = grad === 0 ? "off" : grad.toFixed(1) + " stops";
+  const ga = parseFloat($("gradangle").value) % 360;
+  $("gradangleval").textContent = ga === 0 ? "top" : ga === 90 ? "right" : ga === 180 ? "bottom" : ga === 270 ? "left" : ga + "°";
+  const gp = parseFloat($("gradpos").value);
+  $("gradposval").textContent = gp === 0 ? "center" : signed(gp, 2);
+  const dn = parseFloat($("denoise").value);
+  $("denoiseval").textContent = dn === 0 ? "off" : dn.toFixed(1);
+  $("distortionval").textContent = signed(parseFloat($("distortion").value), 2);
+  const dv = parseFloat($("devignette").value);
+  $("devignetteval").textContent = dv === 0 ? "off" : dv.toFixed(1) + " stops";
+  $("rotateval").textContent = signed(parseFloat($("rotate").value), 1) + "°";
+  const tr = trimFromControls();
+  $("trimval").textContent = tr.trimw ? `${(tr.trimw * 100).toFixed(0)}% × ${(tr.trimh * 100).toFixed(0)}%` : "none";
 }
 
 /* ---- images --------------------------------------------------------- */
@@ -1084,7 +1213,8 @@ $("file").addEventListener("change", e => { for (const f of e.target.files || []
     $("drop").classList.toggle("armed", ev === "dragover");
     if (ev === "drop") for (const f of e.dataTransfer.files || []) acceptFile(f);
   }));
-for (const id of ["strength", "age", "edge", "ev", "halation"])
+for (const id of ["strength", "age", "edge", "ev", "halation", ...SCENE_KEYS.filter(k => !k.startsWith("trim")),
+                  "trimleft", "trimtop", "trimright", "trimbottom"])
   $(id).addEventListener("input", onControlChange);
 for (const id of ["filter", "print", "develop", "grain", "seed", "crop"])
   $(id).addEventListener("change", onControlChange);
@@ -1151,19 +1281,20 @@ function placeOverlay(el, r) {
  * are brought to one input scale, so a preview and a full-size render
  * of the same input compare. */
 function identityGeometry(w, h) {
-  return { inW: w, inH: h, cropX: 0, cropY: 0, cropW: w, cropH: h, placeX: 0, placeY: 0, outW: w, outH: h };
+  return { inW: w, inH: h, cropX: 0, cropY: 0, cropW: w, cropH: h, placeX: 0, placeY: 0, outW: w, outH: h,
+           origW: w, origH: h, trimX: 0, trimY: 0, rot: 0 };
 }
 function scaleGeometry(g, k) {
   if (!g || k === 1) return g;
   const o = {};
-  for (const key of Object.keys(g)) o[key] = g[key] * k;
+  for (const key of Object.keys(g)) o[key] = key === "rot" ? g[key] : g[key] * k;
   return o;
 }
 /* the input's size as the current render saw it; the original's own
  * pixel size when nothing has been rendered yet */
 function referenceInput() {
-  if (lastRender && lastRender.geometry) return [lastRender.geometry.inW, lastRender.geometry.inH];
-  if (pinned && pinned.geometry) return [pinned.geometry.inW, pinned.geometry.inH];
+  if (lastRender && lastRender.geometry) return [lastRender.geometry.origW, lastRender.geometry.origH];
+  if (pinned && pinned.geometry) return [pinned.geometry.origW, pinned.geometry.origH];
   const v = $("view");
   return [v.naturalWidth || v.clientWidth || 1, v.naturalHeight || v.clientHeight || 1];
 }
@@ -1172,11 +1303,11 @@ function imageInfo(kind) {
   if (kind === "original") return originalUrl ? { kind, url: originalUrl, geometry: identityGeometry(rw, rh) } : null;
   if (kind === "A") {
     if (!(pinned && pinned.url)) return null;
-    const g = pinned.geometry ? scaleGeometry(pinned.geometry, rw / pinned.geometry.inW) : identityGeometry(rw, rh);
+    const g = pinned.geometry ? scaleGeometry(pinned.geometry, rw / pinned.geometry.origW) : identityGeometry(rw, rh);
     return { kind, url: pinned.url, geometry: g };
   }
   if (!(lastRender && lastRender.url)) return null;
-  const g = lastRender.geometry ? scaleGeometry(lastRender.geometry, rw / lastRender.geometry.inW) : identityGeometry(rw, rh);
+  const g = lastRender.geometry ? scaleGeometry(lastRender.geometry, rw / lastRender.geometry.origW) : identityGeometry(rw, rh);
   return { kind: "B", url: lastRender.url, geometry: g };
 }
 function shownInfo() { return imageInfo(shownKind()); }
@@ -1222,9 +1353,13 @@ function composeStage() {
    * fitted to the viewport (or at 1:1); the view is clipped to the
    * right of the divider, the left image to the left of it, and where
    * either has no pixels the stage shows through. */
+  /* with trims: left pixel u is file pixel u - placeL + cropL + trimL, which
+   * is shown pixel that - trimS - cropS + placeS; a difference in
+   * straightening is a rotation of the left image about the file's center */
   const gS = shown.geometry, gL = left.geometry;
-  const dx = gS.placeX - gS.cropX + gL.cropX - gL.placeX;
-  const dy = gS.placeY - gS.cropY + gL.cropY - gL.placeY;
+  const dx = gS.placeX - gS.cropX - gS.trimX + gL.trimX + gL.cropX - gL.placeX;
+  const dy = gS.placeY - gS.cropY - gS.trimY + gL.trimY + gL.cropY - gL.placeY;
+  const rotDiff = (gS.rot || 0) - (gL.rot || 0);
   const minX = Math.min(0, dx), minY = Math.min(0, dy);
   const maxX = Math.max(gS.outW, dx + gL.outW), maxY = Math.max(gS.outH, dy + gL.outH);
   const uw = maxX - minX, uh = maxY - minY;
@@ -1239,6 +1374,12 @@ function composeStage() {
   if (ov.src !== left.url) ov.src = left.url;
   const lx = ox + dx * sc, ly = oy + dy * sc, lw = gL.outW * sc, lh = gL.outH * sc;
   ov.style.left = lx + "px"; ov.style.top = ly + "px"; ov.style.width = lw + "px"; ov.style.height = lh + "px";
+  if (rotDiff) {
+    /* the file's center in the left image's own pixels */
+    const cxL = gL.origW / 2 - gL.trimX - gL.cropX + gL.placeX, cyL = gL.origH / 2 - gL.trimY - gL.cropY + gL.placeY;
+    ov.style.transformOrigin = `${(cxL * sc).toFixed(2)}px ${(cyL * sc).toFixed(2)}px`;
+    ov.style.transform = `rotate(${rotDiff}deg)`;
+  } else { ov.style.transform = ""; ov.style.transformOrigin = ""; }
   const divider = ox + minX * sc + wipeX * uw * sc;
   /* the view keeps what is right of the divider, the left image what is left of it */
   const vClip = Math.min(Math.max(divider - ox, 0), gS.outW * sc);
@@ -1458,6 +1599,12 @@ const BRACKETS = {
   halation: () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
   edge:     () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
   develop:  () => ["pull-2", "pull-1", "normal", "push+1", "push+2", "push+3", "push+4", "cross", "cross+1"],
+  temp:     v => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(d => +(v + d).toFixed(2)).filter(x => x >= -2 && x <= 2),
+  shadows:  v => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(d => +(v + d).toFixed(2)).filter(x => x >= -2 && x <= 2),
+  contrast: () => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1],
+  grad:     () => [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3],
+  rotate:   v => [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2].map(d => +(v + d).toFixed(1)).filter(x => x >= -15 && x <= 15),
+  distortion: () => [-0.12, -0.09, -0.06, -0.03, 0, 0.03, 0.06, 0.09, 0.12],
 };
 let bracketRun = 0;
 async function runBracket() {

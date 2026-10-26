@@ -119,6 +119,34 @@ POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c super8 --no-film --develop pus
 POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c super8 --no-film --crop sideways -o "$R6" >/dev/null 2>&1 && {
     echo "test_compat: crop=sideways was accepted"; exit 1; }
 echo "recipes: crop=full and develop=push+3.5 round-trip; out-of-range values refused"
+# 1.24: scene adjustments ride in the recipe and the JPEG, flags on the CLI
+R7="$LIB/r7.jpg"; R8="$LIB/r8.jpg"
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --temp 0.4 --tint -0.2 \
+    --black 0.01 --shadows 0.5 --contrast 0.25 --grad 1.5 --gradangle 180 --gradpos 0.1 \
+    -o "$R7" --save-recipe "$LIB/look3.recipe" >/dev/null 2>&1 || { echo "test_compat: scene flags refused"; exit 1; }
+for k in 'temp=0.4' 'tint=-0.2' 'black=0.01' 'shadows=0.5' 'contrast=0.25' 'grad=1.5' 'gradangle=180' 'gradpos=0.1' 'highlights=0'; do
+    grep -q "^$k\$" "$LIB/look3.recipe" || { echo "test_compat: recipe lacks $k"; exit 1; }
+done
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$R7" -o "$R8" >/dev/null 2>&1
+cmp -s "$R7" "$R8" || { echo "test_compat: scene replay from the JPEG differs"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --grad 4 -o "$R8" >/dev/null 2>&1 && {
+    echo "test_compat: grad=4 was accepted"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film -o "$R8" >/dev/null 2>&1
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --temp 0 --grad 0 --contrast 0 -o "$R7" >/dev/null 2>&1
+cmp -s "$R7" "$R8" || { echo "test_compat: zero scene adjustments changed the render"; exit 1; }
+echo "recipes: scene adjustments round-trip through file and JPEG; zero is identity; ranges enforced"
+# 1.25: lens and framing keys, and the geometry line names the trim and the straightening
+R9="$LIB/r9.jpg"; R10="$LIB/r10.jpg"
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --rotate 2.5 --distortion 0.05 \
+    --devignette 0.5 --denoise 1 --trimx 0.1 --trimy 0.1 --trimw 0.8 --trimh 0.8 -o "$R9" >/dev/null 2>&1 || {
+    echo "test_compat: lens flags refused"; exit 1; }
+./polajuice inspect "$R9" | grep -q '^rotate=2.5$' || { echo "test_compat: recipe lacks rotate"; exit 1; }
+./polajuice inspect "$R9" | grep -q 'trim=[0-9]*,[0-9]* rot=2.5' || { echo "test_compat: geometry line lacks trim/rot"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$R9" -o "$R10" >/dev/null 2>&1
+cmp -s "$R9" "$R10" || { echo "test_compat: lens replay from the JPEG differs"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --rotate 30 -o "$R10" >/dev/null 2>&1 && {
+    echo "test_compat: rotate=30 was accepted"; exit 1; }
+echo "recipes: lens and framing keys round-trip; geometry carries trim and rotation"
 
 rm -f "$IN" "$OUT"
 echo "compatibility matrix tests passed (37 cells + override)"

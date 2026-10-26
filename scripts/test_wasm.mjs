@@ -139,6 +139,19 @@ try {
   if (!cameras.find(c => c.name === "super8").format) throw new Error("super8 reports no format label");
   if (cameras.find(c => c.name === "35mm-negative").format) throw new Error("35mm-negative reports a format crop");
   console.log("push+4 differs from +2, push+5 refused, crop=full, format labels ok");
+  const warm = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, scene: { temp: 0.8, grad: 1.5 } });
+  if (Buffer.compare(Buffer.from(warm), Buffer.from(out)) === 0) throw new Error("scene adjustments had no effect");
+  if (!/\ntemp=0.8\n/.test(new TextDecoder("latin1").decode(warm.subarray(0, 4096)))) throw new Error("temp missing from the embedded recipe");
+  const zero = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, scene: { temp: 0, grad: 0 } });
+  if (Buffer.compare(Buffer.from(zero), Buffer.from(out)) !== 0) throw new Error("zero scene adjustments changed the render");
+  let over = false;
+  try { await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, scene: { grad: 4 } }); } catch (e) { over = true; }
+  if (!over) throw new Error("grad=4 accepted by the wasm");
+  console.log("scene adjustments through the wasm: effect, recipe, identity at zero, range");
+  const trimmed = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, scene: { rotate: 2, trimx: 0.1, trimy: 0.1, trimw: 0.8, trimh: 0.8 } });
+  const head2 = new TextDecoder("latin1").decode(trimmed.subarray(0, 4096));
+  if (!/\nrotate=2\n/.test(head2) || !/ trim=\d+,\d+ rot=2\n/.test(head2)) throw new Error("lens keys or geometry missing from the embedded comment");
+  console.log("lens and framing through the wasm: recipe and geometry");
 }
 {
   // filter reaches the engine: red differs from none on the same seed

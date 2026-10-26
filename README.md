@@ -188,6 +188,39 @@ HEIC still needs one external conversion (`magick input.heic input.jpg`, or
 sRGB at the boundary and converted to linear RGB for processing; they
 render exactly as they did before raw input existed.
 
+### The scene: adjustments before the camera
+
+Nine knobs act on the light before the camera stage, all scene-linear,
+all identity at zero, so they describe the scene and the framing and
+leave the film to do what it does. `--temp` and `--tint` are white
+balance in stops of channel ratio (+1 temp a stop warmer); `--black`
+sets the black point (crush or fog); `--shadows` lifts or drops the
+bottom stops with a soft knee, hue and saturation kept; `--highlights`
+moves the raw shoulder's knee (scene-linear input only, since a JPEG
+has no headroom); `--contrast` is a log gamma about middle gray on
+luminance; `--grad`, `--gradangle` and `--gradpos` are a graduated
+neutral-density filter - the one you would have put on the lens for
+that sky - with its density, its dark edge and where the transition
+sits. The page has them in the Scene group, the recipe carries them
+as keys, brackets step the ones that matter (warm/cool, shadows,
+contrast, grad). Not here, deliberately: saturation, curves, split
+toning, local brushes - the film's business, or another program's.
+
+### Lens and framing
+
+Before the scene: `--denoise` blurs the color planes over about 2 px
+per unit at full size and leaves luminance alone (for high-ISO raw,
+before the grain models add their own); `--distortion` is a radial
+correction (+ undoes the barrel of a wide zoom, - pincushion);
+`--devignette` lifts the corners by that many stops; `--rotate`
+straightens in degrees (+ clockwise; the corners outside come in
+black); `--trimx/--trimy/--trimw/--trimh` cut a window of the frame in
+fractions, before the camera's format crop. The page's *Lens &
+framing* group has them, with the trim as four margins. The geometry
+line records the trim and the straightening, so the wipe lays the
+original over a straightened, trimmed render turned and offset to
+match.
+
 ### Raw input: the scene-linear door
 
 `.nef` (Nikon) and `.dng` (Adobe, iPhone, most converters) open through

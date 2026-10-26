@@ -34,6 +34,14 @@ curl -s -o "$TMP/srv2.jpg" -X POST "http://127.0.0.1:$PORT/api/render?name=cat.j
 ./polajuice apply "$TMP/dir/cat.jpg" -c super8 --no-film --crop full --develop push+3 --seed 7 -o "$TMP/cli2.jpg" >/dev/null 2>&1
 cmp -s "$TMP/srv2.jpg" "$TMP/cli2.jpg" || { echo "test_serve: crop/develop render differs from the CLI"; exit 1; }
 curl -s "http://127.0.0.1:$PORT/api/cameras" | grep -q '"format":"1.36:1 gate"' || { echo "test_serve: camera list lacks the format label"; exit 1; }
+# scene adjustments through the query, byte-identical to the CLI
+curl -s -o "$TMP/srv3.jpg" -X POST "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=super8&film=none&seed=7&temp=0.5&grad=1&gradangle=90&shadows=-0.5&contrast=0.3"
+./polajuice apply "$TMP/dir/cat.jpg" -c super8 --no-film --seed 7 --temp 0.5 --grad 1 --gradangle 90 --shadows -0.5 --contrast 0.3 -o "$TMP/cli3.jpg" >/dev/null 2>&1
+cmp -s "$TMP/srv3.jpg" "$TMP/cli3.jpg" || { echo "test_serve: scene render differs from the CLI"; exit 1; }
+curl -s -X POST "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=super8&temp=5" | grep -q error || { echo "test_serve: temp=5 accepted"; exit 1; }
+curl -s -o "$TMP/srv4.jpg" -X POST "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&seed=7&rotate=3&trimx=0.1&trimy=0.1&trimw=0.8&trimh=0.8&distortion=0.05"
+./polajuice apply "$TMP/dir/cat.jpg" -c 35mm-negative --no-film --seed 7 --rotate 3 --trimx 0.1 --trimy 0.1 --trimw 0.8 --trimh 0.8 --distortion 0.05 -o "$TMP/cli4.jpg" >/dev/null 2>&1
+cmp -s "$TMP/srv4.jpg" "$TMP/cli4.jpg" || { echo "test_serve: lens render differs from the CLI"; exit 1; }
 # the inspect numbers for a file in the folder
 curl -s "http://127.0.0.1:$PORT/api/stats?name=tiny.dng" | grep -q '"scene_linear":true' || { echo "test_serve: stats of a raw lacks scene_linear"; exit 1; }
 curl -s "http://127.0.0.1:$PORT/api/stats?name=cat.jpg" | grep -q '"stops_below_white"' || { echo "test_serve: stats of a jpeg lacks the mean"; exit 1; }

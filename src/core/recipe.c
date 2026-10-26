@@ -21,6 +21,69 @@ static void put_num(char *out, size_t size, float v)
     else snprintf(out, size, "%.4g", (double)v);
 }
 
+static const PjSceneKey scene_keys[] = {
+    {"temp", -2.0f, 2.0f}, {"tint", -1.0f, 1.0f}, {"black", -0.1f, 0.1f},
+    {"shadows", -2.0f, 2.0f}, {"highlights", -1.0f, 1.0f}, {"contrast", -1.0f, 1.0f},
+    {"grad", 0.0f, 3.0f}, {"gradangle", 0.0f, 360.0f}, {"gradpos", -0.5f, 0.5f},
+    {"denoise", 0.0f, 3.0f}, {"distortion", -0.3f, 0.3f}, {"devignette", 0.0f, 2.0f},
+    {"rotate", -15.0f, 15.0f},
+    {"trimx", 0.0f, 1.0f}, {"trimy", 0.0f, 1.0f}, {"trimw", 0.0f, 1.0f}, {"trimh", 0.0f, 1.0f},
+};
+
+const PjSceneKey *pj_scene_keys(size_t *count)
+{
+    if (count) *count = sizeof scene_keys / sizeof scene_keys[0];
+    return scene_keys;
+}
+
+static float *scene_slot(PjRenderOptions *o, const char *key)
+{
+    if (!strcmp(key, "temp")) return &o->temp;
+    if (!strcmp(key, "tint")) return &o->tint;
+    if (!strcmp(key, "black")) return &o->black;
+    if (!strcmp(key, "shadows")) return &o->shadows;
+    if (!strcmp(key, "highlights")) return &o->highlights;
+    if (!strcmp(key, "contrast")) return &o->contrast;
+    if (!strcmp(key, "grad")) return &o->grad;
+    if (!strcmp(key, "gradangle")) return &o->grad_angle;
+    if (!strcmp(key, "gradpos")) return &o->grad_pos;
+    if (!strcmp(key, "denoise")) return &o->denoise;
+    if (!strcmp(key, "distortion")) return &o->distortion;
+    if (!strcmp(key, "devignette")) return &o->devignette;
+    if (!strcmp(key, "rotate")) return &o->rotate;
+    if (!strcmp(key, "trimx")) return &o->trim_x;
+    if (!strcmp(key, "trimy")) return &o->trim_y;
+    if (!strcmp(key, "trimw")) return &o->trim_w;
+    if (!strcmp(key, "trimh")) return &o->trim_h;
+    return NULL;
+}
+
+bool pj_scene_is_key(const char *key)
+{
+    for (size_t i = 0; i < sizeof scene_keys / sizeof scene_keys[0]; ++i)
+        if (!strcmp(scene_keys[i].key, key)) return true;
+    return false;
+}
+
+bool pj_scene_set(PjRenderOptions *o, const char *key, const char *value)
+{
+    for (size_t i = 0; i < sizeof scene_keys / sizeof scene_keys[0]; ++i) {
+        if (strcmp(scene_keys[i].key, key)) continue;
+        char *end = NULL;
+        float v = strtof(value, &end);
+        if (!end || end == value || *end || v < scene_keys[i].lo || v > scene_keys[i].hi) return false;
+        *scene_slot(o, key) = v;
+        return true;
+    }
+    return false;
+}
+
+float pj_scene_get(const PjRenderOptions *o, const char *key)
+{
+    float *slot = scene_slot((PjRenderOptions *)o, key);
+    return slot ? *slot : 0.0f;
+}
+
 int pj_crop_parse(const char *name)
 {
     if (!name || !*name || !strcmp(name, "camera")) return PJ_CROP_CAMERA;
@@ -113,7 +176,19 @@ size_t pj_recipe_format(const char *camera, const char *film,
                      edge, ev, hal,
                      (unsigned long long)o->seed,
                      pj_crop_name(o->crop));
-    return n < 0 ? 0 : (size_t)n;
+    if (n < 0) return 0;
+    size_t used = (size_t)n;
+    /* the scene, lens and framing keys, every one, in table order */
+    size_t count = 0;
+    const PjSceneKey *keys = pj_scene_keys(&count);
+    for (size_t i = 0; i < count && used < size; ++i) {
+        char num[32];
+        put_num(num, sizeof num, pj_scene_get(o, keys[i].key));
+        int m = snprintf(buf + used, size - used, "%s=%s\n", keys[i].key, num);
+        if (m < 0) break;
+        used += (size_t)m;
+    }
+    return used;
 }
 
 bool pj_recipe_is_recipe(const char *text)
