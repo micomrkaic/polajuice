@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polajuice — photographic process emulator</title>
+<style>
+  :root { --ink:#1c1a17; --paper:#f4f1ea; --panel:#fbf9f4; --accent:#b3492c;
+          --line:#d8d2c4; --muted:#7a7263; --faint:#a89f8d; }
+  * { box-sizing: border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--paper); color:var(--ink);
+         font:15px/1.45 Georgia, 'Times New Roman', serif;
+         display:flex; flex-direction:column; min-height:100vh; }
+  a { color:var(--accent); }
+  header { display:flex; align-items:baseline; gap:1rem; padding:0.6rem 1.2rem;
+           border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap; }
+  h1 { font-size:1.35rem; margin:0; letter-spacing:0.02em; }
+  h1 small { font-weight:normal; color:var(--muted); font-size:0.8rem; margin-left:0.5rem; }
+  header .tag { color:var(--muted); font-size:0.85rem; font-style:italic; }
+  #status { color:var(--muted); font-style:italic; margin-left:auto; font-size:0.9rem; }
+  #status.error { color:var(--accent); }
+
+  .workspace { display:grid; grid-template-columns:21rem 1fr; flex:1; min-height:0; }
+  @media (max-width:56rem) { .workspace { grid-template-columns:1fr; } }
+
+  aside.panel { border-right:1px solid var(--line); background:var(--panel);
+                overflow-y:auto; padding:0.4rem 0 1rem; }
+  details.group { border-bottom:1px solid var(--line); padding:0.2rem 1rem 0.5rem; }
+  details.group summary { cursor:pointer; font-size:0.78rem; text-transform:uppercase;
+    letter-spacing:0.1em; color:var(--muted); padding:0.45rem 0; list-style:none; }
+  details.group summary::-webkit-details-marker { display:none; }
+  details.group summary::before { content:"▸ "; }
+  details.group[open] summary::before { content:"▾ "; }
+  .field { margin:0.35rem 0 0.55rem; }
+  label { display:block; font-size:0.74rem; text-transform:uppercase;
+          letter-spacing:0.08em; color:var(--muted); margin-bottom:0.15rem; }
+  label .val { float:right; text-transform:none; letter-spacing:0; color:var(--ink);
+               font-variant-numeric:tabular-nums; }
+  select, input[type=number], input[type=text] { width:100%; padding:0.3rem 0.4rem;
+          font:inherit; font-size:0.9rem; border:1px solid var(--line); background:white; }
+  input[type=range] { width:100%; margin:0.1rem 0 0; accent-color:var(--accent); }
+  .cubeload { font-size:0.75rem; color:var(--muted); margin-top:0.3rem; }
+  .cubeload input { font-size:0.72rem; max-width:100%; }
+  button { font:inherit; font-size:0.85rem; padding:0.4rem 0.9rem; border:1px solid var(--ink);
+           background:var(--ink); color:var(--paper); cursor:pointer; }
+  button.secondary { background:transparent; color:var(--ink); }
+  button.small { padding:0.25rem 0.6rem; font-size:0.78rem; }
+  button:disabled { opacity:0.4; cursor:default; }
+  button.on { background:var(--accent); border-color:var(--accent); color:white; }
+  .btnrow { display:flex; gap:0.4rem; flex-wrap:wrap; margin:0.4rem 0; }
+
+  textarea#recipe { width:100%; height:12.5rem; font:0.78rem/1.35 ui-monospace, Menlo, Consolas, monospace;
+    border:1px solid var(--line); background:white; padding:0.4rem; resize:vertical; }
+  code#cli { display:block; font:0.74rem/1.35 ui-monospace, Menlo, Consolas, monospace;
+    background:white; border:1px solid var(--line); padding:0.4rem; white-space:pre-wrap;
+    word-break:break-all; margin-top:0.4rem; }
+  .presetrow { display:flex; gap:0.3rem; margin-top:0.4rem; }
+  .presetrow input { flex:1; }
+
+  section.stage { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .toolbar { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;
+             padding:0.5rem 1rem; border-bottom:1px solid var(--line); }
+  .toolbar .seg { display:inline-flex; border:1px solid var(--ink); }
+  .toolbar .seg button { border:0; border-right:1px solid var(--ink); background:transparent;
+                         color:var(--ink); }
+  .toolbar .seg button:last-child { border-right:0; }
+  .toolbar .seg button.on { background:var(--ink); color:var(--paper); }
+  .toolbar .spacer { flex:1; }
+  .toolbar select { width:auto; font-size:0.8rem; padding:0.2rem 0.3rem; }
+  .toolbar .wipeside { font-size:0.8rem; color:var(--muted); display:inline-flex; gap:0.3rem; align-items:center; }
+  .toolbar .wipeside .muted { color:var(--faint); }
+  .trimgrid { display:grid; grid-template-columns:3.2rem 1fr; gap:0.15rem 0.4rem; align-items:center; }
+  .trimgrid label { font-size:0.7rem; color:var(--muted); text-transform:none; letter-spacing:0; }
+  #viewport { flex:1; min-height:20rem; overflow:auto; background:#2b2823;
+              display:flex; align-items:center; justify-content:center; position:relative; }
+  #viewport img { max-width:100%; max-height:100%; object-fit:contain; display:block;
+                  background:#111; }
+  #viewport.one2one img { max-width:none; max-height:none; }
+  #viewport.wiping #view { max-width:none; max-height:none; object-fit:fill; }
+  #viewport.wiping { display:block; }
+  /* fitted on the pictures: a print's border may run off the edge, no scrollbars for it */
+  #viewport.wiping:not(.one2one) { overflow:hidden; }
+  #viewport.one2one { display:block; }
+  #caption { padding:0.35rem 1rem; font-size:0.8rem; color:var(--muted); font-style:italic;
+             border-top:1px solid var(--line); min-height:1.6rem; }
+  #before, #after { display:none; }
+  /* overlays sit on the displayed image's own rectangle (set from script) */
+  #viewport .overlay { position:absolute; display:none; max-width:none; max-height:none; }
+  #wipeimg { object-fit:fill; background:#111; pointer-events:none; }
+  #wipebar { width:0; border-left:2px solid var(--paper); box-shadow:0 0 0 1px rgba(0,0,0,0.6);
+             cursor:ew-resize; }
+  #wipebar::after { content:"◂ ▸"; position:absolute; top:50%; left:-1.4rem; width:2.8rem; text-align:center;
+             transform:translateY(-50%); background:var(--paper); color:var(--ink); font-size:0.7rem;
+             padding:0.15rem 0; border-radius:1rem; }
+  #viewport.wiping { cursor:ew-resize; }
+  #clipcanvas { pointer-events:none; image-rendering:pixelated; }
+  #loupe { position:fixed; width:320px; height:320px; border:2px solid var(--paper); border-radius:4px;
+           box-shadow:0 4px 16px rgba(0,0,0,0.5); background-repeat:no-repeat; background-color:#111;
+           pointer-events:none; display:none; z-index:30; }
+  #loupe span { position:absolute; left:0; bottom:0; right:0; font-size:0.65rem; color:var(--paper);
+           background:rgba(0,0,0,0.55); padding:0.1rem 0.3rem; font-style:italic; }
+  #sheet { position:absolute; inset:0; background:rgba(43,40,35,0.97); display:none; z-index:20;
+           flex-direction:column; padding:0.6rem; gap:0.4rem; }
+  #sheet.on { display:flex; }
+  #sheet .head { display:flex; gap:0.6rem; align-items:center; color:var(--paper); font-size:0.85rem; }
+  #sheet .head .spacer { flex:1; }
+  #sheet .head button { color:var(--paper); border-color:var(--paper); background:transparent; }
+  #sheet .grid { flex:1; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+           gap:0.4rem; min-height:0; }
+  #sheet figure { margin:0; min-height:0; display:flex; flex-direction:column; cursor:pointer;
+           border:2px solid transparent; }
+  #sheet figure.cur { border-color:var(--accent); }
+  #sheet figure:hover { border-color:var(--paper); }
+  #sheet img { flex:1; min-height:0; width:100%; object-fit:contain; background:#111; }
+  #sheet figcaption { font-size:0.7rem; color:var(--paper); text-align:center; padding:0.15rem; }
+  #histpanel { display:flex; gap:1rem; align-items:center; padding:0.3rem 1rem; border-top:1px solid var(--line);
+           font-size:0.72rem; color:var(--muted); }
+  #histo { width:256px; height:72px; background:#1d1b18; flex:none; }
+  #histtext { white-space:pre-line; line-height:1.3; }
+  #histpanel button.on { background:var(--accent); color:var(--paper); border-color:var(--accent); }
+  .strip { display:flex; gap:0.5rem; align-items:stretch; padding:0.5rem 1rem;
+           border-top:1px solid var(--line); background:var(--panel); overflow-x:auto; }
+  #drop { border:2px dashed var(--line); padding:0.4rem 0.8rem; text-align:center;
+          cursor:pointer; color:var(--muted); font-size:0.78rem; display:flex;
+          align-items:center; min-width:9rem; transition:border-color .15s; }
+  #drop.armed { border-color:var(--accent); color:var(--accent); }
+  .thumbs { display:flex; gap:0.4rem; }
+  .thumbs figure, .samplestrip figure { margin:0; cursor:pointer; text-align:center; }
+  .thumbs img, .samplestrip img { height:3.6rem; display:block; border:2px solid transparent; }
+  .thumbs figure.on img { border-color:var(--accent); }
+  .thumbs .broken { height:3.6rem; width:5.4rem; box-sizing:border-box; padding:0.25rem;
+    border:2px solid var(--muted); color:var(--muted); font-size:0.58rem; line-height:1.15;
+    overflow:hidden; text-align:left; background:#fff; }
+  .thumbs figcaption, .samplestrip figcaption { font-size:0.62rem; color:var(--muted);
+    max-width:6rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .samplestrip { display:flex; gap:0.4rem; align-items:flex-end; }
+  .samplestrip .credit { font-size:0.62rem; color:var(--faint); font-style:italic;
+    align-self:flex-end; white-space:nowrap; }
+  .sep { width:1px; background:var(--line); margin:0 0.3rem; }
+
+  details#help { padding:0.2rem 1rem 0.5rem; }
+  details#help summary { cursor:pointer; color:var(--muted); font-style:italic; font-size:0.85rem; }
+  .helpgrid h3 { margin:0.6rem 0 0.2rem; font-size:0.95rem; }
+  .helpnote { font-size:0.8rem; color:var(--muted); margin:0 0 0.5rem; }
+  .helpgrid dt { font-weight:bold; margin-top:0.4rem; font-size:0.85rem; }
+  .helpgrid dd { margin:0.1rem 0 0 0; font-size:0.8rem; color:#4a453b; }
+  .helpgrid dd .traits { color:var(--muted); font-style:italic; }
+  footer { padding:0.4rem 1.2rem; font-size:0.75rem; color:var(--muted);
+           border-top:1px solid var(--line); background:var(--panel); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Polajuice <small id="version"></small></h1>
+  <span class="tag" id="enginetag">camera + film, rendered locally in WebAssembly — photos never leave your machine</span>
+  <span id="status">loading engine…</span>
+</header>
+
+<div class="workspace">
+<aside class="panel">
+  <details class="group" open>
+    <summary>Scene</summary>
+    <div class="field">
+      <label for="ev" title="Exposure in stops on the scene light, before anything else.
+Raw files open one stop up on top of this, with the sensor's top stop
+rolled in by a shoulder before the film sees it.">Exposure <span class="val" id="evval">0</span></label>
+      <input id="ev" type="range" min="-2" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="halation" title="Scales the camera's halation: the brightest light scattering back
+through the film base as a red-orange glow. 0 off, 1 the camera's own,
+2 double. Strongest with raw input, where speculars still exist above
+white.">Halation <span class="val" id="halval">1.0</span></label>
+      <input id="halation" type="range" min="0" max="2" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label for="temp" title="White balance, warm/cool: stops of red-to-blue ratio. +1 is a stop warmer.">Warm / cool <span class="val" id="tempval">0</span></label>
+      <input id="temp" type="range" min="-2" max="2" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="tint" title="Green/magenta: +1 a stop toward magenta.">Tint <span class="val" id="tintval">0</span></label>
+      <input id="tint" type="range" min="-1" max="1" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="black" title="Black point in scene units: positive crushes the bottom into black and rescales, negative fogs (lifts everything).">Black point <span class="val" id="blackval">0</span></label>
+      <input id="black" type="range" min="-0.1" max="0.1" step="0.005" value="0">
+    </div>
+    <div class="field">
+      <label for="shadows" title="Lift (+) or drop (-) the shadows, in stops at four stops below middle gray, fading to nothing at gray; hue and saturation kept.">Shadows <span class="val" id="shadowsval">0</span></label>
+      <input id="shadows" type="range" min="-2" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="highlights" title="Moves the raw shoulder's knee: - rolls more headroom in (softer top), + keeps it harder. Scene-linear input only; a JPEG has no headroom.">Highlights (raw) <span class="val" id="highlightsval">0</span></label>
+      <input id="highlights" type="range" min="-1" max="1" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="contrast" title="Scene contrast: a log gamma about middle gray, on luminance, color ratios kept.">Contrast <span class="val" id="contrastval">0</span></label>
+      <input id="contrast" type="range" min="-1" max="1" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="grad" title="Graduated neutral density: the filter you would have put on the lens. Density in stops at the dark edge; the transition feathers over a quarter of the frame.">Grad ND <span class="val" id="gradval">off</span></label>
+      <input id="grad" type="range" min="0" max="3" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="gradangle" title="Where the dark edge is: 0 top, 90 right, 180 bottom, 270 left.">Grad edge <span class="val" id="gradangleval">top</span></label>
+      <input id="gradangle" type="range" min="0" max="360" step="15" value="0">
+    </div>
+    <div class="field">
+      <label for="gradpos" title="The transition's center, as an offset from the frame center along the gradient.">Grad position <span class="val" id="gradposval">center</span></label>
+      <input id="gradpos" type="range" min="-0.5" max="0.5" step="0.025" value="0">
+    </div>
+  </details>
+
+  <details class="group">
+    <summary>Lens &amp; framing</summary>
+    <div class="field">
+      <label for="denoise" title="Chroma denoise: the color planes blurred over about 2 px per unit at full size, luminance untouched. For high-ISO raw before the grain models add their own.">Chroma denoise <span class="val" id="denoiseval">off</span></label>
+      <input id="denoise" type="range" min="0" max="3" step="0.5" value="0">
+    </div>
+    <div class="field">
+      <label for="distortion" title="Radial lens correction: + undoes barrel (corners pulled in by a wide lens), - undoes pincushion. A 24 mm zoom at the wide end wants about +0.05..0.1.">Distortion <span class="val" id="distortionval">0</span></label>
+      <input id="distortion" type="range" min="-0.3" max="0.3" step="0.01" value="0">
+    </div>
+    <div class="field">
+      <label for="devignette" title="Undo the lens's corner falloff: stops of lift at the corners, rising with the square of the radius.">De-vignette <span class="val" id="devignetteval">off</span></label>
+      <input id="devignette" type="range" min="0" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="rotate" title="Straighten: degrees, + clockwise. The canvas stays; the corners outside come in black - trim them below.">Straighten <span class="val" id="rotateval">0°</span></label>
+      <input id="rotate" type="range" min="-15" max="15" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label title="Trim the frame before the camera's own format crop: margins in percent of the frame.">Trim <span class="val" id="trimval">none</span></label>
+      <div class="trimgrid">
+        <label for="trimleft">left</label><input id="trimleft" type="range" min="0" max="45" step="0.5" value="0">
+        <label for="trimtop">top</label><input id="trimtop" type="range" min="0" max="45" step="0.5" value="0">
+        <label for="trimright">right</label><input id="trimright" type="range" min="0" max="45" step="0.5" value="0">
+        <label for="trimbottom">bottom</label><input id="trimbottom" type="range" min="0" max="45" step="0.5" value="0">
+      </div>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Camera</summary>
+    <div class="field">
+      <label for="camera">Camera</label>
+      <select id="camera"></select>
+    </div>
+    <div class="field">
+      <label for="crop" title="Whether to cut the camera's own format from the middle of the picture
+(the square of a 126 cartridge, the 1.03:1 instant print, the Super 8 gate)
+or keep the whole input frame at its own aspect. An instant camera then
+puts its border around the full frame. Cameras without a format crop are
+the same either way.">Format <span class="val" id="cropval"></span></label>
+      <select id="crop">
+        <option value="camera">the camera's format</option>
+        <option value="full">full frame — keep the whole picture</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="filter" title="Lens contrast filter, applied to the light before the film.
+Orange or red with black-and-white film darkens skies and dramatizes clouds;
+green lightens foliage. On color stock: a period-correct strong cast.">Filter</label>
+      <select id="filter">
+        <option value="">none</option>
+        <option value="yellow">yellow (#8)</option>
+        <option value="orange">orange (#15)</option>
+        <option value="red">red (#25)</option>
+        <option value="green">green (#58)</option>
+        <option value="blue">blue (#47)</option>
+      </select>
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Film</summary>
+    <div class="field">
+      <label for="film">Film</label>
+      <select id="film"></select>
+      <div class="cubeload" title="Render with any .cube from your own library (data/luts on your machine) - the full warehouse, not just this shelf">
+        or load .cube: <input type="file" id="cubefile" accept=".cube">
+      </div>
+    </div>
+    <div class="field" id="printcontrol" style="display:none">
+      <label for="print">Print stock</label>
+      <select id="print"><option value="__none__">none — direct</option></select>
+    </div>
+    <div class="field">
+      <label for="strength">Strength <span class="val" id="strengthval">1.00</span></label>
+      <input id="strength" type="range" min="0" max="1" step="0.05" value="1">
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Development</summary>
+    <div class="field">
+      <label for="develop">Developing</label>
+      <select id="develop" title="Push for contrast and grain, pull to soften. Within -1..+2 the
+response is linear; each stop beyond counts 0.6 (the developer has
+little left to bring up). Cross is E-6 slide film in C-41 chemistry;
+cross +N pushes it as well.">
+        <option value="pull-3">pull -3 stops</option>
+        <option value="pull-2">pull -2 stops</option>
+        <option value="pull-1">pull -1 stop</option>
+        <option value="normal" selected>normal</option>
+        <option value="push+1">push +1 stop</option>
+        <option value="push+2">push +2 stops</option>
+        <option value="push+3">push +3 stops</option>
+        <option value="push+4">push +4 stops</option>
+        <option value="cross">cross-process (E-6 in C-41)</option>
+        <option value="cross+1">cross-process, push +1</option>
+        <option value="cross+2">cross-process, push +2</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="age">Age <span class="val" id="ageval">fresh</span></label>
+      <input id="age" type="range" min="0" max="1" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="grain" title="classic: display noise laid over the finished picture.
+silver: grain formed from exposure inside the film - coarse in the
+shadows, fine in the highlights, and the print stock, push and age
+act on it as they act on the image.">Grain model</label>
+      <select id="grain">
+        <option value="classic">classic (overlaid)</option>
+        <option value="silver">silver (from exposure)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="edge" title="Development edge effects. Developer exhausts locally, so the dense
+side of a boundary develops denser and a small dense detail more than a
+large one (border, fringe and Eberhard effects). 1 is a dilute developer,
+2 stand development. Not an unsharp mask: uniform areas are untouched.
+Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</span></label>
+      <input id="edge" type="range" min="0" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="seed">Grain seed</label>
+      <input id="seed" type="number" value="42" step="1">
+    </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Recipe</summary>
+    <p class="helpnote">The whole look as text, as the engine wrote it into the
+    last render. Every JPEG saved from here carries it; <code>polajuice apply
+    IN --recipe out.jpg</code> replays it exactly.</p>
+    <textarea id="recipe" readonly spellcheck="false"></textarea>
+    <div class="btnrow">
+      <button class="small secondary" id="copyrecipe">copy</button>
+      <button class="small secondary" id="saverecipe">save .recipe</button>
+      <label class="small" style="display:inline"><button class="small secondary" type="button" id="loadrecipebtn">load…</button>
+        <input type="file" id="loadrecipe" accept=".recipe,.txt,.jpg,.jpeg" hidden></label>
+    </div>
+    <div class="presetrow">
+      <input type="text" id="presetname" placeholder="name this look">
+      <button class="small" id="presetsave">keep</button>
+    </div>
+    <div class="field" style="margin-top:0.4rem">
+      <label for="presets" id="presetslabel">Kept looks (this browser)</label>
+      <select id="presets"><option value="">—</option></select>
+      <div class="btnrow"><button class="small secondary" id="presetdelete">forget</button></div>
+    </div>
+    <label style="margin-top:0.5rem">Equivalent command</label>
+    <code id="cli"></code>
+    <div class="btnrow"><button class="small secondary" id="copycli">copy command</button></div>
+  </details>
+
+  <details id="help">
+    <summary>What do these cameras and films do?</summary>
+    <div class="helpgrid">
+      <div>
+        <h3>Cameras</h3>
+        <p class="helpnote">The camera is the format and process: optics,
+        grain, flash, framing. Traits below are generated from the engine's
+        own parameters, so they always match what actually renders.</p>
+        <dl id="helpcameras"></dl>
+      </div>
+      <div>
+        <h3>Films</h3>
+        <p class="helpnote">The film is the color chemistry, applied as a
+        3D LUT. "Canonical (auto)" picks each camera's period-correct
+        stock; Age is a third axis — storage fog, faded contrast and a
+        magenta drift that works with any camera and film. Developing is
+        the chemistry: push for contrast and grain, pull to soften, or
+        cross-process slide film for shifted colors — disabled for
+        instant cameras, which develop inside the film unit. Grain model
+        chooses where the grain comes from: classic lays display noise over
+        the finished picture; silver forms it from exposure inside the
+        film, so shadows run coarse and highlights fine, and print stock,
+        push and age act on it as on the image. Edge effects are the
+        developer exhausting locally — the dense side of a boundary
+        develops denser and small dense details most (border, fringe and
+        Eberhard effects) — 1 is a dilute developer, 2 stand development;
+        uniform areas are untouched. Raw files (.nef, .dng) come through a
+        scene-linear door: the sensor's white sits a stop above display
+        white and the top stop rolls in through a shoulder, so halation
+        and the film curve see real highlights instead of a plateau;
+        Exposure moves from there. JPEG and PNG render exactly as before.
+        Halation scales the camera's glow, strongest from raw.</p>
+        <dl id="helpfilms"></dl>
+      </div>
+    </div>
+  </details>
+</aside>
+
+<section class="stage">
+  <div class="toolbar">
+    <span class="seg">
+      <button id="viewOriginal" title="the photo as loaded (hold \ for a glance)">original</button>
+      <button id="viewA" title="the look pinned as A" disabled>A</button>
+      <button id="viewB" class="on" title="the current look">current</button>
+    </span>
+    <button id="pinA" class="small secondary" title="keep the current render and recipe as A, then change things and compare">pin as A</button>
+    <button id="one2one" class="small secondary" title="1:1 pixels (scroll around)">1:1</button>
+    <button id="wipe" class="small secondary" title="wipe: drag a divider; the view (original / A / current, chosen above) is on the right, the image chosen here on the left; key w">wipe</button>
+    <span id="wipeside" class="wipeside" style="display:none">left:
+      <select id="wipeagainst" class="small" title="the image on the left of the divider; the view buttons choose the right">
+        <option value="original">original</option>
+        <option value="A">A</option>
+        <option value="B">current</option>
+      </select>
+      <span class="muted">| right: the view</span>
+    </span>
+    <button id="loupe-btn" class="small secondary" title="loupe: a 1:1 window of the full-size render under the pointer; key l">loupe</button>
+    <button id="bracket" class="small secondary" title="bracket: nine renders of the current look stepping one knob, click one to take it">bracket</button>
+    <select id="bracketaxis" class="small" title="the knob the bracket steps">
+      <option value="ev">exposure</option>
+      <option value="develop">develop</option>
+      <option value="strength">strength</option>
+      <option value="age">age</option>
+      <option value="halation">halation</option>
+      <option value="edge">edge</option>
+      <option value="temp">warm / cool</option>
+      <option value="shadows">shadows</option>
+      <option value="contrast">contrast</option>
+      <option value="grad">grad ND</option>
+      <option value="rotate">straighten</option>
+      <option value="distortion">distortion</option>
+    </select>
+    <span class="spacer"></span>
+    <button id="render" class="secondary" disabled>Render preview</button>
+    <button id="download" disabled>Render full size &amp; download</button>
+    <button id="export" disabled style="display:none" title="render full size and write it next to the source, recipe embedded">Export next to source</button>
+    <button id="batch" class="secondary" disabled style="display:none" title="apply the current look to every image in the folder, written next to each">Apply to folder</button>
+  </div>
+  <div id="viewport"><img id="view" alt="">
+    <img id="wipeimg" class="overlay" alt="">
+    <canvas id="clipcanvas" class="overlay"></canvas>
+    <div id="wipebar" class="overlay"></div>
+    <div id="sheet">
+      <div class="head"><span id="sheethead">bracket</span><span class="spacer"></span>
+        <button id="sheetclose" class="small secondary">close (Esc)</button></div>
+      <div class="grid" id="sheetgrid"></div>
+    </div>
+  </div>
+  <div id="loupe"><span id="loupecap"></span></div>
+  <img id="before" alt=""><img id="after" alt="">
+  <div id="caption"><span id="aftercap">no image loaded</span></div>
+  <div id="histpanel">
+    <canvas id="histo" width="256" height="72" title="per-channel histogram of the view, log scale"></canvas>
+    <span id="histtext">no image</span>
+    <button id="clipwarn" class="small secondary" title="paint clipped pixels: red where a channel hits white, blue where all three sit at black">clipping</button>
+  </div>
+  <div class="strip">
+    <div id="drop">drop JPEG, PNG,<br>NEF or DNG here<input id="file" type="file" accept=".jpg,.jpeg,.png,.nef,.dng,image/jpeg,image/png" hidden multiple></div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="sep"></div>
+    <div id="samplestrip" class="samplestrip"></div>
+  </div>
+</section>
+</div>
+
+<footer>
+  Film stocks are G'MIC/Pat David color presets served from <code>films/</code>;
+  camera descriptions come from the engine itself. Keyboard: <b>\</b> hold for
+  the original, <b>a</b> toggle A/current, <b>w</b> wipe, <b>l</b> loupe,
+  <b>r</b> re-render, Esc closes a bracket. Source: <a href="https://github.com/micomrkaic/polajuice">github.com/micomrkaic/polajuice</a>.
+</footer>
+
+<script type="module">
+"use strict";
+import { createEngine, probeNativeEngine } from "./engine.js";
+const $ = id => document.getElementById(id);
+const PAGE_VERSION = "1.25.3";   // kept in step by scripts/release checks
+
+/* ---- state --------------------------------------------------------- */
+let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
+let wasmEngine = null;  /* always loaded: the fallback, and custom cubes */
+let inputBytes = null, inputName = "photo", inputExt = "jpg";
+let inputServerName = null;   /* a file in the served folder, rendered by name */
+let images = [];          /* {name, ext, bytes, url} loaded this session */
+let current = -1;
+let filmFamilies = [];
+let films = [];
+const filmCache = new Map();
+let customCube = null;    /* {stem, text} from the user's own library */
+let lastRender = null;    /* {blob, url, recipe} of the current look */
+let pinned = null;        /* {blob, url, recipe} pinned as A */
+let originalUrl = null;
+let view = "B";           /* "original" | "A" | "B" */
+let glance = false;       /* the \ key held: the original, briefly */
+let renderTimer = null, rendering = false, renderAgain = false;
+
+function familyToken(family) {
+  const p = family.process || "";
+  if (p.includes("K-14") || p === "E-6" || p.includes("E-6 in C-41")) return "slide";
+  if (p === "C-41") return "negative";
+  if (p.includes("B+W") || p.includes("B and W")) return "bw";
+  if (p === "internal")
+    return /pack/i.test(family.name) ? "pack" : "integral";
+  return null;   // unknown: never filtered out
+}
+
+function setStatus(text, isError) {
+  $("status").textContent = text;
+  $("status").className = isError ? "error" : "";
+}
+
+/* ---- recipe text: read from the engine's JPEG, parse, apply --------- */
+
+/* the first COM segment that announces itself as a polajuice recipe */
+function readJpegComment(bytes) {
+  if (!bytes || bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null;
+  let i = 2;
+  while (i + 4 <= bytes.length) {
+    if (bytes[i] !== 0xFF) return null;
+    const marker = bytes[i + 1];
+    if (marker === 0xFF) { i++; continue; }
+    if (marker === 0xDA || marker === 0xD9) return null;
+    const len = bytes[i + 2] << 8 | bytes[i + 3];
+    if (marker === 0xFE) {
+      const text = new TextDecoder().decode(bytes.subarray(i + 4, i + 2 + len));
+      if (text.startsWith("# polajuice recipe")) return text;
+    }
+    i += 2 + len;
+  }
+  return null;
+}
+
+/* the geometry line the engine writes after the recipe: where the
+ * picture landed in the render, for lining up a comparison image */
+function parseGeometry(text) {
+  const m = text && text.match(/^# geometry in=(\d+),(\d+) crop=(\d+),(\d+),(\d+),(\d+) place=(\d+),(\d+) out=(\d+),(\d+)(?: orig=(\d+),(\d+) trim=(\d+),(\d+) rot=(-?[\d.]+))?$/m);
+  if (!m) return null;
+  const n = m.slice(1).map(x => x === undefined ? undefined : Number(x));
+  return { inW: n[0], inH: n[1], cropX: n[2], cropY: n[3], cropW: n[4], cropH: n[5],
+           placeX: n[6], placeY: n[7], outW: n[8], outH: n[9],
+           origW: n[10] ?? n[0], origH: n[11] ?? n[1], trimX: n[12] ?? 0, trimY: n[13] ?? 0, rot: n[14] ?? 0 };
+}
+function stripGeometry(text) { return text ? text.replace(/^# geometry .*\n?/m, "") : text; }
+let renderGeometry = null;   /* of the last render() that returned */
+let renderCaption = "";      /* its caption; the view decides when to show it */
+
+function parseRecipe(text) {
+  const r = {};
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq < 0) continue;
+    r[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+  }
+  return r;
+}
+
+/* what the page would send: a recipe built from the controls, for the
+ * CLI line before any render has happened */
+const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
+                    "denoise", "distortion", "devignette", "rotate", "trimx", "trimy", "trimw", "trimh"];
+/* the trim is four margins in the page (left, top, right, bottom, in %)
+ * and x, y, width, height in fractions in the recipe */
+function trimFromControls() {
+  const l = parseFloat($("trimleft").value) / 100 || 0, t = parseFloat($("trimtop").value) / 100 || 0;
+  const r = parseFloat($("trimright").value) / 100 || 0, b = parseFloat($("trimbottom").value) / 100 || 0;
+  const w = Math.max(0, 1 - l - r), h = Math.max(0, 1 - t - b);
+  const any = l || t || r || b;
+  return { trimx: any ? +l.toFixed(4) : 0, trimy: any ? +t.toFixed(4) : 0, trimw: any ? +w.toFixed(4) : 0, trimh: any ? +h.toFixed(4) : 0 };
+}
+function trimToControls(r) {
+  const x = parseFloat(r.trimx ?? 0) || 0, y = parseFloat(r.trimy ?? 0) || 0;
+  const w = parseFloat(r.trimw ?? 0) || 0, h = parseFloat(r.trimh ?? 0) || 0;
+  const on = w > 0 && h > 0;
+  $("trimleft").value = on ? (x * 100).toFixed(1) : "0";
+  $("trimtop").value = on ? (y * 100).toFixed(1) : "0";
+  $("trimright").value = on ? ((1 - x - w) * 100).toFixed(1) : "0";
+  $("trimbottom").value = on ? ((1 - y - h) * 100).toFixed(1) : "0";
+}
+function sceneFromControls() {
+  const o = {};
+  for (const k of SCENE_KEYS) if (!k.startsWith("trim")) o[k] = parseFloat($(k).value) || 0;
+  return { ...o, ...trimFromControls() };
+}
+function recipeFromControls() {
+  const stem = customCube ? customCube.stem : resolveFilmStem();
+  const printStem = $("print") && $("print").value !== "__none__" ? $("print").value : "none";
+  return {
+    camera: $("camera").value, film: stem || "none", print: printStem,
+    filter: $("filter").value || "none",
+    strength: String(parseFloat($("strength").value)),
+    develop: $("develop").value, age: String(parseFloat($("age").value)),
+    grain: $("grain").value, edge: String(parseFloat($("edge").value)),
+    ev: String(parseFloat($("ev").value)), halation: String(parseFloat($("halation").value)),
+    seed: String(parseInt($("seed").value, 10) || 0),
+    crop: $("crop").value === "full" ? "full" : "camera",
+    ...Object.fromEntries(Object.entries(sceneFromControls()).map(([k, v]) => [k, String(v)])) };
+}
+
+function cliLine(r) {
+  const q = s => /^[A-Za-z0-9_.+\-\/]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`;
+  const parts = ["polajuice", "apply", q(inputName + "." + inputExt), "-c", q(r.camera)];
+  if (r.film === "none") parts.push("--no-film");
+  else if (r.film && r.film !== "auto") parts.push("-f", q(r.film));
+  if (r.print && r.print !== "none") parts.push("--print", q(r.print));
+  if (r.filter && r.filter !== "none") parts.push("--filter", r.filter);
+  if (r.strength !== undefined && parseFloat(r.strength) !== 1) parts.push("--strength", r.strength);
+  if (r.develop && r.develop !== "normal") parts.push("--develop", r.develop);
+  if (r.age && parseFloat(r.age) !== 0) parts.push("--age", r.age);
+  if (r.grain && r.grain !== "classic") parts.push("--grain", r.grain);
+  if (r.edge && parseFloat(r.edge) !== 0) parts.push("--edge", r.edge);
+  if (r.ev && parseFloat(r.ev) !== 0) parts.push("--ev", r.ev);
+  if (r.halation !== undefined && parseFloat(r.halation) !== 1) parts.push("--halation", r.halation);
+  if (r.seed !== undefined) parts.push("--seed", r.seed);
+  if (r.crop === "full") parts.push("--crop", "full");
+  for (const k of SCENE_KEYS) if (r[k] !== undefined && parseFloat(r[k]) !== 0) parts.push("--" + k, r[k]);
+  return parts.join(" ");
+}
+
+function recipeText(r) {
+  return ["# polajuice recipe 1", `camera=${r.camera}`, `film=${r.film}`, `print=${r.print}`,
+          `filter=${r.filter}`, `strength=${r.strength}`, `develop=${r.develop}`,
+          `age=${r.age}`, `grain=${r.grain}`, `edge=${r.edge}`, `ev=${r.ev}`,
+          `halation=${r.halation}`, `seed=${r.seed}`, `crop=${r.crop || "camera"}`,
+          ...SCENE_KEYS.map(k => `${k}=${r[k] ?? 0}`), ""].join("\n");
+}
+
+function showRecipe(text) {
+  $("recipe").value = text;
+  $("cli").textContent = cliLine(parseRecipe(text));
+}
+
+function refreshRecipeFromControls() {
+  showRecipe(recipeText(recipeFromControls()));
+}
+
+/* set the controls from a recipe; returns a note about anything that
+ * could not be honored */
+function applyRecipe(r) {
+  const notes = [];
+  if (r.camera) {
+    const cam = $("camera");
+    if ([...cam.options].some(o => o.value === r.camera)) {
+      cam.value = r.camera;
+      cam.dispatchEvent(new Event("change"));
+    } else notes.push(`no camera '${r.camera}' here`);
+  }
+  if (r.film !== undefined) {
+    customCube = null;
+    if ($("cubefile")) $("cubefile").value = "";
+    const sel = $("film");
+    const want = r.film === "none" ? "__none__" : r.film === "auto" ? "__auto__" : r.film;
+    if ([...sel.options].some(o => o.value === want)) sel.value = want;
+    else { sel.value = "__auto__"; notes.push(`film '${r.film}' is not staged here; using the canonical stock`); }
+  }
+  if (r.print !== undefined && $("print")) {
+    const want = r.print === "none" ? "__none__" : r.print;
+    if ([...$("print").options].some(o => o.value === want)) $("print").value = want;
+    else if (r.print !== "none") notes.push(`print stock '${r.print}' is not staged here`);
+  }
+  if (r.filter !== undefined) $("filter").value = r.filter === "none" ? "" : r.filter;
+  if (r.strength !== undefined) $("strength").value = r.strength;
+  if (r.develop !== undefined) {
+    const sel = $("develop");
+    if ([...sel.options].some(o => o.value === r.develop) || !sel.options.length) sel.value = r.develop;
+    else {
+      /* a fractional or out-of-list stop count: add it as a choice */
+      sel.add(new Option(r.develop, r.develop));
+      sel.value = r.develop;
+    }
+  }
+  if (r.crop !== undefined) $("crop").value = r.crop === "full" ? "full" : "camera";
+  for (const k of SCENE_KEYS) if (r[k] !== undefined && !k.startsWith("trim")) $(k).value = r[k];
+  if (r.trimw !== undefined || r.trimx !== undefined) trimToControls(r);
+  if (r.age !== undefined) $("age").value = r.age;
+  if (r.grain !== undefined) $("grain").value = r.grain;
+  if (r.edge !== undefined) $("edge").value = r.edge;
+  if (r.ev !== undefined) $("ev").value = r.ev;
+  if (r.halation !== undefined) $("halation").value = r.halation;
+  if (r.seed !== undefined) $("seed").value = r.seed;
+  syncValueLabels();
+  refreshRecipeFromControls();
+  return notes.join("; ");
+}
+
+/* ---- kept looks (localStorage, this browser only) ------------------ */
+const STORE_KEY = "polajuice.looks";
+function loadLooks() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch (e) { return {}; }
+}
+function saveLooks(looks) {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(looks)); } catch (e) { /* private mode */ }
+}
+let serverLooks = {};   /* name -> text, when the engine is native */
+async function refreshPresetList() {
+  const sel = $("presets");
+  if (!sel) return;
+  const previous = sel.value;
+  let names;
+  if (engine && engine.native) {
+    try {
+      serverLooks = {};
+      for (const l of await engine.looks()) serverLooks[l.name] = l.text;
+    } catch (e) { setStatus("cannot read looks/: " + e.message, true); }
+    names = Object.keys(serverLooks);
+  } else names = Object.keys(loadLooks());
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  sel.add(new Option("—", ""));
+  for (const name of names.sort()) sel.add(new Option(name, name));
+  sel.value = [...sel.options].some(o => o.value === previous) ? previous : "";
+}
+function lookText(name) {
+  return engine && engine.native ? serverLooks[name] : loadLooks()[name];
+}
+
+/* ---- boot ----------------------------------------------------------- */
+async function boot() {
+  const wasm = await (await fetch("polajuice.wasm")).arrayBuffer();
+  wasmEngine = await createEngine(new Uint8Array(wasm));
+  engine = wasmEngine;
+  const native = await probeNativeEngine("");
+  if (native) {
+    engine = native;
+    $("enginetag").textContent = `native engine, ${native.info.threads} threads — folder ${native.info.dir}`;
+    $("export").style.display = "";
+    $("batch").style.display = "";
+    $("presetslabel").textContent = "Kept looks (looks/ beside the engine)";
+  }
+  const engineVersion = await engine.version();
+  $("version").textContent = "v" + engineVersion;
+  if (engineVersion !== PAGE_VERSION) {
+    /* the browser can cache index.html while re-fetching the wasm; the
+     * halves then disagree and features quietly go missing - say so */
+    setStatus(`page ${PAGE_VERSION} / engine ${engineVersion} version ` +
+              `mismatch - hard-refresh (Ctrl+Shift+R) to update the page`, true);
+  }
+
+  const cameraSel = $("camera");
+  const cameraList = await engine.cameras();
+  for (const cam of cameraList) {
+    const opt = new Option(`${cam.name} — ${cam.description}`, cam.name);
+    opt.dataset.film = cam.film || "";
+    opt.dataset.instant = cam.instant ? "1" : "";
+    cameraSel.add(opt);
+  }
+  function currentCamera() {
+    return cameraList.find(c => c.name === cameraSel.value) || cameraList[0];
+  }
+  function rebuildFilmSelect() {
+    const cam = currentCamera();
+    const sel = $("film");
+    const previous = sel.value;
+    /* remove every child - options AND optgroup shells; clearing only
+     * sel.options leaves the previous camera's group elements behind */
+    while (sel.firstChild) sel.removeChild(sel.firstChild);
+    if (cam.processes.length === 0) {
+      sel.add(new Option("sealed process — no film", "__none__"));
+      sel.value = "__none__";
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sel.add(new Option("canonical (auto)", "__auto__"));
+    sel.add(new Option("none — scalar engine", "__none__"));
+    for (const family of filmFamilies) {
+      if (family.process === "print") continue;   /* print is its own axis */
+      const token = familyToken(family);
+      if (token && !cam.processes.includes(token)) continue;
+      const group = document.createElement("optgroup");
+      group.label = family.process ? `${family.name} (${family.process})`
+                                   : family.name;
+      for (const stock of family.stocks)
+        group.append(new Option(stock.stem, stock.stem));
+      sel.append(group);
+    }
+    sel.value = [...sel.options].some(o => o.value === previous)
+              ? previous : "__auto__";
+  }
+  function syncCompat() {
+    const cam = currentCamera();
+    $("develop").disabled = cam.instant;
+    if (cam.instant) $("develop").value = "normal";
+    $("edge").disabled = cam.instant;
+    /* the format choice only means something for cameras that crop */
+    $("crop").disabled = !cam.format;
+    $("cropval").textContent = cam.format ? cam.format : "no crop";
+    rebuildFilmSelect();
+  }
+  /* one handler per element and event: the camera's change does the
+   * compatibility rebuild and then asks for a render */
+  cameraSel.addEventListener("change", () => { syncCompat(); onControlChange(); });
+  try {
+    const manifest = await (await fetch("films/films.json")).json();
+    if (Array.isArray(manifest))
+      filmFamilies = [{ name: "Films", note: "", stocks:
+        manifest.map(f => typeof f === "string" ? { stem: f, blurb: "" } : f) }];
+    else
+      filmFamilies = Array.isArray(manifest.families) ? manifest.families : [];
+    films = filmFamilies.flatMap(f => f.stocks);
+  } catch (e) {
+    setStatus("no films/ manifest; canonical films unavailable, scalar engine only");
+  }
+  const printFamilies = filmFamilies.filter(f => f.process === "print");
+  if (printFamilies.length) {
+    $("printcontrol").style.display = "";
+    for (const family of printFamilies)
+      for (const stock of family.stocks)
+        $("print").add(new Option(stock.stem, stock.stem));
+  }
+  syncCompat();
+
+  const camHelp = $("helpcameras");
+  for (const cam of cameraList) {
+    const dt = document.createElement("dt"); dt.textContent = cam.name;
+    const dd = document.createElement("dd");
+    const filmsLine = cam.processes.length
+        ? `takes: ${cam.processes.join(", ")}` : "sealed process — takes no film";
+    dd.innerHTML = `${cam.description}.<br><span class="traits">${cam.traits}</span>` +
+      `<br><span class="traits">${filmsLine}</span>` +
+      (cam.film ? `<br><span class="traits">canonical film: ${cam.film}</span>` : "");
+    camHelp.append(dt, dd);
+  }
+  const filmHelp = $("helpfilms");
+  for (const family of filmFamilies) {
+    const dt = document.createElement("dt");
+    dt.textContent = family.process ? `${family.name} — ${family.process}`
+                                    : family.name;
+    const dd = document.createElement("dd");
+    dd.textContent = family.note || "";
+    filmHelp.append(dt, dd);
+    for (const stock of family.stocks) {
+      if (!stock.blurb) continue;
+      const sdd = document.createElement("dd");
+      sdd.innerHTML = `<span class="traits">${stock.stem}:</span> ${stock.blurb}`;
+      filmHelp.append(sdd);
+    }
+  }
+  try {
+    const sm = await (await fetch("samples/samples.json")).json();
+    const strip = $("samplestrip");
+    for (const sample of sm.samples) {
+      const fig = document.createElement("figure");
+      const img = document.createElement("img");
+      img.src = `samples/${sample.thumb}`;
+      img.alt = sample.caption;
+      img.loading = "lazy";
+      const cap = document.createElement("figcaption");
+      cap.textContent = sample.caption;
+      fig.append(img, cap);
+      fig.addEventListener("click", () => useSample(sample));
+      strip.append(fig);
+    }
+    const credit = document.createElement("span");
+    credit.className = "credit";
+    credit.textContent = sm.credit;
+    strip.append(credit);
+  } catch (e) { /* no samples staged; the drop zone is enough */ }
+
+  wireCustomCube();
+  await refreshPresetList();
+  refreshRecipeFromControls();
+  if (engine.native) await listFolder();
+  setStatus(engine.native ? "ready — pick an image from the folder, or drop one"
+                          : "ready — drop a photo, or click a sample");
+}
+
+/* the served folder's images become strip entries rendered by name */
+async function listFolder() {
+  try {
+    const files = await engine.files();
+    for (const f of files) {
+      if (images.some(im => im.serverName === f.name)) continue;
+      const raw = /^(nef|dng)$/i.test(f.ext);
+      images.push({ name: f.name, ext: f.ext.toLowerCase() === "jpeg" ? "jpg" : f.ext.toLowerCase(),
+                    bytes: null, serverName: f.name,
+                    url: raw ? engine.developUrl(f.name, 1600) : engine.fileUrl(f.name),
+                    thumb: raw ? engine.developUrl(f.name, 240) : engine.fileUrl(f.name) });
+    }
+    refreshThumbs();
+  } catch (e) { setStatus("cannot list the folder: " + e.message, true); }
+}
+
+function wireCustomCube() {
+  const input = $("cubefile");
+  if (!input) return;
+  input.addEventListener("change", async () => {
+    const f = input.files && input.files[0];
+    if (!f) { customCube = null; return; }
+    customCube = { stem: f.name.replace(/\.cube$/i, ""),
+                   text: await f.text() };
+    setStatus(`custom film loaded: ${customCube.stem}`);
+    onControlChange();
+  });
+  $("film").addEventListener("change", () => {
+    if (customCube) {
+      customCube = null;
+      input.value = "";
+      setStatus("custom film cleared - using the catalog again");
+    }
+    onControlChange();
+  });
+}
+
+async function loadFilmCube(stem) {
+  if (!filmCache.has(stem)) {
+    const res = await fetch(`films/${stem}.cube`);
+    if (!res.ok) throw new Error(`film '${stem}' not found under films/`);
+    filmCache.set(stem, await res.text());
+  }
+  return filmCache.get(stem);
+}
+
+function resolveFilmStem() {
+  const chosen = $("film").value;
+  if (chosen === "__none__") return null;
+  if (chosen !== "__auto__") return chosen;
+  const canonical = $("camera").selectedOptions[0].dataset.film;
+  return canonical && films.some(f => f.stem === canonical) ? canonical : null;
+}
+
+/* ---- rendering ------------------------------------------------------ */
+function previewSize() {
+  const vp = $("viewport");
+  const w = vp && vp.clientWidth ? vp.clientWidth : 1400;
+  const h = vp && vp.clientHeight ? vp.clientHeight : 1000;
+  const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+  return Math.max(800, Math.min(2000, Math.round(Math.max(w, h) * dpr)));
+}
+
+/* the look as render parameters: from the controls, or from a recipe
+ * object (what parseRecipe gives) for renders of a pinned look */
+function lookFromRecipe(r) {
+  const stem = r.film === "none" || r.film === "auto" || !r.film ? null : r.film;
+  return {
+    camera: r.camera, stem, filmStem: stem, filmChoice: r.film === "none" ? "none" : stem ? "stem" : "auto",
+    custom: !!(customCube && stem && customCube.stem === stem),
+    printStem: r.print && r.print !== "none" ? r.print : null,
+    filter: r.filter && r.filter !== "none" ? r.filter : null,
+    strength: parseFloat(r.strength ?? 1), seed: parseInt(r.seed ?? 42, 10) || 0,
+    age: parseFloat(r.age ?? 0), develop: r.develop || "normal",
+    grainModel: r.grain || "classic", edge: parseFloat(r.edge ?? 0),
+    ev: parseFloat(r.ev ?? 0), halation: parseFloat(r.halation ?? 1),
+    crop: r.crop === "full" ? "full" : "camera",
+    scene: Object.fromEntries(SCENE_KEYS.map(k => [k, parseFloat(r[k] ?? 0) || 0])) };
+}
+function lookFromControls() {
+  const stem = customCube ? customCube.stem : resolveFilmStem();
+  const filmChoice = $("film").value === "__none__" ? "none" : $("film").value === "__auto__" ? "auto" : "stem";
+  return {
+    camera: $("camera").value, stem, filmStem: stem, filmChoice, custom: !!customCube,
+    printStem: $("print") && $("print").value !== "__none__" ? $("print").value : null,
+    filter: $("filter").value || null,
+    strength: parseFloat($("strength").value), seed: parseInt($("seed").value, 10) || 0,
+    age: parseFloat($("age").value), develop: $("develop").value,
+    grainModel: $("grain").value, edge: parseFloat($("edge").value),
+    ev: parseFloat($("ev").value), halation: parseFloat($("halation").value),
+    crop: $("crop").value === "full" ? "full" : "camera", scene: sceneFromControls() };
+}
+
+/* maxDim 0 = full size; overrides patch the look (brackets); quiet
+ * skips status, caption and the recipe box (brackets, the loupe);
+ * fromRecipe renders a recipe object instead of the controls (A) */
+async function render(maxDim, overrides, quiet, fromRecipe) {
+  if ((!inputBytes && !inputServerName) || !engine) return null;
+  overrides = overrides || {};
+  if (!quiet) setStatus("rendering…");
+  await new Promise(r => setTimeout(r, 20));
+  try {
+    const look = fromRecipe ? lookFromRecipe(fromRecipe) : lookFromControls();
+    const stem = look.stem;
+    /* a custom cube is text the server has no file for: the wasm engine
+     * takes that render; everything else goes to the engine in charge */
+    let eng = engine;
+    if (look.custom && engine.native) {
+      eng = wasmEngine;
+      if (!inputBytes) inputBytes = new Uint8Array(await (await fetch(engine.fileUrl(inputServerName))).arrayBuffer());
+    }
+    const cubeText = eng.native ? null
+                   : look.custom ? customCube.text : (stem ? await loadFilmCube(stem) : null);
+    const family = (!look.custom && stem)
+        ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
+    const filmProcess = family ? familyToken(family) : null;
+    const printCubeText = look.printStem && !eng.native ? await loadFilmCube(look.printStem) : null;
+    const t0 = performance.now();
+    const params = {
+      inputBytes, ext: inputExt, name: eng.native ? inputServerName : null,
+      camera: look.camera, cubeText, filmChoice: look.filmChoice,
+      filmProcess, filmStem: stem, printCubeText,
+      filter: look.filter, strength: look.strength, seed: look.seed, age: look.age,
+      develop: look.develop, maxDim, grainModel: look.grainModel, edge: look.edge,
+      ev: look.ev, halation: look.halation, printStem: look.printStem, crop: look.crop,
+      scene: { ...look.scene } };
+    /* a bracket's override of a scene key goes into the scene */
+    for (const [k, v] of Object.entries(overrides))
+      if (SCENE_KEYS.includes(k)) params.scene[k] = v; else params[k] = v;
+    const out = await eng.render(params);
+    const recipe = readJpegComment(out);
+    renderGeometry = parseGeometry(recipe);
+    if (quiet) return new Blob([out], { type: "image/jpeg" });
+    const secs = ((performance.now() - t0) / 1000).toFixed(secs_digits(performance.now() - t0));
+    setStatus(`rendered in ${secs}s` + (stem ? ` — film: ${stem}` : " — scalar engine") +
+              (eng.native ? "" : (engine.native ? " (wasm, custom cube)" : "")));
+    renderCaption = `rendered — ${look.camera}` + (stem ? ` / ${stem}` : "") +
+      (maxDim ? ` (preview, long edge ${maxDim}px)` : " (full size)");
+    if (recipe) showRecipe(stripGeometry(recipe));
+    return new Blob([out], { type: "image/jpeg" });
+  } catch (e) {
+    if (!quiet) setStatus(e.message, true);
+    return null;
+  }
+}
+
+function secs_digits(ms) { return ms < 1000 ? 2 : 1; }
+
+function showView(which) {
+  view = which;
+  for (const [id, v] of [["viewOriginal", "original"], ["viewA", "A"], ["viewB", "B"]])
+    $(id).className = v === which ? "on" : "";
+  let src = which === "original" ? originalUrl
+          : which === "A" ? (pinned && pinned.url)
+          : (lastRender && lastRender.url) || originalUrl;
+  const full = src ? fullFor(which === "A" ? "A" : which === "original" ? "original" : "B") : null;
+  if (full) src = full.url;
+  if (src && $("view").src !== src) $("view").src = src;
+  if (which === "A" && pinned) $("aftercap").textContent = "A — " + pinned.caption;
+  else if (which === "original") $("aftercap").textContent = "original — " + inputName + "." + inputExt;
+  else if (lastRender) $("aftercap").textContent = lastRender.caption;
+  if (src) updateHistogram(src);
+  composeStage();
+  $("loupe").style.display = "none";
+  if (loupeOn && src) ensureFull(shownKind());
+}
+
+async function renderPreview() {
+  if (rendering) { renderAgain = true; return; }
+  rendering = true;
+  try {
+    const blob = await render(previewSize());
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      lastRender = { blob, url, recipe: $("recipe").value, caption: renderCaption, geometry: renderGeometry };
+      $("after").src = url;
+      /* a render is what the knobs asked to see: show it, unless the
+       * original is being glanced at with the key held */
+      if (!glance) showView("B");
+      else composeStage();   /* the current may be the wipe's left side */
+    }
+  } finally {
+    rendering = false;
+    if (renderAgain) { renderAgain = false; renderPreview(); }
+  }
+}
+
+function scheduleRender() {
+  if (!inputBytes && !inputServerName) return;
+  if (renderTimer) clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => { renderTimer = null; renderPreview(); }, 250);
+}
+
+/* any control: labels, the recipe box, and a debounced preview */
+function onControlChange() {
+  syncValueLabels();
+  refreshRecipeFromControls();
+  scheduleRender();
+}
+
+function syncValueLabels() {
+  $("strengthval").textContent = parseFloat($("strength").value).toFixed(2);
+  const age = parseFloat($("age").value);
+  $("ageval").textContent = age === 0 ? "fresh" : age.toFixed(2);
+  const edge = parseFloat($("edge").value);
+  $("edgeval").textContent = edge === 0 ? "off" : edge.toFixed(1);
+  const ev = parseFloat($("ev").value);
+  $("evval").textContent = (ev > 0 ? "+" : "") + ev.toFixed(1);
+  const hal = parseFloat($("halation").value);
+  $("halval").textContent = hal === 0 ? "off" : hal.toFixed(1);
+  const signed = (v, d) => (v > 0 ? "+" : "") + v.toFixed(d);
+  $("tempval").textContent = signed(parseFloat($("temp").value), 2);
+  $("tintval").textContent = signed(parseFloat($("tint").value), 2);
+  $("blackval").textContent = signed(parseFloat($("black").value), 3);
+  $("shadowsval").textContent = signed(parseFloat($("shadows").value), 1);
+  $("highlightsval").textContent = signed(parseFloat($("highlights").value), 1);
+  $("contrastval").textContent = signed(parseFloat($("contrast").value), 2);
+  const grad = parseFloat($("grad").value);
+  $("gradval").textContent = grad === 0 ? "off" : grad.toFixed(1) + " stops";
+  const ga = parseFloat($("gradangle").value) % 360;
+  $("gradangleval").textContent = ga === 0 ? "top" : ga === 90 ? "right" : ga === 180 ? "bottom" : ga === 270 ? "left" : ga + "°";
+  const gp = parseFloat($("gradpos").value);
+  $("gradposval").textContent = gp === 0 ? "center" : signed(gp, 2);
+  const dn = parseFloat($("denoise").value);
+  $("denoiseval").textContent = dn === 0 ? "off" : dn.toFixed(1);
+  $("distortionval").textContent = signed(parseFloat($("distortion").value), 2);
+  const dv = parseFloat($("devignette").value);
+  $("devignetteval").textContent = dv === 0 ? "off" : dv.toFixed(1) + " stops";
+  $("rotateval").textContent = signed(parseFloat($("rotate").value), 1) + "°";
+  const tr = trimFromControls();
+  $("trimval").textContent = tr.trimw ? `${(tr.trimw * 100).toFixed(0)}% × ${(tr.trimh * 100).toFixed(0)}%` : "none";
+}
+
+/* ---- images --------------------------------------------------------- */
+function refreshThumbs() {
+  const box = $("thumbs");
+  if (!box) return;
+  while (box.firstChild) box.removeChild(box.firstChild);
+  images.forEach((im, i) => {
+    const fig = document.createElement("figure");
+    fig.className = i === current ? "on" : "";
+    const img = document.createElement("img");
+    img.src = im.thumb || im.url; img.alt = im.name;
+    img.loading = "lazy";
+    const cap = document.createElement("figcaption");
+    cap.textContent = im.name;
+    fig.append(img, cap);
+    /* a thumbnail the server could not make (a raw the decoder refuses,
+     * say): show the decoder's reason in its place, not a broken icon */
+    img.addEventListener("error", async () => {
+      const note = document.createElement("div");
+      note.className = "broken";
+      note.textContent = "cannot decode";
+      try {
+        if (im.thumb && engine && engine.native) {
+          const r = await fetch(im.thumb, { cache: "no-store" });
+          const j = await r.json();
+          if (j && j.error) note.textContent = j.error.replace(/^polajuice: /, "");
+        }
+      } catch (e) { /* keep the generic note */ }
+      note.title = note.textContent;
+      im.error = note.textContent;
+      if (img.parentNode === fig) fig.replaceChild(note, img);
+    });
+    fig.addEventListener("click", () => selectImage(i));
+    box.append(fig);
+  });
+}
+
+function selectImage(i) {
+  current = i;
+  const im = images[i];
+  inputBytes = im.bytes; inputExt = im.ext;
+  inputServerName = im.serverName || null;
+  inputName = im.name.replace(/\.[^.]+$/, "");
+  originalUrl = im.url;
+  $("export").disabled = !inputServerName;
+  $("batch").disabled = !(engine && engine.native);
+  lastRender = null;
+  $("before").src = im.url;
+  $("render").disabled = $("download").disabled = false;
+  fullCache.clear();
+  refreshThumbs();
+  refreshRecipeFromControls();
+  showView("original");
+  fetchSensorStats();
+  scheduleRender();
+}
+
+async function acceptBytes(bytes, name) {
+  const m = /\.(png|nef|dng)$/i.exec(name);
+  const ext = m ? m[1].toLowerCase() : "jpg";
+  let url;
+  if (ext === "nef" || ext === "dng") {
+    /* the browser cannot show a raw file: the engine prints it straight */
+    setStatus(`decoding ${name}…`);
+    try {
+      const jpg = await engine.develop({ inputBytes: bytes, ext, maxDim: 1400 });
+      url = URL.createObjectURL(new Blob([jpg], { type: "image/jpeg" }));
+      setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB raw — straight print shown)`);
+    } catch (e) {
+      setStatus(`cannot decode ${name}: ${e.message}`, true);
+      return;
+    }
+  } else {
+    url = URL.createObjectURL(new Blob([bytes]));
+    setStatus(`loaded ${name} (${(bytes.length/1048576).toFixed(1)} MB)`);
+  }
+  images.push({ name, ext, bytes, url });
+  selectImage(images.length - 1);
+}
+
+function acceptFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => acceptBytes(new Uint8Array(reader.result), file.name);
+  reader.readAsArrayBuffer(file);
+}
+
+async function useSample(sample) {
+  setStatus(`fetching ${sample.file}…`);
+  const res = await fetch(`samples/${sample.file}`);
+  if (!res.ok) { setStatus(`sample not found: ${sample.file}`, true); return; }
+  if (sample.suggest) {
+    $("camera").value = sample.suggest;
+    /* setting .value programmatically fires no "change" event, so the
+     * compatibility rebuild (film dropdown, develop enable) must be
+     * triggered explicitly - the bug that once let a Polaroid stock ride
+     * along onto a slide camera via a sample click */
+    $("camera").dispatchEvent(new Event("change"));
+  }
+  await acceptBytes(new Uint8Array(await res.arrayBuffer()), sample.file);
+  if (sample.suggest) setStatus(`loaded ${sample.file} — ${sample.suggest}`);
+}
+
+/* ---- wiring --------------------------------------------------------- */
+$("drop").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", e => { for (const f of e.target.files || []) acceptFile(f); });
+["dragover","dragleave","drop"].forEach(ev =>
+  $("drop").addEventListener(ev, e => {
+    e.preventDefault();
+    $("drop").classList.toggle("armed", ev === "dragover");
+    if (ev === "drop") for (const f of e.dataTransfer.files || []) acceptFile(f);
+  }));
+for (const id of ["strength", "age", "edge", "ev", "halation", ...SCENE_KEYS.filter(k => !k.startsWith("trim")),
+                  "trimleft", "trimtop", "trimright", "trimbottom"])
+  $(id).addEventListener("input", onControlChange);
+for (const id of ["filter", "print", "develop", "grain", "seed", "crop"])
+  $(id).addEventListener("change", onControlChange);
+
+$("render").addEventListener("click", async () => {
+  if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+  const blob = await render(1400);
+  if (blob) {
+    const url = URL.createObjectURL(blob);
+    lastRender = { blob, url, recipe: $("recipe").value, caption: renderCaption, geometry: renderGeometry };
+    $("after").src = url;
+    showView("B");
+  }
+});
+$("download").addEventListener("click", async () => {
+  const blob = await render(0);
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  lastRender = { blob, url, recipe: $("recipe").value, caption: renderCaption, geometry: renderGeometry };
+  $("after").src = url;
+  showView("B");
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${inputName}_${$("camera").value}.jpg`;
+  link.click();
+});
+
+$("viewOriginal").addEventListener("click", () => showView("original"));
+$("viewA").addEventListener("click", () => { if (pinned) showView("A"); });
+$("viewB").addEventListener("click", () => showView("B"));
+$("pinA").addEventListener("click", () => {
+  if (!lastRender) { setStatus("render something first, then pin it", true); return; }
+  pinned = { ...lastRender };
+  $("viewA").disabled = false;
+  setStatus("pinned as A — change the look, then flip between A and current (key: a)");
+});
+$("one2one").addEventListener("click", () => {
+  const vp = $("viewport");
+  const on = !oneToOne();
+  vp.className = on ? "one2one" : "";
+  $("one2one").className = on ? "small on" : "small secondary";
+  if (on) setStatus("1:1 — the pixels of the full-size render (made once per look)");
+  showView(view);
+});
+
+/* ---- comparison tools: wipe, histogram and clipping, loupe, bracket --- */
+let wipeOn = false, wipeX = 0.5, wipeDrag = false;
+let clipOn = false, loupeOn = false;
+let histSrc = null;
+
+/* the rectangle the displayed image occupies inside the viewport; every
+ * overlay is laid on exactly that */
+function viewRect() {
+  const v = $("view");
+  return { left: v.offsetLeft || 0, top: v.offsetTop || 0,
+           width: v.clientWidth || v.width || 0, height: v.clientHeight || v.height || 0 };
+}
+function placeOverlay(el, r) {
+  el.style.left = r.left + "px"; el.style.top = r.top + "px";
+  el.style.width = r.width + "px"; el.style.height = r.height + "px";
+}
+/* ---- the three images and where their pictures sit -------------------
+ * Every image on the page is the input seen through some geometry: the
+ * original is the input itself (identity), a render is a crop of the
+ * input placed in an output (inside a border, for a print). Geometries
+ * are brought to one input scale, so a preview and a full-size render
+ * of the same input compare. */
+function identityGeometry(w, h) {
+  return { inW: w, inH: h, cropX: 0, cropY: 0, cropW: w, cropH: h, placeX: 0, placeY: 0, outW: w, outH: h,
+           origW: w, origH: h, trimX: 0, trimY: 0, rot: 0 };
+}
+function scaleGeometry(g, k) {
+  if (!g || k === 1) return g;
+  const o = {};
+  for (const key of Object.keys(g)) o[key] = key === "rot" ? g[key] : g[key] * k;
+  return o;
+}
+/* the input's size as the current render saw it; the original's own
+ * pixel size when nothing has been rendered yet */
+function referenceInput() {
+  if (lastRender && lastRender.geometry) return [lastRender.geometry.origW, lastRender.geometry.origH];
+  if (pinned && pinned.geometry) return [pinned.geometry.origW, pinned.geometry.origH];
+  const v = $("view");
+  return [v.naturalWidth || v.clientWidth || 1, v.naturalHeight || v.clientHeight || 1];
+}
+function oneToOne() { return /\bone2one\b/.test($("viewport").className); }
+/* at 1:1 the page shows full-size renders: the entry for a kind when it
+ * has been made (and asks for it when not) */
+function fullFor(kind) {
+  if (!oneToOne()) return null;
+  const have = fullCache.get(fullKeyFor(kind));
+  if (have && have !== "pending" && have.w) return have;
+  if (!have) ensureFull(kind);
+  return null;
+}
+function imageInfo(kind) {
+  const full = fullFor(kind);
+  if (full && full.geometry) {
+    /* full-size pixels: geometries in the full render's own units */
+    const g = { ...full.geometry };
+    return { kind, url: full.url, geometry: g, full: true };
+  }
+  const [rw, rh] = referenceInput();
+  if (kind === "original") return originalUrl ? { kind, url: originalUrl, geometry: identityGeometry(rw, rh) } : null;
+  if (kind === "A") {
+    if (!(pinned && pinned.url)) return null;
+    const g = pinned.geometry ? scaleGeometry(pinned.geometry, rw / pinned.geometry.origW) : identityGeometry(rw, rh);
+    return { kind, url: pinned.url, geometry: g };
+  }
+  if (!(lastRender && lastRender.url)) return null;
+  const g = lastRender.geometry ? scaleGeometry(lastRender.geometry, rw / lastRender.geometry.origW) : identityGeometry(rw, rh);
+  return { kind: "B", url: lastRender.url, geometry: g };
+}
+function shownInfo() { return imageInfo(shownKind()); }
+/* ---- the stage: one place composes what is on screen ----------------
+ * The base image is the view (original / A / current, the buttons). With
+ * the wipe on, the image chosen as "left" is laid over it at the input's
+ * pixel scale so the two pictures coincide, and shown left of the
+ * divider; whole, borders included, within the view's box. If the left
+ * choice is the view itself, the choice moves to its counterpart and
+ * the dropdown says so - nothing is swapped silently. */
+function shownKind() { return view === "A" ? "A" : view === "original" ? "original" : "B"; }
+function leftKind() {
+  const sel = $("wipeagainst");
+  let kind = sel.value || "original";
+  if (kind === "A" && !(pinned && pinned.url)) kind = "original";
+  if (kind === shownKind()) kind = shownKind() === "B" ? "original" : "B";
+  if (kind === "B" && !(lastRender && lastRender.url)) kind = "original";
+  if (sel.value !== kind) sel.value = kind;
+  return kind;
+}
+let wipeFrame = null;   /* the last composed frame, for the loupe: {ox, oy, sc, divider, left:{kind,x,y,w,h}} */
+function composeStage() {
+  const vp = $("viewport"), v = $("view"), ov = $("wipeimg"), bar = $("wipebar"), cc = $("clipcanvas");
+  const shown = shownInfo();
+  const left = wipeOn && shown ? imageInfo(leftKind()) : null;
+  const active = !!(left && left.kind !== shown.kind && shown.geometry.outW > 0);
+  $("wipeside").style.display = wipeOn ? "" : "none";
+  $("wipe").className = wipeOn ? "small on" : "small secondary";
+  vp.className = (vp.className.replace(/\bwiping\b/, "").trim() + (active ? " wiping" : "")).trim();
+  if (!active) {
+    /* the view alone: back to the stylesheet's fit, nothing clipped */
+    for (const k of ["position", "left", "top", "width", "height", "clipPath"]) v.style[k] = "";
+    ov.style.display = "none"; bar.style.display = "none";
+    cc.style.clipPath = "";
+    placeOverlay(cc, viewRect());
+    wipeFrame = null;
+    return;
+  }
+  /* Two images in one frame, nothing else. Left pixel u is input pixel
+   * u - placeL + cropL, which is shown pixel u - placeL + cropL - cropS
+   * + placeS: that offset puts the two pictures on top of each other.
+   * The frame is the union of the two extents in shown-output pixels,
+   * fitted to the viewport (or at 1:1); the view is clipped to the
+   * right of the divider, the left image to the left of it, and where
+   * either has no pixels the stage shows through. */
+  /* with trims: left pixel u is file pixel u - placeL + cropL + trimL, which
+   * is shown pixel that - trimS - cropS + placeS; a difference in
+   * straightening is a rotation of the left image about the file's center */
+  const gS = shown.geometry;
+  /* the left image's geometry in the shown image's units (a full-size
+   * shown against a preview left, or the reverse) */
+  const gL = scaleGeometry(left.geometry, gS.origW / left.geometry.origW);
+  const dx = gS.placeX - gS.cropX - gS.trimX + gL.trimX + gL.cropX - gL.placeX;
+  const dy = gS.placeY - gS.cropY - gS.trimY + gL.trimY + gL.cropY - gL.placeY;
+  const rotDiff = (gS.rot || 0) - (gL.rot || 0);
+  const minX = Math.min(0, dx), minY = Math.min(0, dy);
+  const maxX = Math.max(gS.outW, dx + gL.outW), maxY = Math.max(gS.outH, dy + gL.outH);
+  const uw = maxX - minX, uh = maxY - minY;
+  const one2one = /\bone2one\b/.test(vp.className);
+  const vw = vp.clientWidth || 1400, vh = vp.clientHeight || 900;
+  /* The wipe compares pictures, so the fit is on the pictures (the union
+   * of the two crop rectangles), not on the whole frame: a print's border
+   * would otherwise shrink the photo against a borderless camera. What
+   * lies outside the pictures (the Polaroid chin) runs off the viewport. */
+  const pMinX = Math.min(gS.placeX, dx + gL.placeX), pMinY = Math.min(gS.placeY, dy + gL.placeY);
+  const pMaxX = Math.max(gS.placeX + gS.cropW, dx + gL.placeX + gL.cropW);
+  const pMaxY = Math.max(gS.placeY + gS.cropH, dy + gL.placeY + gL.cropH);
+  const pw = Math.max(1, pMaxX - pMinX), ph = Math.max(1, pMaxY - pMinY);
+  const sc = one2one ? 1 : Math.min(vw / pw, vh / ph);
+  const ox = one2one ? Math.max(0, (vw - uw * sc) / 2) - minX * sc : (vw - pw * sc) / 2 - pMinX * sc;
+  const oy = one2one ? Math.max(0, (vh - uh * sc) / 2) - minY * sc : (vh - ph * sc) / 2 - pMinY * sc;
+  v.style.position = "absolute";
+  v.style.left = ox + "px"; v.style.top = oy + "px";
+  v.style.width = (gS.outW * sc) + "px"; v.style.height = (gS.outH * sc) + "px";
+  if (ov.src !== left.url) ov.src = left.url;
+  const lx = ox + dx * sc, ly = oy + dy * sc, lw = gL.outW * sc, lh = gL.outH * sc;
+  ov.style.left = lx + "px"; ov.style.top = ly + "px"; ov.style.width = lw + "px"; ov.style.height = lh + "px";
+  if (rotDiff) {
+    /* the file's center in the left image's own pixels */
+    const cxL = gL.origW / 2 - gL.trimX - gL.cropX + gL.placeX, cyL = gL.origH / 2 - gL.trimY - gL.cropY + gL.placeY;
+    ov.style.transformOrigin = `${(cxL * sc).toFixed(2)}px ${(cyL * sc).toFixed(2)}px`;
+    ov.style.transform = `rotate(${rotDiff}deg)`;
+  } else { ov.style.transform = ""; ov.style.transformOrigin = ""; }
+  const divider = ox + minX * sc + wipeX * uw * sc;
+  /* the view keeps what is right of the divider, the left image what is left of it */
+  const vClip = Math.min(Math.max(divider - ox, 0), gS.outW * sc);
+  v.style.clipPath = `inset(0 0 0 ${vClip.toFixed(2)}px)`;
+  const lClip = Math.min(Math.max(lx + lw - divider, 0), lw);
+  ov.style.clipPath = `inset(0 ${lClip.toFixed(2)}px 0 0)`;
+  ov.style.display = "block";
+  bar.style.left = divider + "px"; bar.style.top = (oy + minY * sc) + "px";
+  bar.style.height = (uh * sc) + "px"; bar.style.display = "block";
+  placeOverlay(cc, viewRect());
+  cc.style.clipPath = v.style.clipPath;
+  wipeFrame = { ox, oy, sc, divider, frameLeft: ox + minX * sc, frameWidth: uw * sc,
+                left: { kind: left.kind, x: lx, y: ly, w: lw, h: lh } };
+}
+function layoutOverlays() { composeStage(); }
+function setWipe(on) { wipeOn = on; composeStage(); }
+$("wipe").addEventListener("click", () => setWipe(!wipeOn));
+$("wipeagainst").addEventListener("change", composeStage);
+function wipeFromEvent(e) {
+  const vp = $("viewport");
+  const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
+  const px = e.clientX - rect.left + (vp.scrollLeft || 0);
+  /* the divider runs over the composed frame (both images), not the view alone */
+  const f = wipeFrame ? { left: wipeFrame.frameLeft, width: wipeFrame.frameWidth } : viewRect();
+  wipeX = Math.max(0, Math.min(1, (px - f.left) / (f.width || 1)));
+  composeStage();
+}
+$("viewport").addEventListener("pointerdown", e => {
+  if (!wipeOn || e.button !== 0) return;
+  wipeDrag = true; wipeFromEvent(e);
+  if (e.preventDefault) e.preventDefault();
+});
+$("viewport").addEventListener("pointermove", e => {
+  if (wipeDrag) wipeFromEvent(e);
+  if (loupeOn) moveLoupe(e);
+});
+$("viewport").addEventListener("pointerup", () => { wipeDrag = false; });
+$("viewport").addEventListener("pointerleave", () => { wipeDrag = false; $("loupe").style.display = "none"; });
+
+/* histogram and clipping: from the pixels of the view, sampled at up to
+ * 512 px wide; per channel, log scale; the clipping overlay paints a
+ * channel at white red and all three at black blue */
+async function updateHistogram(src) {
+  histSrc = src;
+  const canvas = $("histo");
+  if (typeof createImageBitmap !== "function" || !canvas.getContext || typeof document.createElement !== "function") return;
+  let bmp;
+  try { bmp = await createImageBitmap(await (await fetch(src)).blob()); }
+  catch (e) { return; }
+  if (histSrc !== src) { bmp.close && bmp.close(); return; }   /* a newer view came along */
+  const scale = Math.min(1, 512 / bmp.width);
+  const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+  const work = document.createElement("canvas");
+  work.width = w; work.height = h;
+  const wctx = work.getContext("2d", { willReadFrequently: true });
+  if (!wctx) return;
+  wctx.drawImage(bmp, 0, 0, w, h);
+  bmp.close && bmp.close();
+  const px = wctx.getImageData(0, 0, w, h).data;
+  const bins = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+  let hi = [0, 0, 0], lo = 0, n = w * h;
+  const clip = $("clipcanvas");
+  const paint = clipOn && clip.getContext;
+  let cctx = null, cimg = null;
+  if (paint) {
+    clip.width = w; clip.height = h;
+    cctx = clip.getContext("2d");
+    cimg = cctx.createImageData(w, h);
+  }
+  for (let i = 0, j = 0; i < n; ++i, j += 4) {
+    const r = px[j], g = px[j + 1], b = px[j + 2];
+    bins[0][r]++; bins[1][g]++; bins[2][b]++;
+    const anyHi = r >= 254 || g >= 254 || b >= 254;
+    const allLo = r <= 1 && g <= 1 && b <= 1;
+    if (r >= 254) hi[0]++; if (g >= 254) hi[1]++; if (b >= 254) hi[2]++;
+    if (allLo) lo++;
+    if (paint) {
+      const d = cimg.data;
+      if (anyHi) { d[j] = 255; d[j + 1] = 40; d[j + 2] = 40; d[j + 3] = 230; }
+      else if (allLo) { d[j] = 60; d[j + 1] = 90; d[j + 2] = 255; d[j + 3] = 230; }
+      else d[j + 3] = 0;
+    }
+  }
+  if (paint) { cctx.putImageData(cimg, 0, 0); clip.style.display = "block"; layoutOverlays(); }
+  else clip.style.display = "none";
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#1d1b18"; ctx.fillRect(0, 0, W, H);
+  let peak = 1;
+  for (const c of bins) for (let i = 1; i < 255; ++i) peak = Math.max(peak, c[i]);
+  const lp = Math.log(peak + 1);
+  const colors = ["rgba(230,70,70,0.75)", "rgba(80,210,90,0.65)", "rgba(80,120,255,0.7)"];
+  ctx.globalCompositeOperation = "lighter";
+  for (let c = 0; c < 3; ++c) {
+    ctx.fillStyle = colors[c];
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let i = 0; i < 256; ++i) {
+      const y = H - (Math.log(bins[c][i] + 1) / lp) * (H - 2);
+      ctx.lineTo(i * W / 256, y);
+    }
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+  const pct = v => (100 * v / n).toFixed(2) + "%";
+  let text = `clipped high: R ${pct(hi[0])}  G ${pct(hi[1])}  B ${pct(hi[2])}\ncrushed black: ${pct(lo)}`;
+  if (sensorStats) text += `\nsensor: ${sensorStats}`;
+  $("histtext").textContent = text;
+  canvas.dataset.clippedHigh = String(hi[0] + hi[1] + hi[2]);
+  canvas.dataset.crushed = String(lo);
+}
+let sensorStats = null;   /* from the native engine, for raw input */
+async function fetchSensorStats() {
+  sensorStats = null;
+  if (!(engine && engine.native && engine.stats && inputServerName)) return;
+  try {
+    const st = await engine.stats(inputServerName);
+    if (st && st.scene_linear)
+      sensorStats = `${st.stops_below_white.toFixed(2)} stops below white (mean), ${st.clipped_percent.toFixed(2)}% at sensor white`;
+  } catch (e) { sensorStats = null; }
+  if (histSrc) updateHistogram(histSrc);
+}
+$("clipwarn").addEventListener("click", () => {
+  clipOn = !clipOn;
+  $("clipwarn").className = clipOn ? "small on" : "small secondary";
+  if (!clipOn) $("clipcanvas").style.display = "none";
+  if (histSrc) updateHistogram(histSrc);
+});
+
+/* loupe: a 320 px window at 1:1 of what is on view, full size: the
+ * current look rendered full size, A's recipe rendered full size, or
+ * the original itself (a raw's straight print at full size). Each is
+ * made once and kept until the look or the image changes. */
+const fullCache = new Map();   /* key -> {url, w, h} | "pending" */
+function fullKeyFor(kind) {
+  if (kind === "original") return "original|" + inputName + "." + inputExt;
+  if (kind === "A") return "A|" + inputName + "|" + (pinned ? pinned.recipe : "");
+  return "B|" + inputName + "|" + $("recipe").value;
+}
+async function imageDims(url) {
+  return new Promise(resolve => {
+    if (typeof Image !== "function") { resolve({ w: 0, h: 0 }); return; }
+    const im = new Image();
+    im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+    im.onerror = () => resolve({ w: 0, h: 0 });
+    im.src = url;
+  });
+}
+async function ensureFull(kind) {
+  const key = fullKeyFor(kind);
+  const have = fullCache.get(key);
+  if (have === "pending") return null;
+  if (have) return have;
+  fullCache.set(key, "pending");
+  let url = null;
+  try {
+    if (kind === "original") {
+      const raw = /^(nef|dng)$/i.test(inputExt);
+      if (!raw) url = originalUrl;                       /* the file itself is full size */
+      else if (engine && engine.native && inputServerName) url = engine.developUrl(inputServerName, 0);
+      else if (inputBytes) {
+        setStatus("loupe: developing the raw at full size…");
+        const jpg = await wasmEngine.develop({ inputBytes, ext: inputExt, maxDim: 0 });
+        url = URL.createObjectURL(new Blob([jpg], { type: "image/jpeg" }));
+      }
+    } else {
+      setStatus(`loupe: rendering ${kind === "A" ? "A" : "the current look"} at full size…`);
+      const blob = await render(0, {}, true, kind === "A" ? parseRecipe(pinned.recipe) : null);
+      if (blob) url = URL.createObjectURL(blob);
+    }
+  } catch (e) { url = null; }
+  if (!url) { fullCache.delete(key); setStatus("loupe: full size unavailable", true); return null; }
+  const dims = await imageDims(url);
+  const entry = { url, w: dims.w, h: dims.h,
+                  geometry: kind === "original" ? identityGeometry(dims.w, dims.h) : renderGeometry };
+  fullCache.set(key, entry);
+  if (oneToOne()) { showView(view); }   /* 1:1 shows full-size pixels as soon as they exist */
+  setStatus(`loupe: full size ${dims.w}×${dims.h} ready` + (kind === "B" ? "" : ` (${kind})`));
+  return entry;
+}
+async function moveLoupe(e) {
+  const lp = $("loupe");
+  const vp = $("viewport");
+  const rect = vp.getBoundingClientRect ? vp.getBoundingClientRect() : { left: 0, top: 0 };
+  const px = e.clientX - rect.left + (vp.scrollLeft || 0), py = e.clientY - rect.top + (vp.scrollTop || 0);
+  /* with the wipe on, left of the divider the loupe looks at the left image */
+  let kind = shownKind(), r = viewRect();
+  if (wipeFrame && px < wipeFrame.divider) { kind = wipeFrame.left.kind; r = { left: wipeFrame.left.x, top: wipeFrame.left.y, width: wipeFrame.left.w, height: wipeFrame.left.h }; }
+  const fr = await ensureFull(kind);
+  if (!fr || !fr.w || !loupeOn) { lp.style.display = "none"; return; }
+  const fx = (px - r.left) / (r.width || 1);
+  const fy = (py - r.top) / (r.height || 1);
+  if (fx < 0 || fx > 1 || fy < 0 || fy > 1) { lp.style.display = "none"; return; }
+  const size = 320;
+  lp.style.backgroundImage = `url("${fr.url}")`;
+  lp.style.backgroundSize = `${fr.w}px ${fr.h}px`;
+  lp.style.backgroundPosition = `${Math.round(size / 2 - fx * fr.w)}px ${Math.round(size / 2 - fy * fr.h)}px`;
+  const ww = (typeof window !== "undefined" && window.innerWidth) || 1600;
+  const wh = (typeof window !== "undefined" && window.innerHeight) || 1000;
+  lp.style.left = Math.min(e.clientX + 24, ww - size - 8) + "px";
+  lp.style.top = Math.min(e.clientY + 24, wh - size - 8) + "px";
+  $("loupecap").textContent = `${kind === "B" ? "current" : kind} 1:1 of ${fr.w}×${fr.h} at ${Math.round(fx * fr.w)},${Math.round(fy * fr.h)}`;
+  lp.style.display = "block";
+}
+function setLoupe(on) {
+  loupeOn = on;
+  $("loupe-btn").className = on ? "small on" : "small secondary";
+  if (!on) $("loupe").style.display = "none";
+  else if (lastRender || originalUrl) ensureFull(shownKind());
+}
+$("loupe-btn").addEventListener("click", () => setLoupe(!loupeOn));
+
+/* bracket: nine renders stepping one knob around the current value,
+ * small, in a grid over the view; a click takes that value */
+const BRACKETS = {
+  ev:       v => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(d => +(v + d).toFixed(2)).filter(x => x >= -4 && x <= 4),
+  strength: () => [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+  age:      () => [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
+  halation: () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+  edge:     () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+  develop:  () => ["pull-2", "pull-1", "normal", "push+1", "push+2", "push+3", "push+4", "cross", "cross+1"],
+  temp:     v => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(d => +(v + d).toFixed(2)).filter(x => x >= -2 && x <= 2),
+  shadows:  v => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1].map(d => +(v + d).toFixed(2)).filter(x => x >= -2 && x <= 2),
+  contrast: () => [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1],
+  grad:     () => [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3],
+  rotate:   v => [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2].map(d => +(v + d).toFixed(1)).filter(x => x >= -15 && x <= 15),
+  distortion: () => [-0.12, -0.09, -0.06, -0.03, 0, 0.03, 0.06, 0.09, 0.12],
+};
+let bracketRun = 0;
+async function runBracket() {
+  if (!inputBytes && !inputServerName) { setStatus("load an image first", true); return; }
+  const axis = $("bracketaxis").value;
+  const cur = axis === "develop" ? $("develop").value : parseFloat($(axis).value);
+  const values = BRACKETS[axis](cur);
+  const run = ++bracketRun;
+  const grid = $("sheetgrid");
+  while (grid.firstChild) grid.removeChild(grid.firstChild);
+  $("sheethead").textContent = `bracket — ${axis}`;
+  $("sheet").className = "on";
+  const cells = [];
+  for (const v of values) {
+    const fig = document.createElement("figure");
+    const img = document.createElement("img");
+    const cap = document.createElement("figcaption");
+    cap.textContent = axis === "develop" ? v : (axis === "ev" && v > 0 ? "+" : "") + String(v);
+    if (String(v) === String(cur)) fig.className = "cur";
+    fig.append(img, cap);
+    fig.addEventListener("click", () => {
+      $(axis).value = String(v);
+      syncValueLabels();
+      closeSheet();
+      onControlChange();
+    });
+    grid.append(fig);
+    cells.push({ v, img, fig });
+  }
+  const size = Math.max(240, Math.min(600, Math.round(previewSize() / 3)));
+  for (const cell of cells) {
+    if (run !== bracketRun) return;
+    const overrides = axis === "develop" ? { develop: cell.v } : { [axis]: cell.v };
+    const t0 = performance.now();
+    const blob = await render(size, overrides, true);
+    if (run !== bracketRun) return;
+    if (blob) cell.img.src = URL.createObjectURL(blob);
+    else cell.fig.className = (cell.fig.className + " failed").trim();
+    setStatus(`bracket: ${axis} ${cells.indexOf(cell) + 1}/${cells.length} (${((performance.now() - t0) / 1000).toFixed(1)}s)`);
+  }
+  setStatus(`bracket: ${axis} — click a cell to take it, Esc to close`);
+}
+function closeSheet() { $("sheet").className = ""; ++bracketRun; }
+$("bracket").addEventListener("click", runBracket);
+$("sheetclose").addEventListener("click", closeSheet);
+
+if (typeof window !== "undefined" && window.addEventListener) {
+  /* a hook for the Chromium test to check the wipe's placement */
+  window.__polajuice = { imageInfo, shownInfo, leftKind, viewRect, frame: () => wipeFrame };
+  window.addEventListener("resize", layoutOverlays);
+  if (typeof ResizeObserver === "function") new ResizeObserver(layoutOverlays).observe($("view"));
+  $("view").addEventListener("load", layoutOverlays);
+}
+
+$("copyrecipe").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("recipe").value); setStatus("recipe copied"); }
+  catch (e) { setStatus("select the recipe text and copy it by hand", true); }
+});
+$("copycli").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("cli").textContent); setStatus("command copied"); }
+  catch (e) { setStatus("select the command and copy it by hand", true); }
+});
+$("saverecipe").addEventListener("click", () => {
+  const blob = new Blob([$("recipe").value], { type: "text/plain" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  const r = parseRecipe($("recipe").value);
+  link.download = `${r.camera || "look"}${r.film && r.film !== "none" ? "_" + r.film : ""}.recipe`;
+  link.click();
+});
+$("loadrecipebtn").addEventListener("click", () => $("loadrecipe").click());
+$("loadrecipe").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const text = /\.jpe?g$/i.test(f.name) ? readJpegComment(bytes) : new TextDecoder().decode(bytes);
+  if (!text || !text.includes("=")) { setStatus(`${f.name} holds no recipe`, true); return; }
+  const note = applyRecipe(parseRecipe(text));
+  setStatus(`recipe loaded from ${f.name}` + (note ? " — " + note : ""), !!note);
+  scheduleRender();
+  e.target.value = "";
+});
+$("presetsave").addEventListener("click", async () => {
+  const name = ($("presetname").value || "").trim();
+  if (!name) { setStatus("give the look a name first", true); return; }
+  try {
+    if (engine.native) await engine.saveLook(name, $("recipe").value);
+    else { const looks = loadLooks(); looks[name] = $("recipe").value; saveLooks(looks); }
+  } catch (e) { setStatus("cannot keep the look: " + e.message, true); return; }
+  await refreshPresetList();
+  $("presets").value = name;
+  setStatus(engine.native ? `kept looks/${name}.recipe` : `kept '${name}' in this browser`);
+});
+$("presets").addEventListener("change", () => {
+  const name = $("presets").value;
+  if (!name) return;
+  const text = lookText(name);
+  if (!text) return;
+  const note = applyRecipe(parseRecipe(text));
+  setStatus(`look '${name}'` + (note ? " — " + note : ""), !!note);
+  scheduleRender();
+});
+$("presetdelete").addEventListener("click", async () => {
+  const name = $("presets").value;
+  if (!name) return;
+  try {
+    if (engine.native) await engine.deleteLook(name);
+    else { const looks = loadLooks(); delete looks[name]; saveLooks(looks); }
+  } catch (e) { setStatus("cannot forget the look: " + e.message, true); return; }
+  await refreshPresetList();
+  setStatus(`forgot '${name}'`);
+});
+$("export").addEventListener("click", async () => {
+  if (!engine.native || !inputServerName) return;
+  setStatus("exporting full size…");
+  try {
+    const r = await engine.exportFile({ ...lookFromControls(), name: inputServerName });
+    setStatus(`written ${r.written}`);
+  } catch (e) { setStatus("export failed: " + e.message, true); }
+});
+$("batch").addEventListener("click", async () => {
+  if (!engine.native) return;
+  const n = images.filter(im => im.serverName).length;
+  if (typeof confirm === "function" && !confirm(`Apply the current look to all ${n} images in the folder, writing each next to its source?`)) return;
+  setStatus(`rendering ${n} images full size…`);
+  try {
+    const r = await engine.batch(lookFromControls());
+    setStatus(`written ${r.count} files` + (r.failed ? `; ${r.failed} failed: ${r.errors}` : ""), !!r.failed);
+    await listFolder();
+  } catch (e) { setStatus("batch failed: " + e.message, true); }
+});
+
+/* the look as the native engine wants it, from the controls */
+
+if (typeof document.addEventListener === "function") {
+  document.addEventListener("keydown", e => {
+    const tag = (e.target && e.target.tagName) || "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (e.key === "\\" && !glance) { glance = true; showView("original"); }
+    else if (e.key === "a") showView(view === "A" ? "B" : (pinned ? "A" : "B"));
+    else if (e.key === "r") renderPreview();
+    else if (e.key === "w") setWipe(!wipeOn);
+    else if (e.key === "l") setLoupe(!loupeOn);
+    else if (e.key === "Escape") closeSheet();
+  });
+  document.addEventListener("keyup", e => {
+    if (e.key === "\\" && glance) { glance = false; showView("B"); }
+  });
+}
+
+boot().catch(e => setStatus("engine failed to load: " + e.message, true));
+</script>
+</body>
+</html>
