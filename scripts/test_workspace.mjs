@@ -147,6 +147,17 @@ for (const [cam, crop] of formats) {
     for (const against of ["original", "A", "B"]) {
       await page.selectOption("#wipeagainst", against);
       checked.push(await checkWipeAlignment(`${cam}/${crop} view=${v} vs=${against}`));
+      /* the fit is on the pictures: the larger of the two fills the viewport
+       * on one axis whatever border the print adds (a Polaroid's full-frame
+       * print used to shrink the photo against a slide) */
+      const fill = await page.evaluate(() => {
+        const H = window.__polajuice, S = H.shownInfo(), f = H.frame(), vp = document.getElementById("viewport");
+        const O = H.imageInfo(H.leftKind());
+        const k = S.geometry.origW / O.geometry.origW;
+        const pw = Math.max(S.geometry.cropW, O.geometry.cropW * k), ph = Math.max(S.geometry.cropH, O.geometry.cropH * k);
+        return Math.max(pw * f.sc / vp.clientWidth, ph * f.sc / vp.clientHeight);
+      });
+      if (fill < 0.97 || fill > 1.001) fail(`${cam}/${crop} view=${v} vs=${against}: pictures fill ${(fill * 100).toFixed(1)}% of the viewport, not all of it`);
     }
   }
   await page.click("#wipe");

@@ -1,0 +1,28 @@
+1.25.3: wipe fits the pictures; 1:1 shows the full-size render
+
+Page:
+- the wipe fits the pictures to the viewport, not the whole frame: a
+  Polaroid's full-frame print (photo plus border) used to shrink the photo
+  on both sides of the divider against a borderless camera such as a
+  slide. The border now runs off the viewport's edge while wiping; the
+  plain view still fits the whole print. 1:1 is unchanged.
+- the 1:1 button now shows the pixels of the full-size render, for the
+  view and for both sides of the wipe. It used to switch the viewport to
+  scale 1 but keep the preview image, so a Polaroid (or any format) at
+  1:1 stayed at the preview's reduced size. The full render is made once
+  per look (the loupe already used it) and is reused by the loupe.
+- imageInfo() reports which image is on screen (preview or full) so the
+  wipe composer lays the left image in the same frame at the same scale.
+
+Tests:
+- test_workspace.mjs: every wipe case checks that the pictures fill the
+  viewport on one axis; 1:1 block (Polaroid, full render against preview,
+  wipe at scale 1); the loupe checks tolerate an already-cached full
+  render.
+
+Repo:
+- .gitignore and release.sh ignore node_modules, scripts/package.json and
+  scripts/package-lock.json so a machine with Playwright installed still
+  has a clean tree at release time.
+
+Engine: wasm rebuilt (the header shows the engine's version).

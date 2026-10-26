@@ -79,6 +79,8 @@
   #viewport.one2one img { max-width:none; max-height:none; }
   #viewport.wiping #view { max-width:none; max-height:none; object-fit:fill; }
   #viewport.wiping { display:block; }
+  /* fitted on the pictures: a print's border may run off the edge, no scrollbars for it */
+  #viewport.wiping:not(.one2one) { overflow:hidden; }
   #viewport.one2one { display:block; }
   #caption { padding:0.35rem 1rem; font-size:0.8rem; color:var(--muted); font-style:italic;
              border-top:1px solid var(--line); min-height:1.6rem; }
@@ -481,7 +483,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.25.2";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.25.3";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -1388,9 +1390,17 @@ function composeStage() {
   const uw = maxX - minX, uh = maxY - minY;
   const one2one = /\bone2one\b/.test(vp.className);
   const vw = vp.clientWidth || 1400, vh = vp.clientHeight || 900;
-  const sc = one2one ? 1 : Math.min(vw / uw, vh / uh);
-  const ox = Math.max(0, (vw - uw * sc) / 2) - minX * sc;
-  const oy = Math.max(0, (vh - uh * sc) / 2) - minY * sc;
+  /* The wipe compares pictures, so the fit is on the pictures (the union
+   * of the two crop rectangles), not on the whole frame: a print's border
+   * would otherwise shrink the photo against a borderless camera. What
+   * lies outside the pictures (the Polaroid chin) runs off the viewport. */
+  const pMinX = Math.min(gS.placeX, dx + gL.placeX), pMinY = Math.min(gS.placeY, dy + gL.placeY);
+  const pMaxX = Math.max(gS.placeX + gS.cropW, dx + gL.placeX + gL.cropW);
+  const pMaxY = Math.max(gS.placeY + gS.cropH, dy + gL.placeY + gL.cropH);
+  const pw = Math.max(1, pMaxX - pMinX), ph = Math.max(1, pMaxY - pMinY);
+  const sc = one2one ? 1 : Math.min(vw / pw, vh / ph);
+  const ox = one2one ? Math.max(0, (vw - uw * sc) / 2) - minX * sc : (vw - pw * sc) / 2 - pMinX * sc;
+  const oy = one2one ? Math.max(0, (vh - uh * sc) / 2) - minY * sc : (vh - ph * sc) / 2 - pMinY * sc;
   v.style.position = "absolute";
   v.style.left = ox + "px"; v.style.top = oy + "px";
   v.style.width = (gS.outW * sc) + "px"; v.style.height = (gS.outH * sc) + "px";
