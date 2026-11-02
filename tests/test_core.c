@@ -1052,7 +1052,7 @@ int main(void)
             assert(pj_scene_set(&t, "gradangle", "270") && t.grad_angle == 270.0f);
             assert(!pj_scene_set(&t, "temp", "3") && !pj_scene_set(&t, "grad", "-1") && !pj_scene_set(&t, "black", "x"));
             assert(pj_scene_get(&t, "temp") == 0.5f);
-            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 17);
+            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 25);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\ntemp=0.5\n") && strstr(text, "\ngradangle=270\n") && strstr(text, "\ngrad=0\n"));
@@ -1149,10 +1149,159 @@ int main(void)
             assert(pj_scene_set(&t, "rotate", "-3.5") && t.rotate == -3.5f);
             assert(pj_scene_set(&t, "trimw", "0.5") && t.trim_w == 0.5f);
             assert(!pj_scene_set(&t, "rotate", "20") && !pj_scene_set(&t, "distortion", "0.5"));
-            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 17);
+            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 25);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\nrotate=-3.5\n") && strstr(text, "\ntrimw=0.5\n") && strstr(text, "\ndenoise=0\n"));
+            pj_image_free(ref);
+            pj_image_free(src);
+        }
+        /* 1.27: keystone, sharpening, the radial filter, highlight
+         * reconstruction, lens profiles, no cross on black and white */
+        {
+            PjImage *src = pj_image_new(64, 48, &error);
+            assert(src);
+            fill_test_pattern(src);
+            PjRenderOptions base = {.seed = 1, .strength = 1.0f, .color_lut = identity, .film_process = "negative"};
+            PjImage *ref = pj_render(src, "35mm-negative", &base, &error);
+            assert(ref);
+            const float *rp = pj_image_pixels_const(ref);
+            /* keystone +: the top edge is widened, so a top-corner pixel
+             * samples nearer the center (less red at the top right, red
+             * rising with x); the bottom row and the center column stay */
+            PjRenderOptions o = base; o.keystone_v = 1.0f;
+            PjImage *out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+            {
+                const float *a = pj_image_pixels_const(out);
+                assert(a[(1 * 64 + 62) * 3] < rp[(1 * 64 + 62) * 3] - 0.1f);
+                assert(fabsf(a[(46 * 64 + 62) * 3] - rp[(46 * 64 + 62) * 3]) < 0.02f);
+                assert(fabsf(a[(1 * 64 + 32) * 3] - rp[(1 * 64 + 32) * 3]) < 0.02f);
+                /* no empty corners: nothing black at the top edge */
+                assert(a[(0 * 64 + 0) * 3 + 2] > 0.1f && a[(0 * 64 + 63) * 3 + 2] > 0.1f);
+            }
+            pj_image_free(out);
+            /* keystone -: the bottom edge instead */
+            o = base; o.keystone_v = -1.0f;
+            out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+            assert(pj_image_pixels_const(out)[(46 * 64 + 62) * 3] < rp[(46 * 64 + 62) * 3] - 0.1f);
+            assert(fabsf(pj_image_pixels_const(out)[(1 * 64 + 62) * 3] - rp[(1 * 64 + 62) * 3]) < 0.02f);
+            pj_image_free(out);
+            /* horizontal: the left edge; the green ramp runs down y */
+            o = base; o.keystone_h = 1.0f;
+            out = pj_render(src, "35mm-negative", &o, &error); assert(out);
+            assert(pj_image_pixels_const(out)[(46 * 64 + 1) * 3 + 1] < rp[(46 * 64 + 1) * 3 + 1] - 0.1f);
+            assert(fabsf(pj_image_pixels_const(out)[(46 * 64 + 62) * 3 + 1] - rp[(46 * 64 + 62) * 3 + 1]) < 0.02f);
+            pj_image_free(out);
+            /* sharpening: a flat field is untouched, a step gets steeper
+             * (an overshoot either side), luminance only */
+            {
+                PjImage *step = pj_image_new(32, 32, &error); assert(step);
+                float *sp = pj_image_pixels(step);
+                for (size_t y = 0; y < 32; ++y)
+                    for (size_t x = 0; x < 32; ++x) {
+                        float v = x < 16 ? 0.2f : 0.6f;
+                        sp[(y * 32 + x) * 3] = v; sp[(y * 32 + x) * 3 + 1] = v * 0.8f; sp[(y * 32 + x) * 3 + 2] = v * 0.5f;
+                    }
+                PjRenderOptions sh = {.seed = 1, .strength = 1.0f, .color_lut = identity, .film_process = "negative", .sharpen = 1.0f};
+                PjRenderOptions no = sh; no.sharpen = 0.0f;
+                PjImage *a = pj_render(step, "35mm-negative", &sh, &error), *b = pj_render(step, "35mm-negative", &no, &error);
+                assert(a && b);
+                const float *ap = pj_image_pixels_const(a), *bp = pj_image_pixels_const(b);
+                assert(fabsf(ap[(16 * 32 + 4) * 3] - bp[(16 * 32 + 4) * 3]) < 0.003f);      /* flat: untouched */
+                assert(ap[(16 * 32 + 15) * 3] < bp[(16 * 32 + 15) * 3] - 0.01f);             /* dark side dips */
+                assert(ap[(16 * 32 + 16) * 3] > bp[(16 * 32 + 16) * 3] + 0.01f);             /* bright side rises */
+                /* the color ratios at the step are kept */
+                assert(fabsf(ap[(16 * 32 + 16) * 3 + 2] / ap[(16 * 32 + 16) * 3] - bp[(16 * 32 + 16) * 3 + 2] / bp[(16 * 32 + 16) * 3]) < 0.02f);
+                pj_image_free(a); pj_image_free(b); pj_image_free(step);
+            }
+            /* radial +1: a stop at the center, nothing at the corners;
+             * moved to the top left, it lights that corner instead */
+            {
+                PjImage *flat = pj_image_new(64, 48, &error); assert(flat);
+                fill_uniform(flat, 0.25f);
+                PjRenderOptions rd = {.seed = 1, .strength = 1.0f, .color_lut = identity, .film_process = "negative", .radial = 1.0f};
+                PjRenderOptions rn = rd; rn.radial = 0.0f;
+                PjImage *a = pj_render(flat, "35mm-negative", &rd, &error), *b = pj_render(flat, "35mm-negative", &rn, &error);
+                assert(a && b);
+                float center = luma_at(a, 32, 24), corner = luma_at(a, 1, 1), c0 = luma_at(b, 32, 24);
+                assert(center > c0 * 1.5f && fabsf(corner - luma_at(b, 1, 1)) < 0.01f);
+                pj_image_free(a);
+                rd.radial_x = -0.4f; rd.radial_y = -0.4f; rd.radial_size = 0.3f;
+                a = pj_render(flat, "35mm-negative", &rd, &error); assert(a);
+                assert(luma_at(a, 6, 5) > c0 * 1.5f && fabsf(luma_at(a, 62, 46) - luma_at(b, 62, 46)) < 0.01f);
+                pj_image_free(a); pj_image_free(b); pj_image_free(flat);
+            }
+            /* no cross-processing on a black-and-white camera: the render
+             * with cross is the render without, to the bit */
+            {
+                PjRenderOptions c1 = {.seed = 2, .strength = 1.0f, .cross_process = true};
+                PjRenderOptions c0 = c1; c0.cross_process = false;
+                PjImage *a = pj_render(src, "bw-35", &c1, &error), *b = pj_render(src, "bw-35", &c0, &error);
+                assert(a && b);
+                assert(memcmp(pj_image_pixels_const(a), pj_image_pixels_const(b), 64 * 48 * 3 * sizeof(float)) == 0);
+                assert(pj_preset_is_monochrome("bw-35") && !pj_preset_is_monochrome("35mm-negative"));
+                pj_image_free(a); pj_image_free(b);
+            }
+            /* highlight reconstruction: the synthetic raw's ramp runs to
+             * three times white, so from v = 1 green is clipped while red
+             * (gain 2) and blue (gain 1.5) still carry the light. Clipped
+             * at white (recover 0) the pixel stops at 1; rebuilt (recover
+             * 1) it is neutral at the brightness the other channels say,
+             * capped at 1.6 where all but one are gone. */
+            {
+                pj_raw_set_recover(1.0f);
+                PjImage *rec = pj_image_load("tests/raw/bayer_u16.dng", &error);
+                pj_raw_set_recover(0.0f);
+                PjImage *clip = pj_image_load("tests/raw/bayer_u16.dng", &error);
+                assert(rec && clip && pj_raw_recover() == 0.0f);
+                const float *q = pj_image_pixels_const(rec), *k = pj_image_pixels_const(clip);
+                size_t at = (2 * 64 + 27) * 3;     /* v = 3 * 27/63 = 1.286 */
+                for (int c = 0; c < 3; ++c) {
+                    assert(fabsf(k[at + c] - 1.0f) < 0.01f);
+                    assert(fabsf(q[at + c] - 1.286f) < 0.04f);
+                }
+                at = (2 * 64 + 40) * 3;            /* v = 1.9: only red is left, capped */
+                for (int c = 0; c < 3; ++c) assert(q[at + c] > 1.5f && q[at + c] <= 1.61f);
+                at = (2 * 64 + 60) * 3;            /* v = 2.86: all gone, held at the cap */
+                for (int c = 0; c < 3; ++c) assert(fabsf(q[at + c] - 1.6f) < 0.01f && fabsf(k[at + c] - 1.0f) < 0.01f);
+                /* below white nothing changes */
+                at = (24 * 64 + 30) * 3;
+                for (int c = 0; c < 3; ++c) assert(q[at + c] == k[at + c]);
+                pj_image_free(rec); pj_image_free(clip);
+            }
+            /* lens profiles: the 50/1.4 and the 24-120/4 at both ends;
+             * falloff decays with the aperture; an unknown lens has none */
+            {
+                PjRawLens l = {.have = true, .min_focal = 50, .max_focal = 50, .max_ap_min = 1.4f, .max_ap_max = 1.4f, .focal = 50, .fnumber = 1.4f};
+                float d = 0, v = 0;
+                const char *name = pj_lens_profile(&l, &d, &v);
+                assert(name && strstr(name, "50mm") && d > 0.0f && v > 2.0f);
+                l.fnumber = 5.6f;
+                assert(pj_lens_profile(&l, &d, &v) && v < 0.55f && v > 0.25f);
+                assert(fabsf(d * 100.0f - roundf(d * 100.0f)) < 1e-4f && fabsf(v * 10.0f - roundf(v * 10.0f)) < 1e-4f);
+                PjRawLens z = {.have = true, .min_focal = 24, .max_focal = 120, .max_ap_min = 4, .max_ap_max = 4, .focal = 24, .fnumber = 4};
+                assert(pj_lens_profile(&z, &d, &v) && d > 0.02f);        /* barrel at the wide end */
+                z.focal = 120;
+                assert(pj_lens_profile(&z, &d, &v) && d < 0.0f);         /* pincushion at the long end */
+                z.focal = 60;                                             /* between the table's points */
+                assert(pj_lens_profile(&z, &d, &v) && d < 0.0f && d > -0.02f);
+                PjRawLens u = {.have = true, .min_focal = 85, .max_focal = 85, .max_ap_min = 1.8f, .max_ap_max = 1.8f};
+                assert(!pj_lens_profile(&u, &d, &v));
+                PjRawLens none = {0};
+                assert(!pj_lens_profile(&none, &d, &v));
+                /* the D610 NEF in the suite is the synthetic one: no lens tag */
+            }
+            /* the keys exist and the recipe writes them */
+            {
+                PjRenderOptions t = {0};
+                assert(pj_scene_set(&t, "keystonev", "0.5") && t.keystone_v == 0.5f);
+                assert(pj_scene_set(&t, "radial", "-1") && t.radial == -1.0f);
+                assert(pj_scene_set(&t, "recover", "1") && t.recover == 1.0f);
+                assert(!pj_scene_set(&t, "keystonev", "2") && !pj_scene_set(&t, "recover", "1.5") && !pj_scene_set(&t, "sharpen", "-1"));
+                char text[2048];
+                pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
+                assert(strstr(text, "\nkeystonev=0.5\n") && strstr(text, "\nradial=-1\n") && strstr(text, "\nrecover=1\n") && strstr(text, "\nsharpen=0\n"));
+            }
             pj_image_free(ref);
             pj_image_free(src);
         }

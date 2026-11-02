@@ -11,7 +11,9 @@ trap 'rm -rf "$WORK"' EXIT
 PREFIX="$WORK/prefix"
 make -s -C "$ROOT" install-files PREFIX="$PREFIX" >/dev/null
 for f in bin/polajuice bin/superjuice bin/super8ify share/polajuice/web/index.html \
-         share/polajuice/prints/synthetic_minilab.cube share/man/man1/polajuice.1; do
+         share/polajuice/prints/synthetic_minilab.cube share/man/man1/polajuice.1 \
+         share/bash-completion/completions/polajuice share/bash-completion/completions/superjuice \
+         share/zsh/site-functions/_polajuice; do
     [ -e "$PREFIX/$f" ] || { echo "install: missing $PREFIX/$f" >&2; exit 1; }
 done
 # a stand-in film library where 'make install-luts' would put the real one
@@ -43,7 +45,13 @@ done
 # $POLAJUICE_HOME relocates the whole set
 POLAJUICE_HOME="$PREFIX/share/polajuice" XDG_DATA_HOME=/nonexistent "$PREFIX/bin/polajuice" paths | grep -q "^prints  $PREFIX/share/polajuice/prints$" \
     || { echo "paths: POLAJUICE_HOME ignored" >&2; exit 1; }
+grep -q "@VERSION@" "$PREFIX/share/man/man1/polajuice.1" && { echo "man page version not stamped" >&2; exit 1; }
+# the bash completion lists the installed cameras
+if command -v bash >/dev/null; then
+    cams=$(PATH="$PREFIX/bin:$PATH" bash -c '. "$1"; COMP_WORDS=(polajuice apply x.jpg -c ""); COMP_CWORD=4; _polajuice; echo "${COMPREPLY[*]}"' _ "$PREFIX/share/bash-completion/completions/polajuice")
+    case "$cams" in *polaroid-600*) ;; *) echo "bash completion lists no cameras: $cams" >&2; exit 1 ;; esac
+fi
 make -s -C "$ROOT" uninstall PREFIX="$PREFIX" >/dev/null
-left=$(find "$PREFIX" -type f | wc -l)
+left=$(find "$PREFIX" -type f -o -type l | wc -l)
 [ "$left" -eq 0 ] || { echo "uninstall left files:"; find "$PREFIX" -type f; exit 1; }
 echo "install ok: binaries, prints, page and man pages under a prefix; assets found from elsewhere; uninstall clean"

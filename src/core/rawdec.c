@@ -146,6 +146,7 @@ typedef struct {
     unsigned orientation0;
     Entry cm1_0, cm2_0, as_shot_0, illum1_0, illum2_0;
     bool have_cm1_0, have_cm2_0, have_as_shot_0;
+    PjRawLens lens;         /* from EXIF and the MakerNote */
 } Tiff;
 
 static void read_string(const Bytes *b, const Entry *e, char *out, size_t n)
@@ -256,7 +257,20 @@ static bool parse_tiff(Tiff *t, PjError *error)
         Entry e;
         for (unsigned i = 0; i < n && n < 512; ++i) {
             if (!read_entry(b, t->base, ifd, i, &e)) continue;
-            if (e.tag == 37500) { t->makernote_off = e.value_off; t->makernote_len = e.count; }
+            switch (e.tag) {
+            case 37500: t->makernote_off = e.value_off; t->makernote_len = e.count; break;
+            case 0x829d: t->lens.fnumber = (float)entry_num(b, &e, 0); break;   /* FNumber */
+            case 0x920a: t->lens.focal = (float)entry_num(b, &e, 0); break;     /* FocalLength */
+            case 0xa432:                                                        /* LensSpecification */
+                if (e.count == 4) {
+                    t->lens.min_focal = (float)entry_num(b, &e, 0); t->lens.max_focal = (float)entry_num(b, &e, 1);
+                    t->lens.max_ap_min = (float)entry_num(b, &e, 2); t->lens.max_ap_max = (float)entry_num(b, &e, 3);
+                    t->lens.have = t->lens.min_focal > 0.0f;
+                }
+                break;
+            case 0xa434: read_string(b, &e, t->lens.model, sizeof t->lens.model); break;   /* LensModel */
+            default: break;
+            }
         }
     }
     if (!t->have_raw) {
@@ -539,7 +553,7 @@ typedef struct {
 
 /* Nikon type-3 MakerNote: "Nikon\0" + 4 bytes, then a TIFF header at +10
  * whose offsets are relative to that header. */
-static bool nikon_makernote(const Tiff *t, NikonMeta *m, unsigned bps)
+static bool nikon_makernote(Tiff *t, NikonMeta *m, unsigned bps)
 {
     memset(m, 0, sizeof *m);
     const Bytes *b = &t->b;
@@ -569,6 +583,13 @@ static bool nikon_makernote(const Tiff *t, NikonMeta *m, unsigned bps)
                 m->black[c ^ c >> 1] = (unsigned)entry_num(&mb, &e, (uint32_t)c)
                                        >> (14 - (bps > 14 ? 14 : bps));
             m->have_black = true;
+        } else if (e.tag == 0x84 && e.count == 4 && !t->lens.have) {
+            /* Lens: min focal, max focal, max aperture at each - the
+             * unencrypted lens tag (LensData 0x98 needs the serial) */
+            PjRawLens *l = &t->lens;
+            l->min_focal = (float)entry_num(&mb, &e, 0); l->max_focal = (float)entry_num(&mb, &e, 1);
+            l->max_ap_min = (float)entry_num(&mb, &e, 2); l->max_ap_max = (float)entry_num(&mb, &e, 3);
+            l->have = l->min_focal > 0.0f;
         } else if (e.tag == 0x96) {
             m->curve_off = e.value_off;
             m->curve_len = e.count;
@@ -764,7 +785,7 @@ static void decode_tiles_band(size_t t0, size_t t1, void *vctx)
     free(tile);
 }
 
-static bool decode_pixels(const Tiff *t, uint16_t *pix, unsigned spp,
+static bool decode_pixels(Tiff *t, uint16_t *pix, unsigned spp,
                           unsigned *nikon_white, PjError *error)
 {
     const Ifd *d = &t->raw;
@@ -816,6 +837,12 @@ static const CamMatrix cam_matrices[] = {
     { "D7000", { 8198,-2239,-724,-4871,12389,2798,-1043,2050,7181 } },
     { "D800",  { 7866,-2108,-555,-4869,12483,2681,-1176,2069,7501 } },
     { "D90",   { 7309,-1403,-519,-8474,16008,2622,-2434,2826,8064 } },
+    /* the Z family, LibRaw colordata.cpp (2026-11); "Z fc" before "Z f"
+     * because the match is a substring */
+    { "Z fc",  { 11640,-4829,-1079,-5107,13006,2325,-972,1711,7380 } },
+    { "Z f",   { 11607,-4491,-977,-4522,12460,2304,-458,1519,7616 } },
+    { "Z 6",   { 9943,-3269,-839,-5323,13269,2259,-1198,2083,7557 } },
+    { "Z 5",   { 8695,-2558,-648,-5015,12711,2575,-1279,2215,7514 } },
 };
 
 static bool invert3(const double m[9], double out[9])
@@ -879,6 +906,7 @@ typedef struct {
     double black[4], white;
     double wb[3], rgb_cam[9];
     unsigned cfa[4];
+    double recover;        /* highlight reconstruction amount, 0..1 */
 } ConvertCtx;
 
 static void normalize_band(size_t y0, size_t y1, void *vctx)
@@ -946,9 +974,46 @@ static void color_band(size_t y0, size_t y1, void *vctx)
          * highlight handling). The headroom polajuice works with is the
          * stop the pipeline opens the image up by, not light the sensor
          * never saw. */
-        if (r > 1.0) r = 1.0;
-        if (g > 1.0) g = 1.0;
-        if (bb > 1.0) bb = 1.0;
+        if (c->recover > 0.0 && (px[0] >= 0.985f || px[1] >= 0.985f || px[2] >= 0.985f)) {
+            /* Reconstruction: a saturated channel's true value is at
+             * least what it reads; the unclipped channels, which still
+             * carry the light, say how much more. Rebuilt toward the
+             * mean of the unclipped ones the highlight goes neutral and
+             * keeps its brightness (the top stop rolls in through the
+             * scene shoulder later) instead of stopping at white with a
+             * color cast. The amount blends between the two. */
+            double v[3] = {r, g, bb};
+            bool clipped[3] = {px[0] >= 0.985f, px[1] >= 0.985f, px[2] >= 0.985f};
+            double sum = 0.0; int n = 0;
+            for (int ch = 0; ch < 3; ++ch) if (!clipped[ch]) { sum += v[ch]; ++n; }
+            if (n == 0) {
+                /* everything gone: at least as bright as the rebuilt ring
+                 * around it, so a blown core never reads darker than its
+                 * edge */
+                r = g = bb = 1.0 + 0.6 * c->recover;
+            }
+            else {
+                double est = sum / n;
+                if (est > 1.6) est = 1.6;      /* no brighter than the gains can mean */
+                for (int ch = 0; ch < 3; ++ch) {
+                    if (clipped[ch]) {
+                        double target = est > v[ch] ? est : v[ch];
+                        double clip = v[ch] > 1.0 ? 1.0 : v[ch];
+                        v[ch] = clip + (target - clip) * c->recover;
+                    } else if (v[ch] > 1.0) {
+                        /* an unclipped channel above white is real light
+                         * of a strong color; keep it in step with the rebuild */
+                        v[ch] = 1.0 + (v[ch] - 1.0) * c->recover;
+                        if (v[ch] > 1.6) v[ch] = 1.6;
+                    }
+                }
+                r = v[0]; g = v[1]; bb = v[2];
+            }
+        } else {
+            if (r > 1.0) r = 1.0;
+            if (g > 1.0) g = 1.0;
+            if (bb > 1.0) bb = 1.0;
+        }
         for (int ch = 0; ch < 3; ++ch) {
             double v = c->rgb_cam[ch * 3] * r + c->rgb_cam[ch * 3 + 1] * g + c->rgb_cam[ch * 3 + 2] * bb;
             px[ch] = (float)(v < 0 ? 0 : v);
@@ -977,6 +1042,20 @@ static unsigned char *slurp(const char *path, size_t *size, PjError *error)
 /* Last raw file's structure, for 'inspect': container, layout, tiling,
  * compression, bit depth, camera. Static text, overwritten per load. */
 static char raw_description[256];
+static PjRawLens raw_lens;
+static float raw_recover = 0.0f;
+
+void pj_raw_set_recover(float amount)
+{
+    raw_recover = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
+}
+float pj_raw_recover(void) { return raw_recover; }
+
+bool pj_raw_last_lens(PjRawLens *out)
+{
+    if (out) *out = raw_lens;
+    return raw_lens.have || raw_lens.focal > 0.0f;
+}
 const char *pj_raw_last_description(void) { return raw_description; }
 const char *pj_raw_description(void) { return raw_description; }
 /* Sensor readouts of Nikon bodies that declare no crop (the D610 writes
@@ -993,6 +1072,9 @@ static const NikonArea nikon_areas[] = {
     {"D3200", 6080, 4028, 6016, 4000}, {"D3300", 6080, 4028, 6016, 4000},
     {"D7000", 4992, 3280, 4928, 3264}, {"D800", 7424, 4924, 7360, 4912},
     {"D90", 4352, 2868, 4288, 2848}, {"D750", 6032, 4032, 6016, 4016},
+    /* Z 6 sensor family; the Z f entry is from the Z 6 readout, not yet
+     * checked against a Z f file (Z files normally declare their crop) */
+    {"Z fc", 5600, 3728, 5568, 3712}, {"Z f", 6064, 4040, 6048, 4032}, {"Z 6", 6064, 4040, 6048, 4032},
 };
 
 bool pj_raw_nikon_image_area(const char *model, size_t raw_w, size_t raw_h,
@@ -1245,7 +1327,7 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
     /* scene-linear camera RGB, black removed, white at 1.0; the image
      * buffer itself is the work buffer, so no 144 MB intermediate */
     ConvertCtx cc = {.pix = pix, .plane = NULL, .rgb = image->rgb, .w = w, .h = h,
-                     .linear_raw = linear_raw, .white = white};
+                     .linear_raw = linear_raw, .white = white, .recover = raw_recover};
     memcpy(cc.black, black, sizeof black);
     memcpy(cc.wb, wb, sizeof wb);
     memcpy(cc.rgb_cam, rgb_cam, sizeof rgb_cam);
@@ -1297,6 +1379,7 @@ PjImage *pj_image_load_raw(const char *path, PjError *error)
             }
         }
     }
+    raw_lens = t.lens;
     unsigned orientation = d->orientation > 1 ? d->orientation : t.orientation0;
     free(data);
     return pj_image_apply_orientation(image, (int)orientation, error);

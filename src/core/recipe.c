@@ -28,6 +28,10 @@ static const PjSceneKey scene_keys[] = {
     {"denoise", 0.0f, 3.0f}, {"distortion", -0.3f, 0.3f}, {"devignette", 0.0f, 2.0f},
     {"rotate", -15.0f, 15.0f},
     {"trimx", 0.0f, 1.0f}, {"trimy", 0.0f, 1.0f}, {"trimw", 0.0f, 1.0f}, {"trimh", 0.0f, 1.0f},
+    {"keystonev", -1.0f, 1.0f}, {"keystoneh", -1.0f, 1.0f},
+    {"sharpen", 0.0f, 2.0f},
+    {"radial", -2.0f, 2.0f}, {"radialx", -0.5f, 0.5f}, {"radialy", -0.5f, 0.5f}, {"radialsize", 0.0f, 1.0f},
+    {"recover", 0.0f, 1.0f},
 };
 
 const PjSceneKey *pj_scene_keys(size_t *count)
@@ -55,6 +59,14 @@ static float *scene_slot(PjRenderOptions *o, const char *key)
     if (!strcmp(key, "trimy")) return &o->trim_y;
     if (!strcmp(key, "trimw")) return &o->trim_w;
     if (!strcmp(key, "trimh")) return &o->trim_h;
+    if (!strcmp(key, "keystonev")) return &o->keystone_v;
+    if (!strcmp(key, "keystoneh")) return &o->keystone_h;
+    if (!strcmp(key, "sharpen")) return &o->sharpen;
+    if (!strcmp(key, "radial")) return &o->radial;
+    if (!strcmp(key, "radialx")) return &o->radial_x;
+    if (!strcmp(key, "radialy")) return &o->radial_y;
+    if (!strcmp(key, "radialsize")) return &o->radial_size;
+    if (!strcmp(key, "recover")) return &o->recover;
     return NULL;
 }
 

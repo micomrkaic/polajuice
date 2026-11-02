@@ -152,6 +152,15 @@ try {
   const head2 = new TextDecoder("latin1").decode(trimmed.subarray(0, 4096));
   if (!/\nrotate=2\n/.test(head2) || !/ trim=\d+,\d+ rot=2\n/.test(head2)) throw new Error("lens keys or geometry missing from the embedded comment");
   console.log("lens and framing through the wasm: recipe and geometry");
+  // 1.27: keystone, sharpen and the radial filter ride in the scene
+  // string and change the picture; a B&W camera lists itself monochrome
+  const ks = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7, scene: { keystonev: 0.4, sharpen: 1, radial: 0.5, radialsize: 0.4 } });
+  const head3 = new TextDecoder("latin1").decode(ks.subarray(0, 4096));
+  if (!/\nkeystonev=0.4\n/.test(head3) || !/\nradialsize=0.4\n/.test(head3)) throw new Error("1.27 keys missing from the embedded comment");
+  const plainks = await engine.render({ inputBytes: src, ext: srcExt, camera: "super8", seed: 7 });
+  if (ks.length === plainks.length && Buffer.compare(ks, plainks) === 0) throw new Error("keystone/sharpen/radial changed nothing");
+  if (!cameras.find(c => c.name === "bw-35").monochrome || cameras.find(c => c.name === "super8").monochrome) throw new Error("monochrome flag wrong in the camera list");
+  console.log("keystone, sharpen, radial through the wasm; monochrome flagged");
 }
 {
   // filter reaches the engine: red differs from none on the same seed
@@ -203,5 +212,15 @@ try {
   catch (e) { refused = /ev must be/.test(e.message); }
   if (!refused) throw new Error("ev 9 accepted by wasm");
   console.log("raw door ok through wasm (NEF straight print, DNG render, ev, halation)");
+  // recover reaches the decoder ahead of the render; the synthetic raw names no lens
+  const recon = await engine.render({ inputBytes: dng, ext: "dng", camera: "35mm-negative", seed: 1, scene: { recover: 1 } });
+  const clipd = await engine.render({ inputBytes: dng, ext: "dng", camera: "35mm-negative", seed: 1 });
+  if (Buffer.compare(recon, clipd) === 0) throw new Error("recover=1 rendered the same as the clipped decode");
+  const lens = await engine.lens({ inputBytes: dng, ext: "dng" });
+  if (lens !== null) throw new Error("synthetic raw reported a lens: " + JSON.stringify(lens));
+  const { bytes: jpgSrc, ext: jpgExt } = await testInput();
+  const nolens = await engine.lens({ inputBytes: jpgSrc, ext: jpgExt });
+  if (nolens !== null) throw new Error("a JPEG reported a lens");
+  console.log("highlight recovery and the lens query through the wasm");
 }
 console.log("wasm engine tests passed");

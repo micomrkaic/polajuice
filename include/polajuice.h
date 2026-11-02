@@ -146,6 +146,28 @@ typedef struct {
     float trim_x, trim_y, trim_w, trim_h; /* a crop of the frame in
                     fractions 0..1 (x, y, width, height), before the
                     camera's format crop; width or height 0 = no trim */
+    float keystone_v; /* vertical perspective, -1..1: positive widens the
+                    top (a building shot from below, leaning back), negative
+                    the bottom; 1 is a 50% stretch of that edge, whose
+                    sides run off the frame, so no empty corners */
+    float keystone_h; /* horizontal perspective: positive widens the left
+                    edge, negative the right */
+    float sharpen;  /* capture sharpening, 0..2: an unsharp mask on the
+                    luminance over about a pixel at full size, before the
+                    optics soften it; for the softness of a demosaic */
+    float radial;   /* radial filter: stops inside a soft ellipse, -2..2;
+                    +1 lights the subject a stop, -1 takes a stop off it */
+    float radial_x, radial_y; /* the ellipse's center, as an offset from the
+                    frame center in fractions of the frame, -0.5..0.5 */
+    float radial_size; /* its radius as a fraction of the half-diagonal,
+                    0.05..1; 0 means the default 0.35; the edge feathers
+                    over the outer half of the radius */
+    float recover;  /* raw highlight reconstruction, 0..1: 0 clips every
+                    sensor channel at white (dcraw's default); 1 rebuilds
+                    a clipped channel from the unclipped ones so a
+                    blown sky goes neutral and keeps its brightness
+                    instead of turning cyan or magenta. Read by the raw
+                    decoder, not the renderer: pj_raw_set_recover(). */
     int crop;       /* PJ_CROP_CAMERA (0): the camera's own format - the
                     square of the 126 cartridge, the 1.03:1 instant print,
                     the Super 8 gate - cut from the middle of the input,
@@ -222,6 +244,30 @@ bool pj_image_is_scene_linear(const PjImage *image);
 /* One line describing the structure of the last raw file loaded
  * (container, layout, bit depth, compression, tiling, camera). */
 const char *pj_raw_description(void);
+
+/* Raw highlight reconstruction for the next decode (the recover option;
+ * see PjRenderOptions). A process-wide setting, because the decoder
+ * runs before any look is known. */
+void pj_raw_set_recover(float amount);
+float pj_raw_recover(void);
+
+/* The lens of the last raw decoded, from EXIF (FocalLength, FNumber,
+ * LensSpecification/LensModel) or the Nikon MakerNote's lens tag. The
+ * spec is "min-max focal, max aperture at each": 24-120 f/4 is
+ * {24,120,4,4}. have is false for a manual lens or a non-raw input. */
+typedef struct {
+    bool have;
+    float min_focal, max_focal, max_ap_min, max_ap_max;
+    float focal, fnumber;      /* as shot; 0 when unknown */
+    char model[64];            /* LensModel when the file names it */
+} PjRawLens;
+bool pj_raw_last_lens(PjRawLens *out);
+
+/* Lens profiles: distortion and corner falloff of a known lens at the
+ * shot's focal length and aperture, in the units of the distortion and
+ * devignette options. Returns the profile's name, NULL when the lens
+ * has none; out values approximate, from published test charts. */
+const char *pj_lens_profile(const PjRawLens *lens, float *distortion, float *devignette);
 /* The straight print: opens a scene-linear image the stop the pipeline
  * would (plus ev), rolls the headroom in with the scene shoulder, and
  * marks it display-referred. No camera, no film. Display-referred input
@@ -262,6 +308,9 @@ char *pj_preset_traits(const char *name, char *buffer, size_t size);
 /* True for integral/peel-apart instant cameras, whose development is
  * inside the film unit: push/pull and cross-processing do not apply. */
 bool pj_preset_is_instant(const char *name);
+/* true when the camera records in black and white (cross-processing
+ * is meaningless there and is dropped) */
+bool pj_preset_is_monochrome(const char *name);
 /* The camera's format crop as a short label ("square", "1.03:1 instant
  * print", "1.36:1 gate"), or NULL when the camera keeps the input's
  * frame - the cameras PjRenderOptions.crop makes a difference to. */

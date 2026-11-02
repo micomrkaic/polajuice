@@ -7,6 +7,8 @@ PREFIX ?= $(HOME)/.local
 bindir ?= $(PREFIX)/bin
 datadir ?= $(PREFIX)/share/polajuice
 mandir ?= $(PREFIX)/share/man/man1
+bashcompdir ?= $(PREFIX)/share/bash-completion/completions
+zshcompdir ?= $(PREFIX)/share/zsh/site-functions
 includedir ?= $(PREFIX)/include
 libdir ?= $(PREFIX)/lib
 CPPFLAGS ?= -Iinclude -Isrc/cli -Isrc/core -Ithird_party
@@ -26,7 +28,7 @@ ifeq ($(shell uname -s),Darwin)
 CPPFLAGS += -D_DARWIN_C_SOURCE
 endif
 
-CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/recipe.c src/core/rawdec.c src/core/stb_impl.c
+CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/recipe.c src/core/rawdec.c src/core/lensdb.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
 CLI_OBJ = src/cli/filmlib.o src/cli/recipe.o src/cli/look.o src/cli/serve.o
 ALL_OBJ = $(CORE_OBJ) src/cli/main.o $(CLI_OBJ) src/movie/superjuice.o tests/test_core.o
@@ -87,7 +89,9 @@ fetch-polaroid-lut:
 # ---- install ----------------------------------------------------------
 # 'make install' puts polajuice, superjuice and super8ify on the PATH,
 # the print stocks and the web page under $(datadir), the man pages
-# under $(mandir), and fills $(datadir)/luts with the film library: a
+# under $(mandir), bash and zsh completions where those shells look
+# (under $(PREFIX)/share; a per-user zsh needs the site-functions dir
+# on its fpath), and fills $(datadir)/luts with the film library: a
 # library already fetched into the source tree is copied, whatever is
 # still missing is downloaded (scripts/fetch_luts.sh skips families it
 # has). 'make install-files' is the same without the network; 'make
@@ -108,6 +112,10 @@ install-files: all
 	cp -R web/samples web/vendor $(DESTDIR)$(datadir)/web/
 	for m in polajuice superjuice super8ify; do \
 	    sed "s/@VERSION@/$$(cat VERSION)/" docs/man/$$m.1 > $(DESTDIR)$(mandir)/$$m.1 && chmod 644 $(DESTDIR)$(mandir)/$$m.1; done
+	mkdir -p $(DESTDIR)$(bashcompdir) $(DESTDIR)$(zshcompdir)
+	install -m 644 scripts/completions/polajuice.bash $(DESTDIR)$(bashcompdir)/polajuice
+	ln -sf polajuice $(DESTDIR)$(bashcompdir)/superjuice
+	install -m 644 scripts/completions/_polajuice $(DESTDIR)$(zshcompdir)/_polajuice
 
 # the film library: copy what the source tree has, fetch the rest
 install-luts:
@@ -124,6 +132,7 @@ install-dev: libpolajuice.a
 uninstall:
 	$(RM) $(DESTDIR)$(bindir)/polajuice $(DESTDIR)$(bindir)/superjuice $(DESTDIR)$(bindir)/super8ify
 	$(RM) $(DESTDIR)$(mandir)/polajuice.1 $(DESTDIR)$(mandir)/superjuice.1 $(DESTDIR)$(mandir)/super8ify.1
+	$(RM) $(DESTDIR)$(bashcompdir)/polajuice $(DESTDIR)$(bashcompdir)/superjuice $(DESTDIR)$(zshcompdir)/_polajuice
 	$(RM) $(DESTDIR)$(includedir)/polajuice.h $(DESTDIR)$(libdir)/libpolajuice.a
 	$(RM) -r $(DESTDIR)$(datadir)
 

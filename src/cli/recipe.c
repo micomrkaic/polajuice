@@ -91,7 +91,7 @@ bool recipe_load(const char *path, Recipe *r, const char *tool)
         else if (!strcmp(key, "develop")) { snprintf(r->develop, sizeof r->develop, "%s", val); r->has_develop = *val != 0; }
         else if (pj_scene_is_key(key)) {
             if (!pj_scene_set(&r->scene, key, val)) { fprintf(stderr, "%s: recipe: %s=%s out of range\n", tool, key, val); ok = false; }
-            else if (r->nscene < 32) r->scene_keys[r->nscene++] = key;
+            else if (r->nscene < 48) r->scene_keys[r->nscene++] = key;
             else { fprintf(stderr, "%s: recipe: too many scene keys\n", tool); ok = false; }
         }
         else if (!strcmp(key, "crop")) {

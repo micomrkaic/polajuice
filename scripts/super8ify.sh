@@ -34,7 +34,8 @@
 #   CROP     [camera]              camera = the gate crop (1.36:1 for
 #                                   super8); full = keep the whole frame
 #   TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS
-#   DENOISE DISTORTION DEVIGNETTE ROTATE TRIMX TRIMY TRIMW TRIMH
+#   RADIAL RADIALX RADIALY RADIALSIZE DENOISE SHARPEN DISTORTION DEVIGNETTE
+#   ROTATE KEYSTONEV KEYSTONEH TRIMX TRIMY TRIMW TRIMH
 #            [0]                   scene, lens and framing, as polajuice's
 #                                   --temp etc.; only set ones are passed
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
@@ -69,7 +70,8 @@ SET_FILTER=${FILTER+x}; SET_GRAIN=${GRAIN+x}; SET_EDGE=${EDGE+x}
 SET_EV=${EV+x}; SET_HALATION=${HALATION+x}
 SET_DEVELOP=${DEVELOP+x}; SET_CROP=${CROP+x}
 scene_args() {
-    for k in TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS DENOISE DISTORTION DEVIGNETTE ROTATE TRIMX TRIMY TRIMW TRIMH; do
+    for k in TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS RADIAL RADIALX RADIALY RADIALSIZE \
+             DENOISE SHARPEN DISTORTION DEVIGNETTE ROTATE KEYSTONEV KEYSTONEH TRIMX TRIMY TRIMW TRIMH; do
         eval "v=\${$k+x}"
         if [ -n "$v" ]; then
             eval "val=\$$k"

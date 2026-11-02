@@ -288,6 +288,42 @@ A wrong entry shifts hue a little, never brightness or neutrals (the
 recipe forces camera white to RGB white). Add models from the same
 table.
 
+1.27.0 adds the Z family from the same file: Z f, Z fc, Z 6 (also the
+Z 6 II) and Z 5. None has been checked against a file here; the Z f
+entry is the one that matters for this project and awaits a NEF (the
+Z f's lossless-compressed NEF is the format the decoder knows; its
+High Efficiency NEFs are a licensed codec and are refused). The Z f's
+image-area entry (6048x4032 out of the 6064x4040 Z 6 readout) is a
+fallback only used when the file declares no crop.
+
+## Lens profiles (1.27.0)
+
+`src/core/lensdb.c` holds, per lens, the corner distortion (as the
+fraction the distortion option undoes: 0.033 for 3.3% barrel) and the
+corner falloff in stops wide open at a few focal lengths, interpolated
+between them; falloff at smaller apertures decays as (f_open/f)^1.5,
+floored at a fifth, which tracks published charts to about a quarter
+stop. The figures are read off review test charts (Photozone /
+OpticalLimits, Lenstip, DxOMark) and rounded, not measured here:
+AF-S 24-120mm f/4G ED VR, AF-S 50mm f/1.4G, AF-S DX 18-55mm f/3.5-5.6G
+VR, and for the Z f the NIKKOR Z 24-70mm f/4 S, Z 40mm f/2 and Z 28mm
+f/2.8. A lens is matched by its EXIF specification (focal range and
+maximum apertures: LensSpecification, or Nikon's unencrypted lens tag
+0x84), which needs no serial-number decryption; a manual lens records
+none and gets no profile. They are a starting point for the sliders.
+
+## Highlight reconstruction (1.27.0)
+
+The raw door clipped every sensor channel at white (dcraw's default),
+which paints a blown sky cyan or magenta once the white-balance gains
+differ. With `recover` above 0 a clipped channel is rebuilt toward the
+mean of the unclipped ones (the ones still carrying the light): the
+highlight goes neutral and keeps its brightness, up to 1.6x sensor
+white, which the scene shoulder then rolls in. Where every channel is
+gone the pixel is held at that cap, so a blown core never reads darker
+than its reconstructed rim. The amount blends between the two, and 0
+is byte-identical to earlier releases.
+
 The image area of bodies that declare none in CropHiSpeed comes from
 a table keyed by model and raw size. The D600/D610 line is measured:
 of the 6080x4028 readout, the rightmost 46 columns are masked (8 black

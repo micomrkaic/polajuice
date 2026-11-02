@@ -82,6 +82,8 @@
   /* fitted on the pictures: a print's border may run off the edge, no scrollbars for it */
   #viewport.wiping:not(.one2one) { overflow:hidden; }
   #viewport.one2one { display:block; }
+  #lensrow .row { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
+  #lensinfo { font-size:0.75rem; color:var(--muted); font-style:italic; }
   #caption { padding:0.35rem 1rem; font-size:0.8rem; color:var(--muted); font-style:italic;
              border-top:1px solid var(--line); min-height:1.6rem; }
   #before, #after { display:none; }
@@ -210,10 +212,34 @@ white.">Halation <span class="val" id="halval">1.0</span></label>
       <label for="gradpos" title="The transition's center, as an offset from the frame center along the gradient.">Grad position <span class="val" id="gradposval">center</span></label>
       <input id="gradpos" type="range" min="-0.5" max="0.5" step="0.025" value="0">
     </div>
+    <div class="field">
+      <label for="radial" title="Radial filter: stops inside a soft ellipse of the frame's shape. +1 lights the subject a stop, -1 takes a stop off it; the edge feathers over the outer half of the radius.">Radial <span class="val" id="radialval">off</span></label>
+      <input id="radial" type="range" min="-2" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label title="Where the ellipse sits: offsets from the frame center, in fractions of the frame; and its radius in half-diagonals.">Radial center / size <span class="val" id="radialposval">center, 0.35</span></label>
+      <div class="trimgrid">
+        <label for="radialx">x</label><input id="radialx" type="range" min="-0.5" max="0.5" step="0.025" value="0">
+        <label for="radialy">y</label><input id="radialy" type="range" min="-0.5" max="0.5" step="0.025" value="0">
+        <label for="radialsize">size</label><input id="radialsize" type="range" min="0" max="1" step="0.05" value="0">
+      </div>
+    </div>
   </details>
 
   <details class="group">
     <summary>Lens &amp; framing</summary>
+    <div class="field" id="lensrow" style="display:none">
+      <label title="The lens the raw file names, and what its profile would set for distortion and corner falloff at this focal length and aperture (approximate, from published test charts).">Lens <span class="val" id="lensval"></span></label>
+      <div class="row"><span id="lensinfo" class="hint"></span> <button id="lensapply" class="small secondary" title="set distortion and de-vignette from the profile">apply profile</button></div>
+    </div>
+    <div class="field">
+      <label for="sharpen" title="Capture sharpening: an unsharp mask on the luminance over about a pixel at full size, before the camera's optics soften it. For the softness of a demosaic; 1 adds the difference once.">Sharpen <span class="val" id="sharpenval">off</span></label>
+      <input id="sharpen" type="range" min="0" max="2" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="recover" title="Raw highlight reconstruction: 0 clips every sensor channel at white (a blown sky goes cyan or magenta); 1 rebuilds a clipped channel from the unclipped ones, so it goes neutral and keeps its brightness through the shoulder. Raw input only.">Highlight recovery <span class="val" id="recoverval">off</span></label>
+      <input id="recover" type="range" min="0" max="1" step="0.1" value="0">
+    </div>
     <div class="field">
       <label for="denoise" title="Chroma denoise: the color planes blurred over about 2 px per unit at full size, luminance untouched. For high-ISO raw before the grain models add their own.">Chroma denoise <span class="val" id="denoiseval">off</span></label>
       <input id="denoise" type="range" min="0" max="3" step="0.5" value="0">
@@ -229,6 +255,14 @@ white.">Halation <span class="val" id="halval">1.0</span></label>
     <div class="field">
       <label for="rotate" title="Straighten: degrees, + clockwise. The canvas stays; the corners outside come in black - trim them below.">Straighten <span class="val" id="rotateval">0°</span></label>
       <input id="rotate" type="range" min="-15" max="15" step="0.1" value="0">
+    </div>
+    <div class="field">
+      <label for="keystonev" title="Vertical perspective: + widens the top (a building shot from below, leaning back), - the bottom. 1 is a 50% stretch of that edge; its sides run off the frame, so no empty corners.">Keystone, vertical <span class="val" id="keystonevval">0</span></label>
+      <input id="keystonev" type="range" min="-1" max="1" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="keystoneh" title="Horizontal perspective: + widens the left edge, - the right.">Keystone, horizontal <span class="val" id="keystonehval">0</span></label>
+      <input id="keystoneh" type="range" min="-1" max="1" step="0.05" value="0">
     </div>
     <div class="field">
       <label title="Trim the frame before the camera's own format crop: margins in percent of the frame.">Trim <span class="val" id="trimval">none</span></label>
@@ -438,6 +472,10 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
       <option value="grad">grad ND</option>
       <option value="rotate">straighten</option>
       <option value="distortion">distortion</option>
+      <option value="radial">radial</option>
+      <option value="sharpen">sharpen</option>
+      <option value="keystonev">keystone</option>
+      <option value="film">film stocks (contact sheet)</option>
     </select>
     <span class="spacer"></span>
     <button id="render" class="secondary" disabled>Render preview</button>
@@ -483,7 +521,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.26.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.27.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -568,7 +606,9 @@ function parseRecipe(text) {
 /* what the page would send: a recipe built from the controls, for the
  * CLI line before any render has happened */
 const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
-                    "denoise", "distortion", "devignette", "rotate", "trimx", "trimy", "trimw", "trimh"];
+                    "radial", "radialx", "radialy", "radialsize",
+                    "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
+                    "trimx", "trimy", "trimw", "trimh"];
 /* the trim is four margins in the page (left, top, right, bottom, in %)
  * and x, y, width, height in fractions in the recipe */
 function trimFromControls() {
@@ -790,6 +830,12 @@ async function boot() {
     const cam = currentCamera();
     $("develop").disabled = cam.instant;
     if (cam.instant) $("develop").value = "normal";
+    /* cross-processing crosses color curves: nothing to cross on B&W */
+    for (const o of $("develop").options) {
+      if (!/^cross/.test(o.value)) continue;
+      o.disabled = !!cam.monochrome;
+      if (cam.monochrome && $("develop").value === o.value) $("develop").value = "normal";
+    }
     $("edge").disabled = cam.instant;
     /* the format choice only means something for cameras that crop */
     $("crop").disabled = !cam.format;
@@ -977,6 +1023,8 @@ async function render(maxDim, overrides, quiet, fromRecipe) {
   await new Promise(r => setTimeout(r, 20));
   try {
     const look = fromRecipe ? lookFromRecipe(fromRecipe) : lookFromControls();
+    /* the contact sheet overrides the stock: a library film, never the custom cube */
+    if (overrides.film) { look.stem = look.filmStem = overrides.film; look.filmChoice = "stem"; look.custom = false; delete overrides.film; }
     const stem = look.stem;
     /* a custom cube is text the server has no file for: the wasm engine
      * takes that render; everything else goes to the engine in charge */
@@ -1103,6 +1151,16 @@ function syncValueLabels() {
   const dv = parseFloat($("devignette").value);
   $("devignetteval").textContent = dv === 0 ? "off" : dv.toFixed(1) + " stops";
   $("rotateval").textContent = signed(parseFloat($("rotate").value), 1) + "°";
+  const rad = parseFloat($("radial").value);
+  $("radialval").textContent = rad === 0 ? "off" : signed(rad, 1) + " stops";
+  const rx = parseFloat($("radialx").value), ry = parseFloat($("radialy").value), rs = parseFloat($("radialsize").value);
+  $("radialposval").textContent = (rx === 0 && ry === 0 ? "center" : `${signed(rx, 2)}, ${signed(ry, 2)}`) + ", " + (rs === 0 ? "0.35" : rs.toFixed(2));
+  const sh = parseFloat($("sharpen").value);
+  $("sharpenval").textContent = sh === 0 ? "off" : sh.toFixed(1);
+  const rc = parseFloat($("recover").value);
+  $("recoverval").textContent = rc === 0 ? "off" : rc.toFixed(1);
+  $("keystonevval").textContent = signed(parseFloat($("keystonev").value), 2);
+  $("keystonehval").textContent = signed(parseFloat($("keystoneh").value), 2);
   const tr = trimFromControls();
   $("trimval").textContent = tr.trimw ? `${(tr.trimw * 100).toFixed(0)}% × ${(tr.trimh * 100).toFixed(0)}%` : "none";
 }
@@ -1160,6 +1218,7 @@ function selectImage(i) {
   refreshRecipeFromControls();
   showView("original");
   fetchSensorStats();
+  fetchLensInfo();
   scheduleRender();
 }
 
@@ -1524,6 +1583,37 @@ async function updateHistogram(src) {
   canvas.dataset.clippedHigh = String(hi[0] + hi[1] + hi[2]);
   canvas.dataset.crushed = String(lo);
 }
+/* the raw's lens and its profile: shown in Lens & framing, applied on request */
+let lensProfile = null;
+async function fetchLensInfo() {
+  lensProfile = null;
+  $("lensrow").style.display = "none";
+  if (!/^(nef|dng)$/i.test(inputExt || "")) return;
+  try {
+    let info = null;
+    if (engine && engine.native && inputServerName) info = await engine.lens({ name: inputServerName });
+    else if (wasmEngine && inputBytes) info = await wasmEngine.lens({ inputBytes, ext: inputExt });
+    if (!info) return;
+    lensProfile = info;
+    const spec = info.spec && info.spec[0] ? (info.spec[0] === info.spec[1] ? `${info.spec[0]}mm` : `${info.spec[0]}-${info.spec[1]}mm`)
+                 + ` f/${info.spec[2]}${info.spec[2] !== info.spec[3] ? "-" + info.spec[3] : ""}` : "";
+    const shot = (info.focal ? ` @ ${info.focal}mm` : "") + (info.fnumber ? ` f/${info.fnumber}` : "");
+    $("lensval").textContent = (info.profile || info.model || spec || "unnamed") + shot;
+    $("lensinfo").textContent = info.profile
+      ? `profile: distortion ${info.distortion >= 0 ? "+" : ""}${info.distortion}, de-vignette ${info.devignette} stops`
+      : `no profile for this lens${spec ? " (" + spec + ")" : ""}`;
+    $("lensapply").disabled = !info.profile;
+    $("lensrow").style.display = "";
+  } catch (e) { lensProfile = null; }
+}
+$("lensapply").addEventListener("click", () => {
+  if (!lensProfile || !lensProfile.profile) return;
+  $("distortion").value = String(lensProfile.distortion);
+  $("devignette").value = String(lensProfile.devignette);
+  syncValueLabels();
+  setStatus(`lens profile applied: ${lensProfile.profile}`);
+  onControlChange();
+});
 let sensorStats = null;   /* from the native engine, for raw input */
 async function fetchSensorStats() {
   sensorStats = null;
@@ -1640,28 +1730,39 @@ const BRACKETS = {
   grad:     () => [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3],
   rotate:   v => [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2].map(d => +(v + d).toFixed(1)).filter(x => x >= -15 && x <= 15),
   distortion: () => [-0.12, -0.09, -0.06, -0.03, 0, 0.03, 0.06, 0.09, 0.12],
+  radial:   () => [-1.5, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 1.5],
+  sharpen:  () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+  keystonev: () => [-0.6, -0.4, -0.2, -0.1, 0, 0.1, 0.2, 0.4, 0.6],
+  /* the contact sheet: every stock the camera takes, as the film select lists them */
+  film:     () => [...$("film").options].map(o => o.value).filter(v => !v.startsWith("__")),
 };
 let bracketRun = 0;
 async function runBracket() {
   if (!inputBytes && !inputServerName) { setStatus("load an image first", true); return; }
   const axis = $("bracketaxis").value;
-  const cur = axis === "develop" ? $("develop").value : parseFloat($(axis).value);
+  const cur = axis === "develop" ? $("develop").value : axis === "film" ? resolveFilmStem() : parseFloat($(axis).value);
   const values = BRACKETS[axis](cur);
+  if (!values.length) { setStatus(axis === "film" ? "this camera takes no film" : "nothing to bracket", true); return; }
   const run = ++bracketRun;
   const grid = $("sheetgrid");
   while (grid.firstChild) grid.removeChild(grid.firstChild);
-  $("sheethead").textContent = `bracket — ${axis}`;
+  /* nine cells by default; a contact sheet takes as many as the camera has stocks */
+  const cols = Math.max(3, Math.ceil(Math.sqrt(values.length))), rows = Math.max(3, Math.ceil(values.length / cols));
+  grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  grid.style.gridTemplateRows = `repeat(${rows},1fr)`;
+  $("sheethead").textContent = axis === "film" ? `contact sheet — ${values.length} stock${values.length === 1 ? "" : "s"} for ${$("camera").value}` : `bracket — ${axis}`;
   $("sheet").className = "on";
   const cells = [];
   for (const v of values) {
     const fig = document.createElement("figure");
     const img = document.createElement("img");
     const cap = document.createElement("figcaption");
-    cap.textContent = axis === "develop" ? v : (axis === "ev" && v > 0 ? "+" : "") + String(v);
+    cap.textContent = axis === "develop" || axis === "film" ? v : (axis === "ev" && v > 0 ? "+" : "") + String(v);
     if (String(v) === String(cur)) fig.className = "cur";
     fig.append(img, cap);
     fig.addEventListener("click", () => {
-      $(axis).value = String(v);
+      if (axis === "film") { customCube = null; $("film").value = String(v); }
+      else $(axis).value = String(v);
       syncValueLabels();
       closeSheet();
       onControlChange();
@@ -1669,10 +1770,10 @@ async function runBracket() {
     grid.append(fig);
     cells.push({ v, img, fig });
   }
-  const size = Math.max(240, Math.min(600, Math.round(previewSize() / 3)));
+  const size = Math.max(200, Math.min(600, Math.round(previewSize() / cols)));
   for (const cell of cells) {
     if (run !== bracketRun) return;
-    const overrides = axis === "develop" ? { develop: cell.v } : { [axis]: cell.v };
+    const overrides = axis === "develop" ? { develop: cell.v } : axis === "film" ? { film: cell.v } : { [axis]: cell.v };
     const t0 = performance.now();
     const blob = await render(size, overrides, true);
     if (run !== bracketRun) return;

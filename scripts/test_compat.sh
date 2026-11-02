@@ -148,5 +148,39 @@ POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --rota
     echo "test_compat: rotate=30 was accepted"; exit 1; }
 echo "recipes: lens and framing keys round-trip; geometry carries trim and rotation"
 
+# 1.27: keystone, sharpen, radial, recover ride in the recipe and replay;
+# cross on a B&W camera is dropped with a note and renders as normal;
+# --lens auto on a non-raw says so and leaves the corrections alone
+R11="$LIB/r11.jpg"; R12="$LIB/r12.jpg"
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --keystonev 0.3 --keystoneh -0.2 \
+    --sharpen 1 --radial 0.5 --radialx 0.1 --radialy -0.1 --radialsize 0.4 --recover 1 -o "$R11" >/dev/null 2>&1 || {
+    echo "test_compat: 1.27 keys refused"; exit 1; }
+for k in 'keystonev=0.3' 'keystoneh=-0.2' 'sharpen=1' 'radial=0.5' 'radialx=0.1' 'radialsize=0.4' 'recover=1'; do
+    ./polajuice inspect "$R11" | grep -q "^$k\$" || { echo "test_compat: recipe lacks $k"; exit 1; }
+done
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" --recipe "$R11" -o "$R12" >/dev/null 2>&1
+cmp -s "$R11" "$R12" || { echo "test_compat: 1.27 recipe replay differs"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --keystonev 2 -o "$R12" >/dev/null 2>&1 && {
+    echo "test_compat: keystonev=2 was accepted"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c bw-35 --no-film --develop cross -o "$R11" 2>"$LIB/note.txt" >/dev/null || {
+    echo "test_compat: cross on bw-35 failed outright"; exit 1; }
+grep -q "black and white" "$LIB/note.txt" || { echo "test_compat: no note for cross on bw-35"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c bw-35 --no-film -o "$R12" >/dev/null 2>&1
+./polajuice inspect "$R11" | grep -q '^develop=cross$' || { echo "test_compat: cross not recorded"; exit 1; }
+python3 - "$R11" "$R12" <<'PY' || { echo "test_compat: cross on bw-35 changed the pixels"; exit 1; }
+import sys
+a, b = [open(p, 'rb').read() for p in sys.argv[1:3]]
+# the JPEG comment differs (develop=cross vs normal); the scan data must not
+def scan(d): return d[d.rfind(b'\xff\xda'):]
+sys.exit(0 if scan(a) == scan(b) else 1)
+PY
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --lens auto -o "$R11" 2>"$LIB/note.txt" >/dev/null || {
+    echo "test_compat: --lens auto on a JPEG failed"; exit 1; }
+grep -q "needs a raw" "$LIB/note.txt" || { echo "test_compat: --lens auto on a JPEG gave no note"; exit 1; }
+./polajuice inspect "$R11" | grep -q '^distortion=0$' || { echo "test_compat: --lens auto touched a JPEG's corrections"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --lens sideways -o "$R11" >/dev/null 2>&1 && {
+    echo "test_compat: --lens sideways was accepted"; exit 1; }
+echo "recipes: keystone, sharpen, radial, recover round-trip; cross dropped on B&W; --lens auto needs a raw"
+
 rm -f "$IN" "$OUT"
 echo "compatibility matrix tests passed (37 cells + override)"

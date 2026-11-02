@@ -478,6 +478,42 @@ static void grad_band(size_t y0, size_t y1, void *vctx)
     }
 }
 
+/* radial filter: a soft ellipse of the frame's aspect, stops inside,
+ * feathering over the outer half of the radius */
+static void radial_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const float stops = c->f[0], cx = c->f[1], cy = c->f[2], radius = c->f[3];
+    const float w = image->width, h = image->height;
+    for (size_t y = y0; y < y1; ++y) {
+        float fy = (((float)y + 0.5f) / h - 0.5f - cy) * 2.0f;   /* -1..1 across the frame */
+        for (size_t x = 0; x < image->width; ++x) {
+            float fx = (((float)x + 0.5f) / w - 0.5f - cx) * 2.0f;
+            /* the frame's half-diagonal is sqrt2 in these units, so the
+             * ellipse of radius r (in half-diagonals) is |(fx,fy)| = r sqrt2 */
+            float d = sqrtf(fx * fx + fy * fy) / (radius * 1.41421356f);
+            float t = (1.0f - d) / 0.5f;      /* 1 inside half the radius, 0 at the edge */
+            t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+            if (t <= 0.0f) continue;
+            t = t * t * (3.0f - 2.0f * t);
+            float g = exp2f(stops * t);
+            float *p = image->rgb + (y * image->width + x) * 3;
+            p[0] *= g; p[1] *= g; p[2] *= g;
+        }
+    }
+}
+
+static void apply_radial(PjImage *image, float stops, float cx, float cy, float size)
+{
+    if (stops == 0.0f) return;
+    stops = fmaxf(-2.0f, fminf(2.0f, stops));
+    if (size <= 0.0f) size = 0.35f;
+    size = fmaxf(0.05f, fminf(1.0f, size));
+    Ctx ctx = {.image = image, .f = {stops, fmaxf(-0.5f, fminf(0.5f, cx)), fmaxf(-0.5f, fminf(0.5f, cy)), size}};
+    pj_parallel_rows(image->height, radial_band, &ctx);
+}
+
 static void apply_grad_nd(PjImage *image, float stops, float angle_deg, float pos)
 {
     if (stops <= 0.0f) return;
@@ -1505,7 +1541,8 @@ static void trim_rect(size_t in_w, size_t in_h, const PjRenderOptions *o,
 
 static bool needs_resample(const PjRenderOptions *o)
 {
-    return o && (o->rotate != 0.0f || o->distortion != 0.0f || o->devignette != 0.0f);
+    return o && (o->rotate != 0.0f || o->distortion != 0.0f || o->devignette != 0.0f ||
+                 o->keystone_v != 0.0f || o->keystone_h != 0.0f);
 }
 
 bool pj_render_geometry(const char *preset_name, size_t in_w, size_t in_h, int crop,
@@ -1543,6 +1580,7 @@ typedef struct {
     double k;                 /* distortion */
     double vig;               /* devignette stops */
     double inv_halfdiag;
+    double kv, kh;            /* keystone: the stretch of the widened edge */
 } ResampleCtx;
 
 static void resample_band(size_t y0, size_t y1, void *vctx)
@@ -1557,6 +1595,19 @@ static void resample_band(size_t y0, size_t y1, void *vctx)
             /* undo the rotation: the output is the input turned clockwise */
             double rx = c->cosr * dx + c->sinr * dy;
             double ry = -c->sinr * dx + c->cosr * dy;
+            /* undo the perspective: the widened edge is sampled from a
+             * narrower band of the input (its sides run off the frame),
+             * the other edge from the input as it is */
+            if (c->kv != 0.0) {
+                double t = 0.5 - ry / (double)h;            /* 1 at the top, 0 at the bottom */
+                if (c->kv < 0.0) t = 1.0 - t;
+                rx /= 1.0 + 0.5 * fabs(c->kv) * t;
+            }
+            if (c->kh != 0.0) {
+                double t = 0.5 - rx / (double)w;            /* 1 at the left, 0 at the right */
+                if (c->kh < 0.0) t = 1.0 - t;
+                ry /= 1.0 + 0.5 * fabs(c->kh) * t;
+            }
             /* undo the distortion: sample closer in for barrel */
             double r2 = (rx * rx + ry * ry) * c->inv_halfdiag * c->inv_halfdiag;
             double s = 1.0 - c->k * r2;
@@ -1633,6 +1684,45 @@ static void apply_chroma_denoise(PjImage *image, float amount)
     scratch_put(chroma);
 }
 
+typedef struct { PjImage *image; const float *blurred; float amount; } SharpenCtx;
+
+static void sharpen_band(size_t y0, size_t y1, void *vctx)
+{
+    SharpenCtx *c = vctx;
+    size_t w = c->image->width;
+    for (size_t i = y0 * w; i < y1 * w; ++i) {
+        float *p = c->image->rgb + i * 3;
+        const float *b = c->blurred + i * 3;
+        float y = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+        float yb = 0.2126f * b[0] + 0.7152f * b[1] + 0.0722f * b[2];
+        float d = y - yb;
+        if (fabsf(d) < 0.002f) continue;          /* leave the noise floor alone */
+        float target = y + c->amount * d;
+        if (target < 0.0f) target = 0.0f;
+        float g = y > 1e-6f ? target / y : 1.0f;  /* luminance only: the ratios stay */
+        p[0] *= g; p[1] *= g; p[2] *= g;
+    }
+}
+
+/* capture sharpening: an unsharp mask on the luminance over about a
+ * pixel at full size (two box blurs of radius 1 approximate a small
+ * gaussian), scaled with the image so a preview sharpens like the
+ * export; 1.0 adds the difference once */
+static void apply_sharpen(PjImage *image, float amount)
+{
+    if (amount <= 0.0f) return;
+    float *blurred = scratch_frame(image->width, image->height);
+    if (!blurred) return;
+    memcpy(blurred, image->rgb, image->width * image->height * 3 * sizeof(float));
+    double diag = sqrt((double)image->width * image->width + (double)image->height * image->height);
+    unsigned radius = diag > 3000.0 ? (unsigned)lrint(diag / 3000.0) : 1;
+    box_blur(blurred, image->width, image->height, radius);
+    box_blur(blurred, image->width, image->height, radius);
+    SharpenCtx ctx = {image, blurred, fminf(amount, 2.0f) * 0.8f};
+    pj_parallel_rows(image->height, sharpen_band, &ctx);
+    scratch_put(blurred);
+}
+
 /* The input as the camera will see it: denoised, lens-corrected,
  * straightened, trimmed. NULL options or all-zero fields hand back a
  * clone, so renders without them are untouched. */
@@ -1646,7 +1736,8 @@ static PjImage *prepare_input(const PjImage *input, const PjRenderOptions *o, Pj
         double a = (double)o->rotate * 3.14159265358979323846 / 180.0;
         double hd = 0.5 * sqrt((double)input->width * (double)input->width + (double)input->height * (double)input->height);
         ResampleCtx rc = {input, work, 0.5 * (double)input->width, 0.5 * (double)input->height,
-                          cos(a), sin(a), (double)o->distortion, (double)o->devignette, 1.0 / hd};
+                          cos(a), sin(a), (double)o->distortion, (double)o->devignette, 1.0 / hd,
+                          fmax(-1.0, fmin(1.0, (double)o->keystone_v)), fmax(-1.0, fmin(1.0, (double)o->keystone_h))};
         pj_parallel_rows(input->height, resample_band, &rc);
     }
     size_t tx, ty, tw, th;
@@ -1662,6 +1753,7 @@ static PjImage *prepare_input(const PjImage *input, const PjRenderOptions *o, Pj
     else result = clone_image(input, error);
     if (!result) return NULL;
     if (o) apply_chroma_denoise(result, o->denoise);
+    if (o) apply_sharpen(result, o->sharpen);
     return result;
 }
 
@@ -1754,6 +1846,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         /* the light: white balance and the filter on the lens */
         apply_white_balance(image, options->temp, options->tint);
         apply_grad_nd(image, options->grad, options->grad_angle, options->grad_pos);
+        apply_radial(image, options->radial, options->radial_x, options->radial_y, options->radial_size);
     }
     {
         float ev = options ? options->ev : 0.0f;
@@ -1798,6 +1891,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         bool cross = options ? options->cross_process : false;
         float edge = options ? options->edge * strength : 0.0f;
         if (preset->instant_frame) { push = 0.0f; cross = false; edge = 0.0f; }
+        if (mono) cross = false;   /* crossed color curves mean nothing on B&W */
         uint64_t grain_seed = temporal
             ? seed ^ ((uint64_t)frame * UINT64_C(0x9E3779B97F4A7C15))
             : seed;

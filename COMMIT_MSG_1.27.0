@@ -1,0 +1,57 @@
+1.27.0: contact sheet, radial filter, keystone, sharpening, highlight
+recovery, lens profiles, Z f, completions
+
+Page:
+- contact sheet: the bracket's "film stocks" axis renders the current
+  look once per stock the camera takes, in one grid; a click takes the
+  stock. Brackets for radial, sharpen and keystone too.
+- Lens & framing shows a raw's lens (name, focal length, aperture) and
+  what its profile would set; "apply profile" sets the sliders.
+- new controls: radial filter (stops, center, size), sharpen, highlight
+  recovery, keystone vertical/horizontal.
+- cross-processing greyed out on a black-and-white camera.
+
+Engine (new scene keys, all identity at 0, in every front end):
+- radial, radialx, radialy, radialsize: stops inside a soft ellipse.
+- keystonev, keystoneh: perspective correction in the lens resample;
+  the widened edge's sides run off the frame, so no empty corners.
+- sharpen: capture sharpening, an unsharp mask on luminance over about
+  a pixel at full size, after the chroma denoise.
+- recover: raw highlight reconstruction at decode time - a clipped
+  sensor channel rebuilt toward the unclipped ones, neutral and bright
+  up to 1.6x sensor white, instead of clipped at white (0 is
+  byte-identical to before). Read by the decoder ahead of the render
+  (pj_raw_set_recover); the CLI, serve and the wasm set it from the
+  look.
+- cross-processing is dropped on a monochrome camera or B&W film
+  (nothing to cross); the CLIs say so.
+
+Raw:
+- the lens from EXIF (FocalLength, FNumber, LensSpecification,
+  LensModel) and Nikon's unencrypted lens tag 0x84; pj_raw_last_lens().
+- lens profiles (src/core/lensdb.c): distortion and corner falloff by
+  focal length and aperture for the AF-S 24-120/4G VR, AF-S 50/1.4G,
+  AF-S DX 18-55 VR, NIKKOR Z 24-70/4 S, Z 40/2, Z 28/2.8 - approximate,
+  from published charts. 'polajuice apply --lens auto' sets distortion
+  and devignette where they are 0; 'inspect' shows the lens and the
+  profile; serve's /api/stats and the wasm's 'lens' command carry it.
+- Z family color matrices from LibRaw: Z f, Z fc, Z 6/6 II, Z 5; a Z f
+  image-area fallback. Unverified against a file.
+
+Shell:
+- bash and zsh completion for polajuice and superjuice (commands,
+  options, cameras and films from the binaries), installed by
+  'make install' under $(PREFIX)/share.
+
+CLI: --keystonev --keystoneh --sharpen --recover --radial --radialx
+--radialy --radialsize --lens; superjuice and super8ify take the same.
+
+Tests: core (keystone, sharpen, radial, mono cross, reconstruction on
+the synthetic raw, profile lookup, 25 keys), compat (round trip, cross
+on bw-35, --lens auto on a JPEG), serve (lens:null, monochrome flag,
+recover served = CLI), wasm (keys, recover, lens), page (controls,
+cross disabled), Chromium (contact sheet with a served two-stock
+library, radial bracket), install (completions).
+
+Docs: README, RECIPES.md, PRESET_SOURCES.md (Z family, lens profiles,
+highlight reconstruction), man pages.

@@ -350,6 +350,12 @@ bool pj_preset_is_instant(const char *name)
     return preset && preset->instant_frame;
 }
 
+bool pj_preset_is_monochrome(const char *name)
+{
+    const PjPreset *preset = pj_find_preset(name);
+    return preset && preset->monochrome;
+}
+
 const char *pj_preset_format(const char *name)
 {
     const PjPreset *p = pj_find_preset(name);

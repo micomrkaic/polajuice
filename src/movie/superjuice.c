@@ -110,6 +110,10 @@ static void usage(FILE *stream)
         "      --crop MODE         camera (default, the gate crop) or full\n"
         "      --temp --tint --black --shadows --highlights --contrast\n"
         "      --grad --gradangle --gradpos   scene adjustments, as polajuice\n"
+        "      --radial --radialx --radialy --radialsize   radial filter\n"
+        "      --denoise --sharpen --distortion --devignette --rotate\n"
+        "      --keystonev --keystoneh --trimx --trimy --trimw --trimh\n"
+        "                          lens and framing, as polajuice\n"
         "      --age NUMBER        0..1\n"
         "      --strength NUMBER   0..1\n"
         "      --grain MODEL       classic (default) or silver (grain from\n"
@@ -301,6 +305,9 @@ int main(int argc, char **argv)
                 "cameras do not shoot movies\n", camera);
         return EXIT_FAILURE;
     }
+    if (options.cross_process && pj_preset_is_monochrome(camera))
+        fprintf(stderr, "note: %s is black and white; cross-processing has no "
+                "color curves to cross and is ignored\n", camera);
     /* Motion taxonomy, disclosed rather than enforced: some cameras never
      * advanced a frame in history. Physics is refused (instants above);
      * history merely gets a footnote - these are counterfactual movie

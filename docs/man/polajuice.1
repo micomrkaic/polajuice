@@ -126,6 +126,10 @@ Print where the film library, print stocks and web page are found
 (see
 .BR FILES ),
 flagging any that are missing.
+.PP
+Bash and zsh completion for the commands, options, cameras and films
+are installed with the program (bash-completion's directory and zsh's
+site-functions under the install prefix).
 .SH OPTIONS
 .SS The look
 .TP
@@ -162,7 +166,8 @@ in \-3..+4 stops in halves (push+1.5),
 .B cross
 (E-6 in C-41) or
 .BR cross+\fIN\fR .
-Not applicable to instant cameras.
+Not applicable to instant cameras; cross-processing is dropped on a
+black-and-white camera, which has no color curves to cross.
 .TP
 .BI \-\-crop " MODE"
 .B camera
@@ -226,8 +231,46 @@ Graduated ND density at the dark edge, 0..3;
 puts the dark edge (0 top, 90 right, 180 bottom, 270 left) and
 .BI \-\-gradpos " OFFSET"
 moves the transition, \-0.5..0.5 of the frame.
+.TP
+.BI \-\-radial " STOPS"
+Radial filter: stops inside a soft ellipse of the frame's shape, \-2..2
+(+1 lights the subject a stop); the edge feathers over the outer half
+of the radius.
+.BI \-\-radialx " X" ", " \-\-radialy " Y"
+put its center, as offsets from the frame center in fractions of the
+frame, \-0.5..0.5;
+.BI \-\-radialsize " R"
+is its radius in half-diagonals, 0.05..1 (0 means 0.35).
 .SS Lens and framing
 Applied to the input before everything else, in one resampling.
+.TP
+.BI \-\-lens " auto\fR|\fInone"
+With
+.BR auto ,
+a raw file's lens (from EXIF or the Nikon MakerNote), at its focal
+length and aperture, sets
+.B \-\-distortion
+and
+.B \-\-devignette
+from the profile table where they are 0 (values given explicitly are
+kept); the recipe records the numbers.
+.B polajuice inspect
+shows the lens and what the profile would set. Lenses with a profile:
+AF-S 24-120mm f/4G ED VR, AF-S 50mm f/1.4G, AF-S DX 18-55mm f/3.5-5.6G
+VR, NIKKOR Z 24-70mm f/4 S, Z 40mm f/2, Z 28mm f/2.8; the figures are
+approximate, from published test charts.
+.TP
+.BI \-\-recover " N"
+Raw highlight reconstruction, 0..1. At 0 every sensor channel is
+clipped at white, which paints a blown sky cyan or magenta; at 1 a
+clipped channel is rebuilt from the unclipped ones, so the highlight
+goes neutral and keeps its brightness through the scene shoulder.
+Raw input only.
+.TP
+.BI \-\-sharpen " N"
+Capture sharpening, 0..2: an unsharp mask on the luminance over about
+a pixel at full size, before the camera's optics soften it. For the
+softness of a demosaic; 1 adds the difference once.
 .TP
 .BI \-\-denoise " N"
 Chroma denoise 0..3.
@@ -241,6 +284,13 @@ Lift the corners, 0..2.
 .BI \-\-rotate " DEG"
 Straighten, \-15..15 (positive clockwise); the frame is trimmed to the
 largest rectangle without empty corners.
+.TP
+.BI \-\-keystonev " N" ", " \-\-keystoneh " N"
+Perspective, \-1..1. Vertical: positive widens the top edge (a
+building shot from below, leaning back), negative the bottom.
+Horizontal: positive widens the left edge, negative the right. 1 is a
+50% stretch of that edge; its sides run off the frame, so there are no
+empty corners.
 .TP
 .BI \-\-trimx " X" ", " \-\-trimy " Y" ", " \-\-trimw " W" ", " \-\-trimh " H"
 Trim to a rectangle given as fractions of the frame (left, top, width,
@@ -312,6 +362,13 @@ A D610 raw, straightened and warmed, on HP5 with an orange filter:
 .PP
 .nf
     polajuice apply DSC_0042.NEF \-c bw\-35 \-\-rotate 1.5 \-\-temp 0.5 \-\-filter orange \-o hp5.jpg
+.fi
+.PP
+The same raw with its lens corrected from the profile, the blown
+window rebuilt, the cat's face lit a stop:
+.PP
+.nf
+    polajuice apply DSC_0042.NEF \-c 35mm\-negative \-\-lens auto \-\-recover 1 \-\-radial 1 \-\-radialx 0.1 \-\-radialsize 0.3
 .fi
 .PP
 Replay a render on another file, two stops of grad ND added:

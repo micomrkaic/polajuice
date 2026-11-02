@@ -1,0 +1,87 @@
+#compdef polajuice superjuice
+# zsh completion for polajuice and superjuice. Installed by 'make install'
+# to $(PREFIX)/share/zsh/site-functions/; from a checkout add the
+# directory to fpath: fpath=(path/to/scripts/completions $fpath); compinit
+
+_polajuice_cameras() { local -a c; c=(${(f)"$(polajuice cameras 2>/dev/null | awk '/^[a-z0-9]/ {print $1}')"}); _describe 'camera' c; }
+_polajuice_films() { local -a f; f=(${(f)"$(polajuice films 2>/dev/null | awk 'NF == 1 {print $1}')"}); _describe 'film' f; _files -g '*.cube'; }
+
+_polajuice_scene_opts=(
+  '--temp[white balance warm(+)/cool(-), -2..2]:stops:'
+  '--tint[magenta(+)/green(-), -1..1]:stops:'
+  '--black[black point, -0.1..0.1]:level:'
+  '--shadows[lift(+)/drop(-) the shadows, -2..2]:stops:'
+  '--highlights[raw shoulder knee, -1..1]:n:'
+  '--contrast[scene contrast, -1..1]:n:'
+  '--grad[graduated ND, stops at the dark edge, 0..3]:stops:'
+  '--gradangle[dark edge: 0 top, 90 right, 180 bottom, 270 left]:degrees:'
+  '--gradpos[transition center, -0.5..0.5]:offset:'
+  '--radial[radial filter, stops inside, -2..2]:stops:'
+  '--radialx[radial center x, -0.5..0.5]:x:'
+  '--radialy[radial center y, -0.5..0.5]:y:'
+  '--radialsize[radial radius in half-diagonals, 0.05..1]:r:'
+  '--denoise[chroma denoise, 0..3]:n:'
+  '--sharpen[capture sharpening, 0..2]:n:'
+  '--recover[raw highlight reconstruction, 0..1]:n:'
+  '--distortion[barrel(+)/pincushion(-) correction, -0.3..0.3]:k:'
+  '--devignette[lift the corners, stops 0..2]:stops:'
+  '--rotate[straighten, degrees, -15..15]:degrees:'
+  '--keystonev[vertical perspective, -1..1]:n:'
+  '--keystoneh[horizontal perspective, -1..1]:n:'
+  '--trimx[trim left edge, 0..1]:x:' '--trimy[trim top edge, 0..1]:y:'
+  '--trimw[trim width, 0..1]:w:' '--trimh[trim height, 0..1]:h:'
+)
+_polajuice_look_opts=(
+  '(-c --camera)'{-c,--camera}'[camera archetype]:camera:_polajuice_cameras'
+  '(-f --film)'{-f,--film}'[film stock]:film:_polajuice_films'
+  '--no-film[built-in scalar color engine]'
+  '--any-film[bypass camera/film compatibility]'
+  '--develop[development]:mode:(normal push+1 push+2 push+3 push+4 pull-1 pull-2 pull-3 cross cross+1 cross+2)'
+  '--crop[format]:mode:(camera full)'
+  '--age[storage aging 0..1]:n:'
+  '--strength[blend strength 0..1]:n:'
+  '--grain[grain model]:model:(classic silver)'
+  '--edge[development edge effects 0..2]:n:'
+  '--ev[exposure, stops -4..4]:stops:'
+  '--halation[scale halation 0..2]:n:'
+  '--filter[lens contrast filter]:filter:(yellow orange red green blue)'
+  '--recipe[take the look from a recipe file or polajuice JPEG]:file:_files'
+  '--seed[grain seed]:n:'
+)
+
+_polajuice() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+  _arguments -C '1:command:->cmd' '*::arg:->args'
+  case $state in
+    cmd) _describe 'command' '(apply:render\ a\ photograph develop:straight\ print\ of\ a\ raw serve:the\ workspace\ page cameras:list\ cameras describe:one\ camera films:the\ film\ library inspect:what\ a\ file\ is paths:where\ the\ assets\ are)' ;;
+    args)
+      case $line[1] in
+        apply) _arguments "${_polajuice_look_opts[@]}" "${_polajuice_scene_opts[@]}" \
+                 '--print[print stock after the film]:stock:_polajuice_films' \
+                 '(-o --output)'{-o,--output}'[output file]:file:_files' \
+                 '--lens[lens profile from the raw]:mode:(auto none)' \
+                 '--linear[16-bit PNG/TIFF as scene-linear]' \
+                 '--save-recipe[write the look as a recipe]:file:_files' \
+                 '1:input:_files -g "*.(jpg|jpeg|JPG|JPEG|png|PNG|ppm|nef|NEF|dng|DNG|tif|tiff)"' ;;
+        develop) _arguments '(-o --output)'{-o,--output}'[output]:file:_files' '--ev[exposure]:stops:' '--linear' '1:raw:_files -g "*.(nef|NEF|dng|DNG|png|tif|tiff)"' ;;
+        serve) _arguments '--port[port]:port:' '--web[page directory]:dir:_files -/' '1:folder:_files -/' ;;
+        describe) _polajuice_cameras ;;
+        films) _polajuice_films ;;
+        inspect) _files ;;
+      esac ;;
+  esac
+}
+
+_superjuice() {
+  _arguments "${_polajuice_look_opts[@]}" "${_polajuice_scene_opts[@]}" \
+    '(-o --output)'{-o,--output}'[output movie]:file:_files' \
+    '--motion-scale[gate weave and flicker scale]:n:' \
+    '--crf[H.264 quality]:n:' \
+    '1:movie:_files -g "*.(mp4|MP4|mov|MOV|mkv|avi|m4v)"'
+}
+
+case $service in
+  polajuice) _polajuice "$@" ;;
+  superjuice) _superjuice "$@" ;;
+esac

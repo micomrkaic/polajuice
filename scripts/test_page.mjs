@@ -176,6 +176,27 @@ if (!/\ntrimx=0.1\n/.test(elems["recipe"].value) || !/\ntrimy=0.05\n/.test(elems
 if (!/--rotate -2.5/.test(elems["cli"].textContent) || !/--trimw 0.7/.test(elems["cli"].textContent)) throw new Error("CLI line lacks framing flags: " + elems["cli"].textContent);
 elems["trimleft"].value = "0"; elems["trimtop"].value = "0"; elems["trimright"].value = "0"; elems["trimbottom"].value = "0"; elems["rotate"].value = "0";
 console.log("lens and framing controls present; trim margins map to x,y,w,h in the recipe and CLI line");
+// 1.27: keystone, sharpen, recover, radial controls; the lens row; cross
+// disabled on a black-and-white camera
+for (const id of ["keystonev", "keystoneh", "sharpen", "recover", "radial", "radialx", "radialy", "radialsize", "lensapply"])
+  if (!elems[id]) throw new Error(id + " control absent");
+elems["keystonev"].value = "0.3"; elems["sharpen"].value = "1"; elems["radial"].value = "-0.5"; elems["radialsize"].value = "0.5"; elems["recover"].value = "1";
+elems["keystonev"].handlers["input"]();
+await new Promise(r => setTimeout(r, 400));
+for (const k of ["keystonev=0.3", "sharpen=1", "radial=-0.5", "radialsize=0.5", "recover=1"])
+  if (!new RegExp("\\n" + k + "\\n").test(elems["recipe"].value)) throw new Error("recipe lacks " + k + ":\n" + elems["recipe"].value);
+if (!/--keystonev 0.3\b/.test(elems["cli"].textContent) || !/--recover 1/.test(elems["cli"].textContent)) throw new Error("CLI line lacks 1.27 flags: " + elems["cli"].textContent);
+elems["keystonev"].value = "0"; elems["sharpen"].value = "0"; elems["radial"].value = "0"; elems["radialsize"].value = "0"; elems["recover"].value = "0";
+elems["develop"].add({ value: "normal" }); elems["develop"].add({ value: "cross" }); elems["develop"].add({ value: "cross+1" });
+elems["develop"].value = "cross";
+elems["camera"].value = "bw-35";
+elems["camera"].handlers["change"]();
+if (!elems["develop"].options.find(o => o.value === "cross").disabled) throw new Error("cross not disabled on bw-35");
+if (elems["develop"].value !== "normal") throw new Error("develop not reset from cross on bw-35: " + elems["develop"].value);
+elems["camera"].value = "35mm-slide";
+elems["camera"].handlers["change"]();
+if (elems["develop"].options.find(o => o.value === "cross").disabled) throw new Error("cross stuck disabled on a color camera");
+console.log("1.27 controls present; keys in the recipe and CLI line; cross disabled on B&W");
 
 // THE regression: pick an instant camera, then click a sample that suggests
 // a slide camera; the film dropdown must be rebuilt for the new camera.

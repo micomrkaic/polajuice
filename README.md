@@ -236,6 +236,22 @@ line records the trim and the straightening, so the wipe lays the
 original over a straightened, trimmed render turned and offset to
 match.
 
+Added in 1.27: `--keystonev`/`--keystoneh` correct perspective (+
+widens the top, or the left, edge; the stretched edge's sides run off
+the frame, so there are no empty corners to trim); `--sharpen` is
+capture sharpening, an unsharp mask on luminance over about a pixel at
+full size, for the softness of a demosaic; `--radial` with
+`--radialx/--radialy/--radialsize` is a radial filter, stops inside a
+soft ellipse (+1 lights the cat's face a stop); `--recover` rebuilds
+clipped raw channels from the unclipped ones so a blown sky goes
+neutral and bright instead of cyan; and `--lens auto` reads the raw's
+lens and focal length and sets `--distortion`/`--devignette` from a
+small profile table (24-120/4, 50/1.4G, 18-55 VR, Z 24-70/4 S; see
+docs/PRESET_SOURCES.md) where you left them at zero - `polajuice
+inspect` shows what it would set, and the page offers it as *apply
+profile*. Cross-processing on a black-and-white camera is dropped with
+a note (nothing to cross), and the page greys it out.
+
 ### Raw input: the scene-linear door
 
 `.nef` (Nikon) and `.dng` (Adobe, iPhone, most converters) open through
@@ -544,9 +560,14 @@ Four tools on the view, all page-side (renders are unchanged):
   - for judging grain and edge effects without rendering full size by
   hand; each full-size image is made once per look.
 - **Bracket**: nine renders of the current look stepping one knob
-  (exposure, develop, strength, age, halation, edge) in a grid over
-  the view; click a cell to take that value. On the native engine the
-  nine take about a second; in the browser engine they take their time.
+  (exposure, develop, strength, age, halation, edge, the scene and
+  lens knobs) in a grid over the view; click a cell to take that
+  value. On the native engine the nine take about a second; in the
+  browser engine they take their time.
+- **Contact sheet**: the bracket's *film stocks* axis renders the
+  current look once per stock the camera takes - every C-41 negative
+  for a 35mm camera, say - in one grid; click a cell to take that
+  stock. The question it answers is "Portra or Gold on this one?"
 
 ### `polajuice serve`: the workspace on the native engine
 

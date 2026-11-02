@@ -48,11 +48,11 @@ static int list_cameras(void)
                 }
         }
         const char *format = pj_preset_format(name);
-        printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, film ? film : "",
+        printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, film ? film : "",
                pj_preset_description(name),
                pj_preset_traits(name, traits, sizeof traits),
                pj_preset_is_instant(name) ? "instant" : "film", tokens,
-               format ? format : "");
+               format ? format : "", pj_preset_is_monochrome(name) ? "mono" : "color");
     }
     return 0;
 }
@@ -118,6 +118,13 @@ static int render(int argc, char **argv)
     if (strcmp(film, "-")) {
         lut = pj_lut3d_load_cube(film, &error);
         if (!lut) { fprintf(stderr, "%s\n", error.message); return 1; }
+    }
+    /* raw highlight reconstruction is decided before the decode: the
+     * recover key is read out of the scene string ahead of the rest */
+    pj_raw_set_recover(0.0f);
+    if (argc > 21) {
+        const char *at = strstr(argv[21], "recover=");
+        if (at && (at == argv[21] || at[-1] == ',')) pj_raw_set_recover(strtof(at + 8, NULL));
     }
     PjImage *image = pj_image_load(in_path, &error);
     if (!image) {
@@ -226,15 +233,42 @@ static int develop(int argc, char **argv)
     return 0;
 }
 
+/* the lens of a raw and what its profile would set, as JSON on stdout
+ * ("null" for a file without lens data) */
+static int lens_info(int argc, char **argv)
+{
+    if (argc != 3) { fprintf(stderr, "args: lens IN\n"); return 2; }
+    PjError error = {{0}};
+    PjImage *image = pj_image_load(argv[2], &error);
+    if (!image) { fprintf(stderr, "%s\n", error.message); return 1; }
+    bool raw = pj_image_is_scene_linear(image);
+    pj_image_free(image);
+    PjRawLens lens;
+    if (!raw || !pj_raw_last_lens(&lens)) { printf("null\n"); return 0; }
+    float dist = 0.0f, fall = 0.0f;
+    const char *prof = pj_lens_profile(&lens, &dist, &fall);
+    printf("{\"spec\":[%g,%g,%g,%g],\"model\":\"", (double)lens.min_focal, (double)lens.max_focal,
+           (double)lens.max_ap_min, (double)lens.max_ap_max);
+    for (const char *c = lens.model; *c; ++c) {
+        if (*c == '"' || *c == '\\') putchar('\\');
+        if ((unsigned char)*c >= 32) putchar(*c);
+    }
+    printf("\",\"focal\":%g,\"fnumber\":%g,\"profile\":", (double)lens.focal, (double)lens.fnumber);
+    if (prof) printf("\"%s\"", prof); else printf("null");
+    printf(",\"distortion\":%g,\"devignette\":%g}\n", (double)dist, (double)fall);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc >= 2 && !strcmp(argv[1], "develop")) return develop(argc, argv);
+    if (argc >= 2 && !strcmp(argv[1], "lens")) return lens_info(argc, argv);
     if (argc >= 2 && !strcmp(argv[1], "--list-cameras")) return list_cameras();
     if (argc >= 2 && !strcmp(argv[1], "--version")) {
         printf("%s\n", pj_version_string());
         return 0;
     }
     if (argc >= 2 && !strcmp(argv[1], "render")) return render(argc, argv);
-    fprintf(stderr, "modes: --list-cameras | --version | render ... | develop ...\n");
+    fprintf(stderr, "modes: --list-cameras | --version | render ... | develop ... | lens IN\n");
     return 2;
 }

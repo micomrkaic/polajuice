@@ -28,10 +28,18 @@ render. `key=value` sources into a shell, which is why it is not JSON.
     grad=0
     gradangle=0
     gradpos=0
+    radial=0
+    radialx=0
+    radialy=0
+    radialsize=0
     denoise=0
+    sharpen=0
+    recover=0
     distortion=0
     devignette=0
     rotate=0
+    keystonev=0
+    keystoneh=0
     trimx=0
     trimy=0
     trimw=0
@@ -66,6 +74,18 @@ render. `key=value` sources into a shell, which is why it is not JSON.
 | devignette | undo the lens's corner falloff, stops at the corners, 0..2 |
 | rotate | straighten, degrees, -15..15, + clockwise; corners outside come in black |
 | trimx, trimy, trimw, trimh | a crop of the frame in fractions, before the camera's format crop; width or height 0 = none |
+| radial | radial filter: stops inside a soft ellipse, -2..2; feathers over the outer half of the radius |
+| radialx, radialy | the ellipse's center, offset from the frame center in fractions of the frame, -0.5..0.5 |
+| radialsize | its radius in half-diagonals, 0.05..1; 0 means 0.35 |
+| sharpen | capture sharpening, 0..2: an unsharp mask on luminance over about a pixel at full size |
+| recover | raw highlight reconstruction, 0..1: clipped sensor channels rebuilt from the unclipped ones instead of clipped at white (raw input only) |
+| keystonev | vertical perspective, -1..1: + widens the top edge, - the bottom; 1 is a 50% stretch of that edge, its sides running off the frame |
+| keystoneh | horizontal perspective, -1..1: + widens the left edge, - the right |
+
+The lens profile (`--lens auto`, the page's *apply profile*) is not a
+key: it resolves to `distortion` and `devignette` values at render time,
+and those are what the recipe records, so a recipe replays the same on
+any input.
 
 A JPEG's comment carries one more line after the recipe,
 `# geometry in=W,H crop=X,Y,W,H place=X,Y out=W,H orig=W,H trim=X,Y

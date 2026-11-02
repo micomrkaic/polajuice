@@ -45,6 +45,16 @@ cmp -s "$TMP/srv4.jpg" "$TMP/cli4.jpg" || { echo "test_serve: lens render differ
 # the inspect numbers for a file in the folder
 curl -s "http://127.0.0.1:$PORT/api/stats?name=tiny.dng" | grep -q '"scene_linear":true' || { echo "test_serve: stats of a raw lacks scene_linear"; exit 1; }
 curl -s "http://127.0.0.1:$PORT/api/stats?name=cat.jpg" | grep -q '"stops_below_white"' || { echo "test_serve: stats of a jpeg lacks the mean"; exit 1; }
+# 1.27: the lens field (null for the synthetic raw, which names none), the
+# monochrome flag, and a recover render that differs from the clipped one
+curl -s "http://127.0.0.1:$PORT/api/stats?name=tiny.dng" | grep -q '"lens":null' || { echo "test_serve: stats of the synthetic raw should carry lens:null"; exit 1; }
+curl -s "http://127.0.0.1:$PORT/api/cameras" | grep -q '"name":"bw-35"[^}]*"monochrome":true' || { echo "test_serve: bw-35 not flagged monochrome"; exit 1; }
+curl -s "http://127.0.0.1:$PORT/api/render?name=tiny.dng&camera=35mm-negative&film=none&max=0" -o "$TMP/clip.jpg"
+curl -s "http://127.0.0.1:$PORT/api/render?name=tiny.dng&camera=35mm-negative&film=none&max=0&recover=1" -o "$TMP/recon.jpg"
+cmp -s "$TMP/clip.jpg" "$TMP/recon.jpg" && { echo "test_serve: recover=1 rendered the same as recover=0"; exit 1; }
+./polajuice inspect "$TMP/recon.jpg" | grep -q '^recover=1$' || { echo "test_serve: served recipe lacks recover"; exit 1; }
+./polajuice apply "$TMP/dir/tiny.dng" -c 35mm-negative --no-film --recover 1 -o "$TMP/recon_cli.jpg" >/dev/null 2>&1
+cmp -s "$TMP/recon.jpg" "$TMP/recon_cli.jpg" || { echo "test_serve: served recover render differs from the CLI"; exit 1; }
 # a dropped image travels in the body
 curl -s -o "$TMP/body.jpg" -X POST --data-binary "@$TMP/dir/cat.jpg" "http://127.0.0.1:$PORT/api/render?ext=jpg&camera=super8&film=none&ev=-0.5&halation=1.5&grain=silver&edge=1&seed=7&filter=orange"
 cmp -s "$TMP/body.jpg" "$TMP/cli.jpg" || { echo "test_serve: body render differs"; exit 1; }

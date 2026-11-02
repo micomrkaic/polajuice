@@ -77,6 +77,17 @@ static void usage(FILE *stream)
         "      --trimw --trimh     trim: width/height kept, fraction 0..1\n"
         "      --filter NAME       lens contrast filter: yellow, orange, red,\n"
         "                          green, blue (orange + a bw camera = drama)\n"
+        "      --keystonev N       vertical perspective, -1..1: + widens the top\n"
+        "      --keystoneh N       horizontal perspective, -1..1: + widens the left\n"
+        "      --sharpen N         capture sharpening 0..2 (the demosaic's softness)\n"
+        "      --lens auto         a raw's lens profile sets distortion and\n"
+        "                          devignette where they are 0 ('inspect' shows it)\n"
+        "      --recover N         raw highlight reconstruction 0..1: clipped\n"
+        "                          channels rebuilt from the others (neutral,\n"
+        "                          bright) instead of clipped at white\n"
+        "      --radial STOPS      radial filter: stops inside a soft ellipse, -2..2\n"
+        "      --radialx --radialy its center, offset from the middle, -0.5..0.5\n"
+        "      --radialsize R      its radius in half-diagonals, 0.05..1 (0 = 0.35)\n"
         "      --crop MODE         camera (default): the camera's own format\n"
         "                          cut from the middle (square, instant\n"
         "                          print, Super 8 gate); full: keep the whole\n"
@@ -169,6 +180,24 @@ static int inspect_image(const char *path)
                pj_raw_description(),
                mean, mean > 0.0 ? -log2(mean) : 0.0,
                100.0 * (double)clipped / (double)(n ? n : 1));
+    if (raw) {
+        PjRawLens lens;
+        if (pj_raw_last_lens(&lens)) {
+            float dist = 0.0f, fall = 0.0f;
+            const char *name = pj_lens_profile(&lens, &dist, &fall);
+            printf("lens: ");
+            if (lens.have) printf("%g-%gmm f/%g-%g", (double)lens.min_focal, (double)lens.max_focal,
+                                  (double)lens.max_ap_min, (double)lens.max_ap_max);
+            else printf("(unnamed)");
+            if (lens.model[0]) printf(" %s", lens.model);
+            if (lens.focal > 0.0f) printf(", shot at %gmm", (double)lens.focal);
+            if (lens.fnumber > 0.0f) printf(" f/%g", (double)lens.fnumber);
+            printf("\n");
+            if (name) printf("lens profile: %s -> --distortion %g --devignette %g (--lens auto applies them)\n",
+                             name, (double)dist, (double)fall);
+            else printf("lens profile: none for this lens\n");
+        } else printf("lens: none recorded (a manual lens?)\n");
+    }
     pj_image_free(image);
     return EXIT_SUCCESS;
 }
@@ -233,7 +262,7 @@ static int apply(int argc, char **argv)
     const char *print_request = NULL;
     bool no_film = false;
     bool linear_input = false;
-    bool any_film = false;
+    bool any_film = false, lens_auto = false;
     const char *save_recipe = NULL;
     PjRenderOptions options = {.seed = UINT64_C(0x504f4c414a554943),
                                .strength = 1.0f};
@@ -260,6 +289,12 @@ static int apply(int argc, char **argv)
             film_request = argv[++i];
         else if (!strcmp(argv[i], "--no-film"))
             no_film = true;
+        else if (!strcmp(argv[i], "--lens") && i + 1 < argc) {
+            const char *mode = argv[++i];
+            if (!strcmp(mode, "auto")) lens_auto = true;
+            else if (!strcmp(mode, "none")) lens_auto = false;
+            else { fprintf(stderr, "polajuice: --lens takes auto or none\n"); return EXIT_FAILURE; }
+        }
         else if (!strcmp(argv[i], "--any-film"))
             any_film = true;
         else if (!strcmp(argv[i], "--print") && i + 1 < argc)
@@ -392,6 +427,9 @@ static int apply(int argc, char **argv)
         pj_preset_is_instant(camera))
         fprintf(stderr, "note: %s develops inside the film unit; "
                 "--develop is ignored for instant cameras\n", camera);
+    if (options.cross_process && pj_preset_is_monochrome(camera))
+        fprintf(stderr, "note: %s is black and white; cross-processing has no "
+                "color curves to cross and is ignored\n", camera);
     if (options.edge > 0.0f && pj_preset_is_instant(camera))
         fprintf(stderr, "note: %s develops inside the film unit; "
                 "--edge is ignored for instant cameras\n", camera);
@@ -465,6 +503,50 @@ static int apply(int argc, char **argv)
     if (!options.film_process)
         options.film_process = pj_preset_primary_process(camera);
 
+    const char *prof = getenv("POLAJUICE_PROFILE");
+    bool profiling = prof && *prof && *prof != '0';
+    struct timespec t0, t1;
+    if (profiling) {
+        timespec_get(&t0, TIME_UTC);
+        fprintf(stderr, "polajuice profile (%u threads)\n", pj_thread_count());
+    }
+    pj_raw_set_recover(options.recover);
+    PjImage *source = linear_input ? pj_image_load_linear(input, &error)
+                                   : pj_image_load(input, &error);
+    if (!source) {
+        pj_lut3d_free(lut);
+        pj_lut3d_free(print_lut);
+        return fail(&error);
+    }
+    if (profiling) {
+        timespec_get(&t1, TIME_UTC);
+        fprintf(stderr, "  %-22s %6.1f ms\n", "load (decode)",
+                ((double)t1.tv_sec - (double)t0.tv_sec) * 1000.0 + ((double)t1.tv_nsec - (double)t0.tv_nsec) / 1e6);
+    }
+    /* --lens auto: the file's lens, at its focal length and aperture,
+     * sets the corrections the user left at zero; the recipe records the
+     * numbers, so it replays the same on any input */
+    if (lens_auto) {
+        PjRawLens lens;
+        float dist = 0.0f, fall = 0.0f;
+        const char *name = pj_raw_last_lens(&lens) && pj_image_is_scene_linear(source)
+                           ? pj_lens_profile(&lens, &dist, &fall) : NULL;
+        if (name) {
+            bool set_d = options.distortion == 0.0f, set_v = options.devignette == 0.0f;
+            if (set_d) options.distortion = dist;
+            if (set_v) options.devignette = fall;
+            fprintf(stderr, "lens: %s at %gmm f/%g -> distortion %g%s, devignette %g%s\n",
+                    name, (double)lens.focal, (double)lens.fnumber,
+                    (double)dist, set_d ? "" : " (kept yours)", (double)fall, set_v ? "" : " (kept yours)");
+        } else if (!pj_image_is_scene_linear(source))
+            fprintf(stderr, "note: --lens auto needs a raw file (no lens data in %s)\n", input);
+        else if (lens.have)
+            fprintf(stderr, "note: no profile for this lens (%g-%gmm f/%g-%g%s%s); corrections left as given\n",
+                    (double)lens.min_focal, (double)lens.max_focal, (double)lens.max_ap_min, (double)lens.max_ap_max,
+                    lens.model[0] ? ", " : "", lens.model);
+        else
+            fprintf(stderr, "note: %s names no lens (a manual lens?); corrections left as given\n", input);
+    }
     static char recipe_text[1024];
     {
         char print_stem[256];
@@ -486,25 +568,6 @@ static int apply(int argc, char **argv)
         }
     }
 
-    const char *prof = getenv("POLAJUICE_PROFILE");
-    bool profiling = prof && *prof && *prof != '0';
-    struct timespec t0, t1;
-    if (profiling) {
-        timespec_get(&t0, TIME_UTC);
-        fprintf(stderr, "polajuice profile (%u threads)\n", pj_thread_count());
-    }
-    PjImage *source = linear_input ? pj_image_load_linear(input, &error)
-                                   : pj_image_load(input, &error);
-    if (!source) {
-        pj_lut3d_free(lut);
-        pj_lut3d_free(print_lut);
-        return fail(&error);
-    }
-    if (profiling) {
-        timespec_get(&t1, TIME_UTC);
-        fprintf(stderr, "  %-22s %6.1f ms\n", "load (decode)",
-                ((double)t1.tv_sec - (double)t0.tv_sec) * 1000.0 + ((double)t1.tv_nsec - (double)t0.tv_nsec) / 1e6);
-    }
     PjGeometry geom;
     pj_render_geometry_opt(camera, pj_image_width(source), pj_image_height(source), &options, &geom);
     PjImage *result = pj_render(source, camera, &options, &error);

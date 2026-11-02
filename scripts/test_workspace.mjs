@@ -16,9 +16,20 @@ catch (e) { console.log("test_workspace: playwright not installed, skipping"); p
 const exe = process.env.PLAYWRIGHT_CHROMIUM || "";
 const types = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm",
                 ".json": "application/json", ".jpg": "image/jpeg", ".cube": "text/plain" };
+/* a two-stock film library for the contact sheet: a manifest and tiny
+ * cubes (a 2-point identity and a 2-point warm one), served in place of
+ * the staged films the sandbox does not have */
+const cubeText = warm => "TITLE \"test\"\nLUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n"
+  .replace(/^1 1 1$/m, warm ? "1 0.95 0.85" : "1 1 1");
+const fakeFilms = {
+  families: [{ name: "Test negatives", process: "C-41", note: "", stocks: [{ stem: "test_neg_a", blurb: "" }, { stem: "test_neg_b", blurb: "" }] },
+             { name: "Test slides", process: "E-6", note: "", stocks: [{ stem: "test_slide", blurb: "" }] }] };
 const server = createServer(async (req, res) => {
   try {
-    const path = join(webDir, decodeURIComponent(req.url.split("?")[0]).replace(/^\/+/, "") || "index.html");
+    const url = decodeURIComponent(req.url.split("?")[0]);
+    if (url === "/films/films.json") { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(fakeFilms)); return; }
+    if (/^\/films\/test_.*\.cube$/.test(url)) { res.writeHead(200, { "content-type": "text/plain" }); res.end(cubeText(/_b|slide/.test(url))); return; }
+    const path = join(webDir, url.replace(/^\/+/, "") || "index.html");
     const data = await readFile(path);
     res.writeHead(200, { "content-type": types[extname(path)] || "application/octet-stream" });
     res.end(data);
@@ -169,8 +180,7 @@ await page.selectOption("#camera", "polaroid-600");
 await page.waitForFunction(() => /camera=polaroid-600\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
 const previewW = await page.$eval("#view", e => e.naturalWidth);
 await page.click("#one2one");
-await page.waitForFunction(w => document.getElementById("view").naturalWidth > w * 1.2, previewW, { timeout: 120000 });
-const fullW = await page.$eval("#view", e => e.naturalWidth);
+const fullW = await (await page.waitForFunction(w => document.getElementById("view").naturalWidth > w * 1.2 && document.getElementById("view").naturalWidth, previewW, { timeout: 120000 })).jsonValue();
 await page.click("#wipe"); await page.selectOption("#wipeagainst", "original");
 await page.waitForFunction(() => { const H = window.__polajuice; const f = H.frame(); const O = H.imageInfo(H.leftKind());
   return f && H.shownInfo().full && O && O.full && f.sc === 1; }, null, { timeout: 60000 });
@@ -212,6 +222,33 @@ await page.click("#wipe");
 await page.$eval("#rotate", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
 await page.$eval("#trimleft", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
 await page.waitForFunction(() => /\nrotate=0\n/.test(document.getElementById("recipe").value) && /\ntrimw=0\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+// 1.27: the contact sheet renders every stock the camera takes (the two
+// C-41 test negatives for 35mm-negative, the slide left out) and a click
+// takes the stock; a radial bracket runs like the others
+await page.selectOption("#camera", "35mm-negative");
+await page.waitForFunction(() => /camera=35mm-negative\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+const stocks = await page.$eval("#film", e => [...e.options].map(o => o.value).filter(v => !v.startsWith("__")));
+if (stocks.join() !== "test_neg_a,test_neg_b") fail("film select for 35mm-negative lists " + stocks.join() + ", expected the two C-41 test stocks");
+await page.selectOption("#bracketaxis", "film");
+await page.click("#bracket");
+await page.waitForFunction(() => /contact sheet — 2 stocks/.test(document.getElementById("sheethead").textContent), null, { timeout: 60000 });
+await page.waitForFunction(() => /bracket: film — click/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
+const sheetCells = await page.$$eval("#sheetgrid figure img", imgs => imgs.filter(i => i.src.startsWith("blob:")).length);
+if (sheetCells !== 2) fail("contact sheet rendered " + sheetCells + " of 2 stocks");
+const sheetCaps = await page.$$eval("#sheetgrid figcaption", c => c.map(e => e.textContent));
+if (sheetCaps.join() !== "test_neg_a,test_neg_b") fail("contact sheet captions: " + sheetCaps.join());
+await page.click("#sheetgrid figure:nth-child(2)");
+await page.waitForFunction(() => document.getElementById("film").value === "test_neg_b", null, { timeout: 10000 });
+await page.waitForFunction(() => /\nfilm=test_neg_b\n/.test(document.getElementById("recipe").value), null, { timeout: 60000 });
+await page.selectOption("#film", "__auto__");
+await page.selectOption("#bracketaxis", "radial");
+await page.click("#bracket");
+await page.waitForFunction(() => /bracket: radial — click/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
+if (await page.$$eval("#sheetgrid figure img", imgs => imgs.filter(i => i.src.startsWith("blob:")).length) !== 9) fail("radial bracket did not render 9 cells");
+await page.keyboard.press("Escape");
+await page.selectOption("#camera", "super8");
+await page.waitForFunction(() => /camera=super8\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+console.log("contact sheet ok: 2 stocks rendered and taken by click; radial bracket ok");
 await page.selectOption("#bracketaxis", "ev");
 await page.click("#bracket");
 await page.waitForFunction(() => /bracket: ev — click/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
@@ -225,9 +262,19 @@ if (await page.$eval("#ev", e => e.value) !== evWant) fail("bracket cell did not
 await page.waitForFunction(w => new RegExp("\\nev=" + w + "\\n").test(document.getElementById("recipe").value), evWant, { timeout: 60000 });
 await page.click("#loupe-btn");
 await page.waitForFunction(() => /loupe: full size \d+×\d+ ready/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
-await page.mouse.move(vp.x + vp.w * 0.5, vp.y + vp.h * 0.5);
-await page.mouse.move(vp.x + vp.w * 0.5 + 3, vp.y + vp.h * 0.5);
-await page.waitForFunction(() => document.getElementById("loupe").style.display === "block", null, { timeout: 10000 });
+/* the viewport may have been re-laid out since vp was measured, and a
+ * render scheduled by the bracket click can land between moves: aim at
+ * the view itself and keep nudging until the loupe is up */
+{
+  const vr = await page.$eval("#view", e => e.getBoundingClientRect().toJSON());
+  let up = false;
+  for (let i = 0; i < 40 && !up; ++i) {
+    await page.mouse.move(vr.x + vr.width * 0.5 + (i % 2), vr.y + vr.height * 0.5);
+    await page.waitForTimeout(250);
+    up = await page.$eval("#loupe", e => e.style.display === "block");
+  }
+  if (!up) fail("loupe did not show over the current render: " + await page.$eval("#status", e => e.textContent));
+}
 const bg = await page.$eval("#loupe", e => e.style.backgroundSize);
 if (!/\d+px \d+px/.test(bg)) fail("loupe has no full-size image: " + bg);
 // the loupe shows what is on view: the original at its own full size, A at full size

@@ -13,7 +13,9 @@ import { WASI, WASIProcExit, File, PreopenDirectory, ConsoleStdout }
 
 /* the scene adjustments as the engine's one argument: "k=v,k=v", "-" for none */
 export const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
-                           "denoise", "distortion", "devignette", "rotate", "trimx", "trimy", "trimw", "trimh"];
+                           "radial", "radialx", "radialy", "radialsize",
+                           "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
+                           "trimx", "trimy", "trimw", "trimh"];
 function sceneArg(scene) {
     if (!scene) return "-";
     const parts = SCENE_KEYS.filter(k => scene[k] !== undefined && scene[k] !== null && Number(scene[k]) !== 0)
@@ -65,12 +67,12 @@ async function run(args, workFiles) {
             const r = await run(["--list-cameras"], {});
             if (r.code !== 0) throw new Error(r.stderr || "camera listing failed");
             return r.stdout.trim().split("\n").map(line => {
-                const [name, film, description, traits, kind, procs, format]
+                const [name, film, description, traits, kind, procs, format, color]
                     = line.split("\t");
                 return { name, film: film || null, description,
                          traits: traits || "", instant: kind === "instant",
                          processes: procs ? procs.split(",") : [],
-                         format: format || null };
+                         format: format || null, monochrome: color === "mono" };
             });
         },
         /* inputBytes: Uint8Array; ext: "jpg"|"png"|"nef"|"dng"; cubeText: string|null;
@@ -87,6 +89,15 @@ async function run(args, workFiles) {
             const out = r.files.get("out.jpg");
             if (!out) throw new Error("develop produced no output");
             return out.data;
+        },
+        /* The lens of a raw file and what its profile would set:
+         * {spec, model, focal, fnumber, profile, distortion, devignette},
+         * or null for a file without lens data. */
+        async lens({ inputBytes, ext }) {
+            const inName = "in." + inputExtension(ext);
+            const r = await run(["lens", "work/" + inName], { [inName]: inputBytes });
+            if (r.code !== 0) throw new Error(r.stderr.trim() || `lens failed (${r.code})`);
+            try { return JSON.parse(r.stdout.trim()); } catch (e) { return null; }
         },
         async render({ inputBytes, ext, camera, cubeText, filmProcess = null,
                        filmStem = null, printCubeText = null, filter = null,
@@ -198,6 +209,11 @@ export function createNativeEngine(base, info) {
         async files() { return (await expectOk(await fetch(api("/api/files"), { cache: "no-store" }))).json(); },
         fileUrl(name) { return api("/api/file", { name }); },
         async stats(name) { return (await expectOk(await fetch(api("/api/stats", { name })))).json(); },
+        async lens(o) {
+            if (!o.name) return null;
+            const st = await (await expectOk(await fetch(api("/api/stats", { name: o.name })))).json();
+            return st && st.lens ? st.lens : null;
+        },
         developUrl(name, maxDim) { return api("/api/develop", { name, max: maxDim || 0 }); },
         async exportFile(o) {
             const r = await fetch(api("/api/export", { ...lookParams(o), name: o.name }), { method: "POST" });

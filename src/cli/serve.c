@@ -279,6 +279,10 @@ static unsigned char *jpeg_bytes(PjImage *image, size_t *len, PjError *error)
 static PjImage *load_request_image(const Request *r, char *msg, size_t msgsize)
 {
     PjError error = {{0}};
+    /* raw highlight reconstruction is a decode-time choice: the look's
+     * recover value goes to the decoder before the file is opened */
+    const char *recover = param(r, "recover");
+    pj_raw_set_recover(recover ? strtof(recover, NULL) : 0.0f);
     const char *name = param(r, "name");
     if (name) {
         if (!safe_name(name) || !is_image_name(name)) { snprintf(msg, msgsize, "bad file name"); return NULL; }
@@ -342,10 +346,11 @@ static void handle_cameras(int fd)
         k += (size_t)snprintf(json + k, size - k,
                               "%s{\"name\":\"%s\",\"film\":%s%s%s,\"description\":\"%s\","
                               "\"traits\":\"%s\",\"instant\":%s,\"processes\":[%s],"
-                              "\"format\":%s%s%s}",
+                              "\"format\":%s%s%s,\"monochrome\":%s}",
                               i ? "," : "", nesc, film ? "\"" : "", film ? fesc : "null", film ? "\"" : "",
                               desc, tesc, pj_preset_is_instant(name) ? "true" : "false", procs,
-                              format ? "\"" : "", format ? fmtesc : "null", format ? "\"" : "");
+                              format ? "\"" : "", format ? fmtesc : "null", format ? "\"" : "",
+                              pj_preset_is_monochrome(name) ? "true" : "false");
     }
     snprintf(json + k, size - k, "]");
     respond_json(fd, json);
@@ -418,12 +423,28 @@ static void handle_stats(int fd, const Request *r)
     mean = n ? mean / (double)n : 0.0;
     char desc[600];
     json_escape(raw ? pj_raw_description() : "", desc, sizeof desc);
-    char json[1024];
+    /* the lens, and what its profile would set (the page offers it) */
+    char lens_json[512] = "null";
+    PjRawLens lens;
+    if (raw && pj_raw_last_lens(&lens)) {
+        float dist = 0.0f, fall = 0.0f;
+        const char *prof = pj_lens_profile(&lens, &dist, &fall);
+        char model[160], pname[160];
+        json_escape(lens.model, model, sizeof model);
+        json_escape(prof ? prof : "", pname, sizeof pname);
+        snprintf(lens_json, sizeof lens_json,
+                 "{\"spec\":[%g,%g,%g,%g],\"model\":\"%s\",\"focal\":%g,\"fnumber\":%g,"
+                 "\"profile\":%s%s%s,\"distortion\":%g,\"devignette\":%g}",
+                 (double)lens.min_focal, (double)lens.max_focal, (double)lens.max_ap_min, (double)lens.max_ap_max,
+                 model, (double)lens.focal, (double)lens.fnumber,
+                 prof ? "\"" : "null", pname, prof ? "\"" : "", (double)dist, (double)fall);
+    }
+    char json[1700];
     snprintf(json, sizeof json,
              "{\"width\":%zu,\"height\":%zu,\"scene_linear\":%s,\"mean\":%.5f,"
-             "\"stops_below_white\":%.3f,\"clipped_percent\":%.4f,\"raw\":\"%s\"}",
+             "\"stops_below_white\":%.3f,\"clipped_percent\":%.4f,\"raw\":\"%s\",\"lens\":%s}",
              pj_image_width(image), pj_image_height(image), raw ? "true" : "false", mean,
-             mean > 0.0 ? -log2(mean) : 0.0, 100.0 * (double)clipped / (double)(n ? n : 1), desc);
+             mean > 0.0 ? -log2(mean) : 0.0, 100.0 * (double)clipped / (double)(n ? n : 1), desc, lens_json);
     pj_image_free(image);
     respond_json(fd, json);
 }
