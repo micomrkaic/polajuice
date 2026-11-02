@@ -24,7 +24,11 @@
 
 ## 0.3 — iPhone input
 
-- HEIC/Display P3 decoding
+- HEIC/Display P3 decoding (1.27.1: HEIC is told by content and
+  converted on the way in by an installed heif-convert/ImageMagick/sips;
+  decoding it natively would mean an HEVC decoder, which stays out by
+  design; Display P3 is not yet honored - the converter's JPEG is read
+  as sRGB)
 - explicit SDR and HDR paths
 - conservative computational-photography normalization
 - optional ProRAW input through LibRaw (done without LibRaw: the

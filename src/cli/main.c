@@ -51,7 +51,8 @@ static void usage(FILE *stream)
         "                          film (cinema negative->print model)\n"
         "  -o, --output PATH       output path; default INPUT_CAMERA.ext\n"
         "                          formats by extension: .ppm .png .jpg .jpeg\n"
-        "                          (input also .nef .dng, or --linear)\n"
+        "                          (input also .nef .dng, .heic through an\n"
+        "                          installed converter, or --linear)\n"
         "      --strength NUMBER   blend strength from 0 to 1 (default 1)\n"
         "      --develop MODE      development: normal (default), push+N or\n"
         "                          pull-N stops (-3..+4, halves allowed:\n"
@@ -114,6 +115,9 @@ static void usage(FILE *stream)
         "  -h, --help              show this help\n\n",
         stream);
     fputs(
+        "HEIC: an HEVC image, not decoded here; with heif-convert, heif-dec,\n"
+        "magick, convert or sips on the PATH it is converted once to\n"
+        "NAME_from_heic.jpg beside the source and that is what opens.\n\n"
         "Raw input: .nef and .dng files open through a scene-linear door -\n"
         "the sensor's white sits a stop above display white and the top stop\n"
         "rolls in through a shoulder, so halation and the film curve see real\n"

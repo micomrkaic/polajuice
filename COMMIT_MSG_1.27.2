@@ -1,0 +1,25 @@
+1.27.2: HEIC told by content and converted on the way in; docs
+
+- a HEIC/HEIF/AVIF is recognized by its ftyp box whatever the extension
+  (a HEIC renamed .jpg included) and refused with the ways in: convert
+  it, shoot JPEG or ProRAW, or install a converter. Native, wasm, and
+  the page's drop zone (which checks the bytes before the engine sees
+  them).
+- the CLI (apply, develop, inspect) and 'polajuice serve' convert a
+  HEIC themselves when heif-convert, heif-dec, magick, convert or sips
+  is on the PATH: once, to NAME_from_heic.jpg beside the source, reused
+  while it is newer than the source. The served strip lists HEICs
+  (shown through the converter like a raw's straight print), renders
+  and exports them, and keeps the derived JPEG out of the strip and the
+  batch. EXIF orientation survives the round trip (checked with
+  libheif's x265 build).
+- src/cli/heic.c: fork/exec, no shell; linked into the CLIs only.
+
+Tests: core (sniffing, refusal by content), compat and serve (a stub
+HEIC and a stand-in converter on the PATH prove the plumbing without
+libheif: conversion, reuse, derived file hidden, batch covers it),
+wasm and page (refusal by content).
+
+Docs: --help names HEIC and the converter; README title without a stale
+version, HEIC section, completions in the install notes; ROADMAP marks
+HEIC done as far as it goes (Display P3 still read as sRGB).

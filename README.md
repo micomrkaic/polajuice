@@ -1,4 +1,4 @@
-# Polajuice 1.6.0 — the juice package
+# Polajuice — the juice package
 
 One engine, two front-ends: **polajuice** for stills, **superjuice** for
 movies. Both are thin drivers over the same core (`libpolajuice.a`) and
@@ -42,7 +42,9 @@ film library: a library already fetched into the source tree is copied,
 the rest is downloaded. `make install-files` is the same without the
 network, `make uninstall` removes all of it, `make install PREFIX=/usr/local`
 installs system-wide, `make install-dev` adds the header and the static
-library. Installed, the tools run from any directory and find their
+library. Bash and zsh completion for both tools (commands, options,
+cameras and films, read from the binaries) go under `share/` with the
+rest; zsh needs that `site-functions` directory on its `fpath`. Installed, the tools run from any directory and find their
 assets through `$POLAJUICE_*`, `./data` and `./web` when in a checkout,
 `~/.local/share/polajuice`, then the build's datadir; `polajuice paths`
 shows the result.
@@ -202,10 +204,10 @@ the web page shows them as a click-to-load strip with a suggested camera
 per photo, and CLI users can run e.g.
 `./polajuice apply web/samples/classic-jaguar.jpg -c technicolor-3strip`.
 
-HEIC still needs one external conversion (`magick input.heic input.jpg`, or
-`sips -s format jpeg` on macOS). JPEG, PNG and PPM are treated as 8-bit
-sRGB at the boundary and converted to linear RGB for processing; they
-render exactly as they did before raw input existed.
+HEIC goes through an installed converter on the way in (see *HEIC from
+a phone* below). JPEG, PNG and PPM are treated as 8-bit sRGB at the
+boundary and converted to linear RGB for processing; they render
+exactly as they did before raw input existed.
 
 ### The scene: adjustments before the camera
 
