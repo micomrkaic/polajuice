@@ -12,21 +12,69 @@
 #include <strings.h>
 #include <sys/stat.h>
 
+/* ---- where the assets are --------------------------------------------
+ * The binaries run from the source tree or from an install, and a user
+ * may keep a library elsewhere, so every asset directory (the film
+ * library, the print stocks, the web page) is found in this order:
+ *   1. its own variable ($POLAJUICE_FILMS, $POLAJUICE_PRINTS, $POLAJUICE_WEB)
+ *   2. $POLAJUICE_HOME/<name>, one variable for a whole relocated set
+ *   3. the source tree's path relative to the working directory, when it
+ *      exists (data/luts, data/prints, web - running from the repo)
+ *   4. ${XDG_DATA_HOME:-~/.local/share}/polajuice/<name> ('make install')
+ *   5. POLAJUICE_DATADIR/<name>, baked in at build time from the
+ *      Makefile's datadir (a system-wide 'make install PREFIX=/usr/local')
+ * The first directory that exists wins; if none does, 4 is returned so
+ * the error message names the place 'make install' would fill. */
+#ifndef POLAJUICE_DATADIR
+#define POLAJUICE_DATADIR "/usr/local/share/polajuice"
+#endif
+
+static bool dir_exists(const char *path)
+{
+    struct stat st;
+    return path && *path && stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+const char *asset_dir(const char *env, const char *name, const char *in_tree, char *buf, size_t n)
+{
+    const char *own = env ? getenv(env) : NULL;
+    if (own && *own) { snprintf(buf, n, "%s", own); return buf; }
+    const char *home_set = getenv("POLAJUICE_HOME");
+    if (home_set && *home_set) { snprintf(buf, n, "%s/%s", home_set, name); return buf; }
+    if (dir_exists(in_tree)) { snprintf(buf, n, "%s", in_tree); return buf; }
+    char user[1024];
+    const char *xdg = getenv("XDG_DATA_HOME"), *home = getenv("HOME");
+    if (xdg && *xdg) snprintf(user, sizeof user, "%s/polajuice/%s", xdg, name);
+    else if (home && *home) snprintf(user, sizeof user, "%s/.local/share/polajuice/%s", home, name);
+    else user[0] = '\0';
+    if (dir_exists(user)) { snprintf(buf, n, "%s", user); return buf; }
+    snprintf(buf, n, "%s/%s", POLAJUICE_DATADIR, name);
+    if (dir_exists(buf)) return buf;
+    snprintf(buf, n, "%s", user[0] ? user : in_tree);
+    return buf;
+}
+
 /* ---- film library ----------------------------------------------------- */
 
 const char *film_library_root(void)
 {
-    const char *env = getenv("POLAJUICE_FILMS");
-    return env && *env ? env : "data/luts";
+    static char buf[2048];
+    return asset_dir("POLAJUICE_FILMS", "luts", "data/luts", buf, sizeof buf);
 }
 
 /* Print stocks live beside the fetched film library: shipped synthetic
  * placeholders (and any measured print cubes the user adds) in
  * data/prints, overridable with POLAJUICE_PRINTS. */
-static const char *print_library_root(void)
+const char *print_library_root(void)
 {
-    const char *env = getenv("POLAJUICE_PRINTS");
-    return env && *env ? env : "data/prints";
+    static char buf[2048];
+    return asset_dir("POLAJUICE_PRINTS", "prints", "data/prints", buf, sizeof buf);
+}
+
+const char *web_root(void)
+{
+    static char buf[2048];
+    return asset_dir("POLAJUICE_WEB", "web", "web", buf, sizeof buf);
 }
 
 typedef struct {

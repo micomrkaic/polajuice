@@ -1,0 +1,30 @@
+1.26.0: make install, man pages, assets found from anywhere
+
+Install:
+- 'make install' puts polajuice, superjuice and super8ify in ~/.local/bin,
+  the print stocks and the workspace page in ~/.local/share/polajuice/,
+  the man pages in ~/.local/share/man/man1/, and fills
+  ~/.local/share/polajuice/luts with the film library (a library already
+  in the source tree is copied, the rest downloaded). 'make install-files'
+  does the same without the network, 'make uninstall' removes everything,
+  PREFIX= relocates (PREFIX=/usr/local for a system-wide install),
+  'make install-dev' adds the header and static library.
+
+Assets:
+- the film library, print stocks and web page are found in order: their
+  own variable ($POLAJUICE_FILMS/_PRINTS/_WEB), $POLAJUICE_HOME/<name>,
+  the source tree relative to the working directory, ~/.local/share/
+  polajuice (XDG_DATA_HOME), then the datadir baked in at build time.
+  'polajuice paths' prints the result. 'polajuice serve' takes its page
+  from the same lookup (--web still overrides).
+
+Docs:
+- man pages: polajuice(1), superjuice(1), super8ify(1) in docs/man/.
+- 'polajuice --help' now lists the lens and framing flags and --filter.
+- README: build and install section.
+
+Tests:
+- scripts/test_install.sh (in 'make check'): installs into a scratch
+  prefix, runs the installed binaries from an unrelated directory
+  against assets found through XDG_DATA_HOME and $POLAJUICE_HOME, serves
+  the installed page, and checks that uninstall leaves nothing.

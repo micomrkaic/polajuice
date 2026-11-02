@@ -18,10 +18,30 @@ the vendored public-domain stb single-header libraries in `third_party/`).
 The processing core works in linear floating-point RGB and includes film-like
 tone response, color matrices, optical softness, vignette, halation,
 luminance-dependent grain, square crops, exact-proportion instant-print
-framing, an age stage and standard `.cube` 3D color LUTs. HEIC, TIFF, ICC and
-RAW remain future work (libvips and Little CMS territory).
+framing, an age stage and standard `.cube` 3D color LUTs. Raw files (Nikon
+NEF, DNG) open through a scene-linear door; HEIC, TIFF and ICC remain
+future work.
 
 ## Build
+
+```sh
+make                 # polajuice, superjuice, libpolajuice.a (C17, no dependencies)
+make check           # the test suite
+make install         # to ~/.local: binaries, data, man pages, and the film library
+```
+
+`make install` puts `polajuice`, `superjuice` and `super8ify` in
+`~/.local/bin`, the print stocks and the workspace page in
+`~/.local/share/polajuice/`, the man pages in `~/.local/share/man/man1/`
+(`man polajuice`), and fills `~/.local/share/polajuice/luts/` with the
+film library: a library already fetched into the source tree is copied,
+the rest is downloaded. `make install-files` is the same without the
+network, `make uninstall` removes all of it, `make install PREFIX=/usr/local`
+installs system-wide, `make install-dev` adds the header and the static
+library. Installed, the tools run from any directory and find their
+assets through `$POLAJUICE_*`, `./data` and `./web` when in a checkout,
+`~/.local/share/polajuice`, then the build's datadir; `polajuice paths`
+shows the result.
 
 ## superjuice: movies
 
@@ -101,15 +121,9 @@ SILENT=yes or let a soundless input produce a silent reel naturally.
 Super 8 was silent for most people anyway - the stripe is the luxury
 option, then as now.
 
-Building requires only a C17 compiler and `libm`:
-
-```sh
-make          # native binaries: polajuice and superjuice
-make check
-make wasm     # the same engine for the browser (Emscripten; see docs/WEB.md)
-```
-
-The web build renders entirely client-side — drop a photo on the page,
+Building requires only a C17 compiler and `libm` (see Build above);
+`make wasm` builds the same engine for the browser (wasi-sdk; see
+docs/WEB.md). The web build renders entirely client-side — drop a photo on the page,
 pick a camera and film, download the result; pixels are byte-identical to
 the CLI for the same inputs and seed.
 
@@ -124,7 +138,8 @@ List the nine built-in cameras and their canonical films:
 A look is a **camera** plus a **film**. The camera (`-c`) is the format and
 process archetype: optics, grain, flash, framing, age. The film (`-f`) is the
 color chemistry, a `.cube` 3D LUT named by stock and found automatically in
-the film library (`data/luts/`, populated by `make fetch-luts`; override the
+the film library (`data/luts/` in a checkout, `~/.local/share/polajuice/luts/`
+once installed, populated by `make fetch-luts` / `make install`; override the
 location with `$POLAJUICE_FILMS`). Every camera has a canonical film applied
 by default when installed, so the everyday command is just:
 
@@ -548,8 +563,9 @@ render to it (the header says "native engine, N threads"). The
 folder's images fill the strip (raw ones shown as straight prints),
 "Export next to source" writes the full-size JPEG beside the original
 with the recipe embedded, "Apply to folder" runs the current look on
-every image, and kept looks are files in `looks/` under the repo, so
-they travel with it. A served render is byte-identical to the CLI's,
+every image, and kept looks are files in `looks/` under the served
+directory, so they travel with the pictures. The page comes from the
+installed web directory (or `web/` in a checkout; `--web PATH` overrides). A served render is byte-identical to the CLI's,
 which the test suite checks. The server binds 127.0.0.1 only; a custom
 .cube loaded in the page still renders in wasm, since the server has
 no file for it.

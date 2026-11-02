@@ -1,0 +1,343 @@
+.TH POLAJUICE 1 "November 2026" "polajuice @VERSION@" "User Commands"
+.SH NAME
+polajuice \- photographic process emulator: cameras, film stocks, prints
+.SH SYNOPSIS
+.B polajuice apply
+.I INPUT
+.B \-c
+.I CAMERA
+.RB [ \-f
+.IR FILM ]
+.RB [ \-o
+.IR OUTPUT ]
+.RI [ options ]
+.br
+.B polajuice develop
+.I INPUT
+.RB [ \-o
+.IR OUTPUT ]
+.RB [ \-\-ev
+.IR N ]
+.RB [ \-\-linear ]
+.br
+.B polajuice serve
+.RI [ DIR ]
+.RB [ \-\-port
+.IR N ]
+.RB [ \-\-web
+.IR PATH ]
+.br
+.B polajuice cameras
+.br
+.B polajuice describe
+.I CAMERA
+.br
+.B polajuice films
+.RI [ NAME ]
+.br
+.B polajuice inspect
+.I INPUT
+.br
+.B polajuice paths
+.SH DESCRIPTION
+.B polajuice
+renders a photograph the way a particular camera and film would have:
+the optics (softness, vignette, halation, flash), the format (a square,
+an instant print with its border, a Super 8 gate), the film's color
+chemistry (a 3D LUT), its grain, the development (push, pull, cross
+process), aging in storage, and optionally a print stock after the
+negative. It is written in C17 with no dependencies and runs the same
+pipeline in the terminal, in a browser page, and in the movie front-end
+.BR superjuice (1).
+.PP
+A
+.I look
+is a
+.I camera
+(see
+.BR "polajuice cameras" )
+plus a
+.I film
+(a .cube LUT from the film library). Each camera has a canonical film
+that is used when it is installed; a film of another process is refused
+unless
+.B \-\-any\-film
+is given. Cameras with a sealed process (technicolor-3strip, autochrome,
+polavision) take no film.
+.PP
+Input is JPEG, PNG, a 16-bit scene-linear PNG/TIFF
+.RB ( \-\-linear ),
+or a Nikon NEF / DNG raw, which is decoded through a scene-linear door:
+the sensor's white sits a stop above display white and the top stop
+rolls in through a shoulder, so halation and the film curve see real
+highlights. Output format follows the extension: .jpg .jpeg .png .ppm.
+.PP
+Every JPEG
+.B polajuice
+writes carries its recipe (the whole look as key=value lines) and a
+geometry line in the JPEG comment, so a render can be replayed, varied
+or inspected later with
+.B \-\-recipe
+and
+.BR inspect .
+.SH COMMANDS
+.TP
+.BI apply " INPUT " \-c " CAMERA"
+Render
+.I INPUT
+through the look. The default output is
+.IR INPUT_CAMERA.ext
+next to the input.
+.TP
+.BI develop " INPUT"
+The straight print of a raw file: scene-linear decode, a stop up, the
+scene shoulder, no camera and no film. For checking a raw, or as a
+neutral base.
+.TP
+.BI serve " " [ DIR ]
+Serve the workspace page on http://localhost:8000 with the native
+engine rendering on every core.
+.IR DIR 's
+images (default: the working directory) appear in the strip; exports go
+next to the source and looks are kept as
+.IR DIR/looks/*.recipe .
+The page itself comes from the installed web directory (see
+.BR FILES ),
+or from
+.BR \-\-web " " \fIPATH\fR.
+.TP
+.B cameras
+List the camera archetypes with their traits, admissible film
+processes and canonical film.
+.TP
+.BI describe " CAMERA"
+One camera in detail.
+.TP
+.BI films " " [ NAME ]
+List the film library (and print stocks), optionally filtered by a
+substring.
+.TP
+.BI inspect " INPUT"
+Show what a file is: dimensions, the raw's model, crop and matrix, and
+for a polajuice JPEG the recipe and geometry it carries.
+.TP
+.B paths
+Print where the film library, print stocks and web page are found
+(see
+.BR FILES ),
+flagging any that are missing.
+.SH OPTIONS
+.SS The look
+.TP
+.BI \-c ", " \-\-camera " NAME"
+Camera / format archetype. Required for
+.BR apply .
+.TP
+.BI \-f ", " \-\-film " NAME\fR|\fIFILE"
+Film stock: a name searched in the film library (substring, case
+insensitive) or a path to a .cube file.
+.TP
+.B \-\-no\-film
+Force the built-in scalar color engine.
+.TP
+.B \-\-any\-film
+Bypass camera/film compatibility checks.
+.TP
+.BI \-\-print " NAME\fR|\fIFILE"
+Print or scan stock .cube chained after the film (cinema
+negative-to-print model). Shipped:
+.IR synthetic_minilab ", " synthetic_cine_print ", " synthetic_archival_neutral .
+.TP
+.BI \-o ", " \-\-output " PATH"
+Output file; the extension picks the format.
+.TP
+.BI \-\-strength " N"
+Blend strength 0..1 between the input and the look (default 1).
+.TP
+.BI \-\-develop " MODE"
+.BR normal " (default), " push+\fIN\fR ", " pull\-\fIN\fR
+with
+.I N
+in \-3..+4 stops in halves (push+1.5),
+.B cross
+(E-6 in C-41) or
+.BR cross+\fIN\fR .
+Not applicable to instant cameras.
+.TP
+.BI \-\-crop " MODE"
+.B camera
+(default): the camera's own format cut from the middle (square, instant
+print, Super 8 gate).
+.BR full :
+keep the whole input frame at its own aspect; instant cameras then
+border the whole picture.
+.TP
+.BI \-\-age " N"
+Storage aging 0 (fresh) .. 1: fog, faded contrast, magenta drift.
+.TP
+.BI \-\-grain " MODEL"
+.B classic
+(default, overlaid) or
+.BR silver :
+grain formed from exposure inside the film, coarse in the shadows and
+fine in the highlights.
+.TP
+.BI \-\-edge " N"
+Development edge effects 0..2 (1 dilute developer, 2 stand
+development). Not for instant cameras.
+.TP
+.BI \-\-seed " INTEGER"
+Deterministic grain seed.
+.TP
+.BI \-\-ev " N"
+Exposure in stops, \-4..+4 (default 0).
+.TP
+.BI \-\-halation " N"
+Scale the camera's halation 0..2 (0 off, default 1).
+.TP
+.BI \-\-filter " NAME"
+Lens contrast filter:
+.BR yellow ", " orange ", " red ", " green ", " blue .
+Orange on a black-and-white camera is the dramatic-sky classic.
+.SS Scene adjustments
+Applied to the light before the camera; 0 is off for all of them.
+.TP
+.BI \-\-temp " STOPS"
+White balance warm(+)/cool(\-), \-2..2.
+.TP
+.BI \-\-tint " STOPS"
+Magenta(+)/green(\-), \-1..1.
+.TP
+.BI \-\-black " LEVEL"
+Black point: crush(+)/fog(\-), \-0.1..0.1.
+.TP
+.BI \-\-shadows " STOPS"
+Lift(+)/drop(\-) the shadows, \-2..2.
+.TP
+.BI \-\-highlights " N"
+Raw shoulder knee: softer(\-)/harder(+), \-1..1.
+.TP
+.BI \-\-contrast " N"
+Scene contrast about middle gray, \-1..1.
+.TP
+.BI \-\-grad " STOPS"
+Graduated ND density at the dark edge, 0..3;
+.BI \-\-gradangle " DEG"
+puts the dark edge (0 top, 90 right, 180 bottom, 270 left) and
+.BI \-\-gradpos " OFFSET"
+moves the transition, \-0.5..0.5 of the frame.
+.SS Lens and framing
+Applied to the input before everything else, in one resampling.
+.TP
+.BI \-\-denoise " N"
+Chroma denoise 0..3.
+.TP
+.BI \-\-distortion " N"
+Barrel(+)/pincushion(\-) correction, \-0.3..0.3.
+.TP
+.BI \-\-devignette " N"
+Lift the corners, 0..2.
+.TP
+.BI \-\-rotate " DEG"
+Straighten, \-15..15 (positive clockwise); the frame is trimmed to the
+largest rectangle without empty corners.
+.TP
+.BI \-\-trimx " X" ", " \-\-trimy " Y" ", " \-\-trimw " W" ", " \-\-trimh " H"
+Trim to a rectangle given as fractions of the frame (left, top, width,
+height), 0..1 each.
+.SS Recipes
+.TP
+.BI \-\-recipe " FILE"
+Take the look from a recipe: a key=value file, or any JPEG polajuice
+rendered. Flags given after it override it line by line.
+.TP
+.BI \-\-save\-recipe " FILE"
+Write the look used as a recipe file.
+.TP
+.B \-\-linear
+Take a 16-bit PNG/TIFF as scene-linear (dcraw \-4 \-T, darktable linear
+export).
+.SH FILES
+Assets are found in this order, the first existing directory winning:
+.IP 1. 4
+.BR $POLAJUICE_FILMS ", " $POLAJUICE_PRINTS ", " $POLAJUICE_WEB
+\- each directory on its own;
+.IP 2. 4
+.BR $POLAJUICE_HOME/ { luts , prints , web }
+\- one variable for a relocated set;
+.IP 3. 4
+.IR ./data/luts ", " ./data/prints ", " ./web
+\- the source tree, when running from a checkout;
+.IP 4. 4
+.IR ${XDG_DATA_HOME:-~/.local/share}/polajuice/ { luts , prints , web }
+\- what
+.B make install
+fills;
+.IP 5. 4
+the datadir baked in at build time (the Makefile's
+.BR datadir ,
+.I /usr/local/share/polajuice
+for a system-wide install).
+.PP
+.B polajuice paths
+shows the result. Looks saved from the page live in
+.I looks/
+under the served directory.
+.SH ENVIRONMENT
+.TP
+.B POLAJUICE_FILMS, POLAJUICE_PRINTS, POLAJUICE_WEB, POLAJUICE_HOME
+See
+.BR FILES .
+.TP
+.B POLAJUICE_THREADS
+Number of render threads (default: all cores). The output is identical
+for any thread count.
+.TP
+.B POLAJUICE_PROFILE
+When set (and not 0), print render timings to standard error.
+.SH EXAMPLES
+A roll of Portra through a clean 35mm camera:
+.PP
+.nf
+    polajuice apply photo.jpg \-c 35mm\-negative
+.fi
+.PP
+A Polaroid that keeps the whole frame, a stop under, pushed two stops:
+.PP
+.nf
+    polajuice apply photo.jpg \-c polaroid\-600 \-\-crop full \-\-ev \-1 \-\-develop push+2
+.fi
+.PP
+A D610 raw, straightened and warmed, on HP5 with an orange filter:
+.PP
+.nf
+    polajuice apply DSC_0042.NEF \-c bw\-35 \-\-rotate 1.5 \-\-temp 0.5 \-\-filter orange \-o hp5.jpg
+.fi
+.PP
+Replay a render on another file, two stops of grad ND added:
+.PP
+.nf
+    polajuice apply other.jpg \-\-recipe photo_35mm\-negative.jpg \-\-grad 2 \-\-gradangle 0
+.fi
+.PP
+Work on a folder in the browser:
+.PP
+.nf
+    polajuice serve ~/Pictures/cats
+.fi
+.SH EXIT STATUS
+0 on success, 1 on any error (unknown camera or film, incompatible
+process, unreadable input, a value out of range).
+.SH SEE ALSO
+.BR superjuice (1),
+.BR super8ify (1).
+.PP
+Full documentation, recipe format and preset sources:
+.I https://github.com/micomrkaic/polajuice
+.SH AUTHOR
+Mico Mrkaic. GPL-3.0-or-later. The film-stock LUTs are the G'MIC / Pat
+David color presets, under their own license, fetched by
+.BR "make install" " or " "make fetch\-luts" ;
+see
+.I docs/PRESET_SOURCES.md
+for what each camera's look is based on.

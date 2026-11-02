@@ -1,6 +1,18 @@
 CC ?= cc
 AR ?= ar
+# Install layout (GNU-ish, per-user by default): binaries in $(bindir),
+# the film library, print stocks and web page under $(datadir), man pages
+# in $(mandir). 'make install PREFIX=/usr/local' for a system-wide one.
+PREFIX ?= $(HOME)/.local
+bindir ?= $(PREFIX)/bin
+datadir ?= $(PREFIX)/share/polajuice
+mandir ?= $(PREFIX)/share/man/man1
+includedir ?= $(PREFIX)/include
+libdir ?= $(PREFIX)/lib
 CPPFLAGS ?= -Iinclude -Isrc/cli -Isrc/core -Ithird_party
+# the binaries know the install's datadir as the last place to look for
+# assets (after $POLAJUICE_*, the source tree and ~/.local/share/polajuice)
+CPPFLAGS += -DPOLAJUICE_DATADIR=\"$(datadir)\"
 CFLAGS ?= -O3 -g
 CFLAGS += -std=c17 -Wall -Wextra -Wpedantic -pthread
 # Auto header dependencies (picked up by the built-in .c -> .o rule).
@@ -19,7 +31,7 @@ CORE_OBJ = $(CORE_SRC:.c=.o)
 CLI_OBJ = src/cli/filmlib.o src/cli/recipe.o src/cli/look.o src/cli/serve.o
 ALL_OBJ = $(CORE_OBJ) src/cli/main.o $(CLI_OBJ) src/movie/superjuice.o tests/test_core.o
 
-.PHONY: all clean clean-wasm check check-wasm install fetch-luts fetch-polaroid-lut wasm serve
+.PHONY: all clean clean-wasm check check-wasm install install-files install-luts install-dev uninstall fetch-luts fetch-polaroid-lut wasm serve
 
 all: polajuice superjuice libpolajuice.a
 
@@ -44,6 +56,7 @@ check: tests/test_core
 	sh scripts/test_movie.sh
 	sh scripts/test_threads.sh
 	sh scripts/test_serve.sh
+	sh scripts/test_install.sh
 
 # WebAssembly build via wasi-sdk (auto-downloaded to third_party/ on
 # first run; see docs/WEB.md). 'make' builds native; 'make wasm' the
@@ -71,12 +84,48 @@ fetch-polaroid-lut:
 	unzip -o polaroid_px-680.zip polaroid_px-680.cube
 	$(RM) polaroid_px-680.zip
 
-# portable install: BSD install (macOS) has no -D, so create dirs explicitly
-install: all
-	mkdir -p $(DESTDIR)/usr/local/bin $(DESTDIR)/usr/local/include $(DESTDIR)/usr/local/lib
-	install -m 755 polajuice $(DESTDIR)/usr/local/bin/polajuice
-	install -m 644 include/polajuice.h $(DESTDIR)/usr/local/include/polajuice.h
-	install -m 644 libpolajuice.a $(DESTDIR)/usr/local/lib/libpolajuice.a
+# ---- install ----------------------------------------------------------
+# 'make install' puts polajuice, superjuice and super8ify on the PATH,
+# the print stocks and the web page under $(datadir), the man pages
+# under $(mandir), and fills $(datadir)/luts with the film library: a
+# library already fetched into the source tree is copied, whatever is
+# still missing is downloaded (scripts/fetch_luts.sh skips families it
+# has). 'make install-files' is the same without the network; 'make
+# uninstall' removes everything including the fetched library.
+# Portable: BSD install (macOS) has no -D, so directories are made first.
+install: install-files install-luts
+	@echo "installed to $(bindir) (data in $(datadir), man pages in $(mandir))"
+	@case ":$$PATH:" in *":$(bindir):"*) ;; *) echo "note: $(bindir) is not on your PATH" ;; esac
+
+install-files: all
+	mkdir -p $(DESTDIR)$(bindir) $(DESTDIR)$(datadir)/prints $(DESTDIR)$(datadir)/web $(DESTDIR)$(mandir)
+	install -m 755 polajuice $(DESTDIR)$(bindir)/polajuice
+	install -m 755 superjuice $(DESTDIR)$(bindir)/superjuice
+	install -m 755 scripts/super8ify.sh $(DESTDIR)$(bindir)/super8ify
+	for f in data/prints/*.cube data/prints/README.md; do install -m 644 $$f $(DESTDIR)$(datadir)/prints/; done
+	install -m 644 web/index.html web/engine.js $(DESTDIR)$(datadir)/web/
+	[ ! -f web/polajuice.wasm ] || install -m 644 web/polajuice.wasm $(DESTDIR)$(datadir)/web/
+	cp -R web/samples web/vendor $(DESTDIR)$(datadir)/web/
+	for m in polajuice superjuice super8ify; do \
+	    sed "s/@VERSION@/$$(cat VERSION)/" docs/man/$$m.1 > $(DESTDIR)$(mandir)/$$m.1 && chmod 644 $(DESTDIR)$(mandir)/$$m.1; done
+
+# the film library: copy what the source tree has, fetch the rest
+install-luts:
+	mkdir -p $(DESTDIR)$(datadir)/luts
+	@if [ -d data/luts ]; then cp -R data/luts/. $(DESTDIR)$(datadir)/luts/; fi
+	LUT_DIR=$(DESTDIR)$(datadir)/luts sh scripts/fetch_luts.sh
+
+# the C library and header, for programs that link libpolajuice
+install-dev: libpolajuice.a
+	mkdir -p $(DESTDIR)$(includedir) $(DESTDIR)$(libdir)
+	install -m 644 include/polajuice.h $(DESTDIR)$(includedir)/polajuice.h
+	install -m 644 libpolajuice.a $(DESTDIR)$(libdir)/libpolajuice.a
+
+uninstall:
+	$(RM) $(DESTDIR)$(bindir)/polajuice $(DESTDIR)$(bindir)/superjuice $(DESTDIR)$(bindir)/super8ify
+	$(RM) $(DESTDIR)$(mandir)/polajuice.1 $(DESTDIR)$(mandir)/superjuice.1 $(DESTDIR)$(mandir)/super8ify.1
+	$(RM) $(DESTDIR)$(includedir)/polajuice.h $(DESTDIR)$(libdir)/libpolajuice.a
+	$(RM) -r $(DESTDIR)$(datadir)
 
 clean:
 	$(RM) $(ALL_OBJ) $(ALL_OBJ:.o=.d)

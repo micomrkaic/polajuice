@@ -1,0 +1,112 @@
+.TH SUPER8IFY 1 "November 2026" "polajuice @VERSION@" "User Commands"
+.SH NAME
+super8ify \- phone clip in, 1970s Super 8 reel with magnetic-stripe sound out
+.SH SYNOPSIS
+.B super8ify
+.I INPUT.MOV
+.RI [ OUTPUT.mp4 ]
+.SH DESCRIPTION
+.B super8ify
+turns a clip into a home movie: the picture goes through
+.BR superjuice (1)
+at 18 frames per second and 720 lines on the camera's canonical stock,
+aged a little; the sound goes through
+.BR audiotard (1)
+(a tape chain, the bandwidth of a projector speaker, a small tube amp);
+.BR ffmpeg (1)
+marries them. The default output is
+.IR INPUT_CAMERA.mp4
+next to the input.
+.PP
+Everything is tuned through environment variables, defaults in
+brackets. Only the ones set are passed on, so the camera's own defaults
+hold otherwise.
+.SS Picture
+.TP
+.B CAMERA
+[super8] polajuice camera.
+.TP
+.B FILM
+[the camera's canonical stock] film stock;
+.B none
+forces the scalar engine.
+.TP
+.B AGE
+[0.25] 0 fresh .. 1 attic.
+.TP
+.B SEED
+[7] grain seed.
+.TP
+.B FPS
+[18] Super 8 ran at 18.
+.TP
+.B HEIGHT
+[720] proxy height; real Super 8 resolved less.
+.TP
+.B FILTER
+[] lens contrast filter (yellow, orange, red, green, blue).
+.TP
+.B GRAIN
+[classic] classic or silver.
+.TP
+.B EDGE
+[0] development edge effects 0..2.
+.TP
+.B RECIPE
+[] a recipe file or polajuice JPEG to take the look from; the other
+knobs apply on top.
+.TP
+.B EV, HALATION, DEVELOP, CROP
+[0] [1] [normal] [camera] as polajuice's
+.BR \-\-ev ", " \-\-halation ", " \-\-develop ", " \-\-crop .
+.TP
+.B TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS
+.TQ
+.B DENOISE DISTORTION DEVIGNETTE ROTATE TRIMX TRIMY TRIMW TRIMH
+[0] scene, lens and framing, as polajuice's
+.BR \-\-temp " etc."
+.TP
+.B MOTION
+[1] gate weave / flicker scale: 0.5 steadier, 2 a worn projector, 0
+tripod-locked.
+.SS Sound
+.TP
+.B SOUND
+[stripe]
+.B stripe
+= the audiotard tape mangle;
+.B clean
+= the original audio untouched;
+.B silent
+= no audio (period-correct).
+.TP
+.B WOW, FLUTTER
+[14] [10] speed wobble depth in cents, slow and fast.
+.TP
+.B HISS
+[\-38] tape hiss in dBFS.
+.TP
+.B DRIVE, SHAPE
+[2] [tube] tube drive into the small amp and its curve.
+.TP
+.B BAND
+[120:5000] projector-speaker bandwidth lo:hi Hz.
+.TP
+.B AT_EXTRA
+[] extra audiotard arguments verbatim, e.g.
+.B AT_EXTRA="\-\-vinyl"
+for the wrong era.
+.SS Tools
+.TP
+.B SUPERJUICE, AUDIOTARD
+Paths to the binaries when they are not on the PATH.
+.SH EXAMPLES
+.nf
+    super8ify holiday.MOV
+    CAMERA=bw\-35 FILTER=orange AGE=0.5 super8ify holiday.MOV noir.mp4
+    FILM=kodak_kodachrome_64 SOUND=silent super8ify holiday.MOV
+.fi
+.SH SEE ALSO
+.BR superjuice (1),
+.BR polajuice (1),
+.BR ffmpeg (1).

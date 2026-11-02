@@ -28,6 +28,8 @@ static void usage(FILE *stream)
         "  polajuice describe CAMERA\n"
         "  polajuice films [NAME]\n"
         "  polajuice inspect INPUT\n"
+        "  polajuice paths\n"
+        "      where the film library, print stocks and web page are found\n"
         "  polajuice serve [DIR] [--port 8000]\n"
         "      the workspace page on http://localhost:8000, rendering here\n"
         "      on every core, with DIR's images in the strip, exports next\n"
@@ -53,7 +55,9 @@ static void usage(FILE *stream)
         "      --develop MODE      development: normal (default), push+N or\n"
         "                          pull-N stops (-3..+4, halves allowed:\n"
         "                          push+1.5), cross (E-6 in C-41), or\n"
-        "                          cross+N; not applicable to instant cameras\n"
+        "                          cross+N; not applicable to instant cameras\n",
+        pj_version_string());
+    fputs(
         "  Scene adjustments, on the light before the camera (all 0 = off):\n"
         "      --temp STOPS        white balance warm(+)/cool(-), -2..2\n"
         "      --tint STOPS        magenta(+)/green(-), -1..1\n"
@@ -64,6 +68,15 @@ static void usage(FILE *stream)
         "      --grad STOPS        graduated ND density at the dark edge, 0..3\n"
         "      --gradangle DEG     dark edge: 0 top, 90 right, 180 bottom, 270 left\n"
         "      --gradpos OFFSET    transition center, -0.5..0.5 of the frame\n"
+        "  Lens and framing, on the input before everything (all 0 = off):\n"
+        "      --denoise N         chroma denoise 0..3\n"
+        "      --distortion N      barrel(+)/pincushion(-) correction, -0.3..0.3\n"
+        "      --devignette N      lift the corners 0..2\n"
+        "      --rotate DEG        straighten, -15..15 (positive clockwise)\n"
+        "      --trimx --trimy     trim: left/top edge, fraction of the frame 0..1\n"
+        "      --trimw --trimh     trim: width/height kept, fraction 0..1\n"
+        "      --filter NAME       lens contrast filter: yellow, orange, red,\n"
+        "                          green, blue (orange + a bw camera = drama)\n"
         "      --crop MODE         camera (default): the camera's own format\n"
         "                          cut from the middle (square, instant\n"
         "                          print, Super 8 gate); full: keep the whole\n"
@@ -87,13 +100,17 @@ static void usage(FILE *stream)
         "                          override it line by line\n"
         "      --save-recipe FILE  write the look used as a recipe file\n"
         "  -h, --help              show this help\n\n",
-        pj_version_string());
+        stream);
     fputs(
         "Raw input: .nef and .dng files open through a scene-linear door -\n"
         "the sensor's white sits a stop above display white and the top stop\n"
         "rolls in through a shoulder, so halation and the film curve see real\n"
         "highlights. JPEG/PNG input renders exactly as before.\n\n"
-        "Film library: $POLAJUICE_FILMS, else ./data/luts ('make fetch-luts').\n",
+        "Assets (film library, print stocks, web page) are found in order:\n"
+        "$POLAJUICE_FILMS/_PRINTS/_WEB, $POLAJUICE_HOME/{luts,prints,web},\n"
+        "./data/luts ./data/prints ./web (the source tree),\n"
+        "~/.local/share/polajuice/ ('make install'), then the build's datadir.\n"
+        "'polajuice paths' shows the result.\n",
         stream);
 }
 
@@ -549,6 +566,15 @@ int main(int argc, char **argv)
         return serve_main(argc, argv);
     if (!strcmp(argv[1], "inspect") && argc > 2)
         return inspect_image(argv[2]);
+    if (!strcmp(argv[1], "paths")) {
+        struct stat st;
+        const char *dirs[3][2] = { { "films", film_library_root() }, { "prints", print_library_root() },
+                                   { "web", web_root() } };
+        for (int i = 0; i < 3; ++i)
+            printf("%-7s %s%s\n", dirs[i][0], dirs[i][1],
+                   stat(dirs[i][1], &st) == 0 ? "" : "  (missing: 'make install' or 'make fetch-luts')");
+        return EXIT_SUCCESS;
+    }
     usage(stderr);
     return EXIT_FAILURE;
 }

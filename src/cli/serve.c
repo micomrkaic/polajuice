@@ -72,7 +72,7 @@ typedef struct {
 } Request;
 
 static const char *g_dir = ".";
-static const char *g_web = "web";
+static const char *g_web = NULL;   /* --web, else web_root() */
 
 /* ---- small helpers ----------------------------------------------------- */
 
@@ -820,10 +820,11 @@ int serve_main(int argc, char **argv)
         fprintf(stderr, "polajuice serve: '%s' is not a directory\n", g_dir);
         return EXIT_FAILURE;
     }
+    if (!g_web) g_web = web_root();
     char index[2048];
     snprintf(index, sizeof index, "%s/index.html", g_web);
     if (stat(index, &st) != 0) {
-        fprintf(stderr, "polajuice serve: no page at %s (run from the repo, or --web PATH)\n", index);
+        fprintf(stderr, "polajuice serve: no page at %s (run from the repo, 'make install', or --web PATH)\n", index);
         return EXIT_FAILURE;
     }
     signal(SIGPIPE, SIG_IGN);

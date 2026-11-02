@@ -1,0 +1,86 @@
+.TH SUPERJUICE 1 "November 2026" "polajuice @VERSION@" "User Commands"
+.SH NAME
+superjuice \- motion front-end of the polajuice engine
+.SH SYNOPSIS
+.B superjuice
+.I INPUT.mp4
+.B \-c
+.I CAMERA
+.RB [ \-o
+.IR OUTPUT.mp4 ]
+.RI [ options ]
+.br
+.B ffmpeg ... \-f yuv4mpegpipe \- |
+.B superjuice \-c
+.I CAMERA
+.B | ffmpeg ...
+.SH DESCRIPTION
+.B superjuice
+runs every frame of a movie through the same look pipeline as
+.BR polajuice (1):
+camera, film, development, aging. Grain is decorrelated frame to frame
+("boiling"), and cameras with motion character (super8, autochrome,
+technicolor-3strip) add gate weave and flicker.
+.PP
+In
+.B file mode
+one command does the decoding, rendering, encoding and audio
+passthrough; it needs
+.BR ffmpeg (1)
+on the PATH. The default output is
+.IR INPUT_CAMERA.mp4
+next to the input.
+.PP
+In
+.B plumbing mode
+.B superjuice
+reads YUV4MPEG on standard input and writes it on standard output, for
+custom pipelines:
+.PP
+.nf
+    ffmpeg \-i clip.mov \-f yuv4mpegpipe \-pix_fmt yuv420p \- \\
+      | superjuice \-c super8 \\
+      | ffmpeg \-f yuv4mpegpipe \-i \- \-c:v libx264 \-crf 18 out.mp4
+.fi
+.PP
+Instant cameras are still-print formats and are refused.
+.SH OPTIONS
+The look options are those of
+.BR polajuice (1)
+and mean the same:
+.BR \-c / \-\-camera ,
+.BR \-f / \-\-film ,
+.BR \-\-no\-film ", " \-\-any\-film ", " \-\-develop ", " \-\-crop ", "
+.BR \-\-temp ", " \-\-tint ", " \-\-black ", " \-\-shadows ", " \-\-highlights ", "
+.BR \-\-contrast ", " \-\-grad ", " \-\-gradangle ", " \-\-gradpos ", "
+.BR \-\-denoise ", " \-\-distortion ", " \-\-devignette ", " \-\-rotate ", "
+.BR \-\-trimx ", " \-\-trimy ", " \-\-trimw ", " \-\-trimh ", "
+.BR \-\-age ", " \-\-strength ", " \-\-grain ", " \-\-edge ", " \-\-ev ", "
+.BR \-\-halation ", " \-\-filter ", " \-\-recipe .
+.PP
+Movie-specific:
+.TP
+.BI \-\-seed " INTEGER"
+Base seed; each frame's grain is derived from it.
+.TP
+.BI \-\-motion\-scale " N"
+Scale gate weave and flicker (default 1; 0.5 steadier, 2 a worn
+projector, 0 tripod-locked).
+.TP
+.BI \-o ", " \-\-output " PATH"
+Output movie (file mode).
+.TP
+.BI \-\-crf " N"
+H.264 quality for file mode, lower is better (default 18).
+.SH FILES
+The film library and print stocks are found as for
+.BR polajuice (1):
+.BR $POLAJUICE_FILMS ,
+.BR $POLAJUICE_HOME ,
+the source tree,
+.IR ~/.local/share/polajuice ,
+the build's datadir.
+.SH SEE ALSO
+.BR polajuice (1),
+.BR super8ify (1),
+.BR ffmpeg (1).
