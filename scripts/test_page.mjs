@@ -197,6 +197,17 @@ elems["camera"].value = "35mm-slide";
 elems["camera"].handlers["change"]();
 if (elems["develop"].options.find(o => o.value === "cross").disabled) throw new Error("cross stuck disabled on a color camera");
 console.log("1.27 controls present; keys in the recipe and CLI line; cross disabled on B&W");
+// a dropped HEIC is told by its bytes and refused with the ways in, not sent to the engine
+{
+  const heic = new Uint8Array([0,0,0,24, 0x66,0x74,0x79,0x70, 0x68,0x65,0x69,0x63, 0,0,0,0, 0x6d,0x69,0x66,0x31, 0x68,0x65,0x69,0x63]);
+  globalThis.FileReader = class { readAsArrayBuffer(f) { this.result = f.bytes.buffer; this.onload(); } };
+  const before = elems["status"].textContent;
+  elems["drop"].handlers["drop"]({ preventDefault() {}, dataTransfer: { files: [{ name: "IMG_0001.HEIC", bytes: heic }] } });
+  await new Promise(r => setTimeout(r, 300));
+  if (!/HEIC/.test(elems["status"].textContent) || !/heif-convert/.test(elems["status"].textContent))
+    throw new Error("dropped HEIC not refused with the ways in: " + elems["status"].textContent);
+  console.log("dropped HEIC refused by content with the ways in");
+}
 
 // THE regression: pick an instant camera, then click a sample that suggests
 // a slide camera; the film dropdown must be rebuilt for the new camera.

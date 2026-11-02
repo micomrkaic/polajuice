@@ -245,6 +245,11 @@ bool pj_image_is_scene_linear(const PjImage *image);
  * (container, layout, bit depth, compression, tiling, camera). */
 const char *pj_raw_description(void);
 
+/* true when the file is HEIC/HEIF/AVIF by content (an ISO-BMFF ftyp box
+ * with a HEIF brand), whatever its extension; such a file is refused
+ * with a message naming the ways in, since HEVC is not decoded here */
+bool pj_image_is_heif(const char *path);
+
 /* Raw highlight reconstruction for the next decode (the recover option;
  * see PjRenderOptions). A process-wide setting, because the decoder
  * runs before any look is known. */

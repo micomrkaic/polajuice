@@ -222,5 +222,13 @@ try {
   const nolens = await engine.lens({ inputBytes: jpgSrc, ext: jpgExt });
   if (nolens !== null) throw new Error("a JPEG reported a lens");
   console.log("highlight recovery and the lens query through the wasm");
+  // a HEIC (a stub with the ftyp box) is refused with a message that says HEIC, whatever it is called
+  const heic = new Uint8Array([0,0,0,24, 0x66,0x74,0x79,0x70, 0x68,0x65,0x69,0x63, 0,0,0,0, 0x6d,0x69,0x66,0x31, 0x68,0x65,0x69,0x63]);
+  for (const ext of ["heic", "jpg"]) {
+    let said = "";
+    try { await engine.render({ inputBytes: heic, ext, camera: "super8", seed: 1 }); } catch (e) { said = e.message; }
+    if (!/HEIC/.test(said)) throw new Error(`HEIC as .${ext} not refused by name: ${said}`);
+  }
+  console.log("HEIC refused through the wasm with the ways in");
 }
 console.log("wasm engine tests passed");

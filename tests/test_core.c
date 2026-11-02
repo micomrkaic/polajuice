@@ -1144,6 +1144,22 @@ int main(void)
                 assert(dp[nb] > np[nb] + 1e-4f);     /* into its neighbors */
                 pj_image_free(d); pj_image_free(n); pj_image_free(flat);
             }
+            /* HEIC: told by its ftyp box whatever the name, refused with
+             * the ways in; the extension alone is not enough */
+            {
+                FILE *f = fopen("tests/raw/_stub.heic", "wb"); assert(f);
+                static const unsigned char ftyp[] = {0,0,0,24,'f','t','y','p','h','e','i','c',0,0,0,0,'m','i','f','1','h','e','i','c'};
+                fwrite(ftyp, 1, sizeof ftyp, f); fclose(f);
+                assert(pj_image_is_heif("tests/raw/_stub.heic"));
+                assert(!pj_image_is_heif("tests/raw/bayer_u16.dng") && !pj_image_is_heif("tests/raw/none.heic"));
+                PjError he = {{0}};
+                assert(!pj_image_load("tests/raw/_stub.heic", &he) && strstr(he.message, "HEIC"));
+                remove("tests/raw/_stub.heic");
+                f = fopen("tests/raw/_stub.jpg", "wb"); assert(f);
+                fwrite(ftyp, 1, sizeof ftyp, f); fclose(f);
+                assert(!pj_image_load("tests/raw/_stub.jpg", &he) && strstr(he.message, "HEIC"));
+                remove("tests/raw/_stub.jpg");
+            }
             /* the key table knows them and the recipe writes them */
             PjRenderOptions t = {0};
             assert(pj_scene_set(&t, "rotate", "-3.5") && t.rotate == -3.5f);

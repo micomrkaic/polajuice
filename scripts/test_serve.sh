@@ -13,7 +13,14 @@ trap cleanup EXIT
 mkdir -p "$TMP/dir"
 cp web/samples/sleeping-cat.jpg "$TMP/dir/cat.jpg"
 cp tests/raw/bayer_lj92.dng "$TMP/dir/tiny.dng"
-./polajuice serve "$TMP/dir" --port "$PORT" > "$TMP/log" 2>&1 &
+# a HEIC in the folder (a stub) and a stand-in converter first on the
+# PATH that writes a known JPEG: the strip lists the HEIC, develop and
+# render go through the conversion, the derived JPEG stays out of the
+# strip and the batch
+printf '\000\000\000\030ftypheic\000\000\000\000mif1heic' > "$TMP/dir/phone.heic"
+mkdir -p "$TMP/fakebin"
+printf '#!/bin/sh\ncp "%s" "$4"\n' "$TMP/dir/cat.jpg" > "$TMP/fakebin/heif-convert"; chmod +x "$TMP/fakebin/heif-convert"
+PATH="$TMP/fakebin:$PATH" ./polajuice serve "$TMP/dir" --port "$PORT" > "$TMP/log" 2>&1 &
 PID=$!
 for i in 1 2 3 4 5 6 7 8 9 10; do
     curl -s "http://127.0.0.1:$PORT/api/version" > "$TMP/v" 2>/dev/null && break
@@ -22,6 +29,14 @@ done
 grep -q '"native":true' "$TMP/v" || { echo "test_serve: server did not come up"; cat "$TMP/log"; exit 1; }
 curl -s "http://127.0.0.1:$PORT/api/cameras" | grep -q '"name":"super8"' || { echo "test_serve: cameras endpoint"; exit 1; }
 curl -s "http://127.0.0.1:$PORT/api/files" | grep -q 'cat.jpg' || { echo "test_serve: files endpoint"; exit 1; }
+curl -s "http://127.0.0.1:$PORT/api/files" | grep -q 'phone.heic' || { echo "test_serve: HEIC not listed"; exit 1; }
+curl -s -o "$TMP/heic_dev.jpg" "http://127.0.0.1:$PORT/api/develop?name=phone.heic&max=200"
+./polajuice inspect "$TMP/heic_dev.jpg" | grep -q "^width: 200$\|^height: 200$" || { echo "test_serve: HEIC develop through the converter failed"; cat "$TMP/log"; exit 1; }
+[ -s "$TMP/dir/phone_from_heic.jpg" ] || { echo "test_serve: no derived JPEG beside the served HEIC"; exit 1; }
+curl -s "http://127.0.0.1:$PORT/api/files" | grep -q 'phone_from_heic' && { echo "test_serve: the derived JPEG is listed as a source"; exit 1; }
+curl -s -o "$TMP/heic_r.jpg" "http://127.0.0.1:$PORT/api/render?name=phone.heic&camera=super8&film=none&seed=3&max=0"
+curl -s -o "$TMP/cat_r.jpg" "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=super8&film=none&seed=3&max=0"
+cmp -s "$TMP/heic_r.jpg" "$TMP/cat_r.jpg" || { echo "test_serve: HEIC render differs from its JPEG's"; exit 1; }
 curl -s -o "$TMP/page" -w '%{content_type}' "http://127.0.0.1:$PORT/" | grep -q text/html || { echo "test_serve: page not served"; exit 1; }
 curl -s -o "$TMP/dev.jpg" "http://127.0.0.1:$PORT/api/develop?name=tiny.dng&max=48"
 [ -s "$TMP/dev.jpg" ] || { echo "test_serve: develop of a raw failed"; exit 1; }
@@ -62,7 +77,8 @@ cmp -s "$TMP/body.jpg" "$TMP/cli.jpg" || { echo "test_serve: body render differs
 curl -s -X POST "http://127.0.0.1:$PORT/api/export?name=cat.jpg&camera=super8&film=none" | grep -q '"written"' || { echo "test_serve: export"; exit 1; }
 [ -f "$TMP/dir/cat_super8.jpg" ] || { echo "test_serve: export file missing"; exit 1; }
 curl -s "http://127.0.0.1:$PORT/api/files" | grep -q 'cat_super8' && { echo "test_serve: export listed as a source"; exit 1; }
-curl -s -X POST "http://127.0.0.1:$PORT/api/batch?camera=bw-35&film=none" | grep -q '"count":2' || { echo "test_serve: batch count"; exit 1; }
+curl -s -X POST "http://127.0.0.1:$PORT/api/batch?camera=bw-35&film=none" | grep -q '"count":3' || { echo "test_serve: batch count"; exit 1; }
+[ -f "$TMP/dir/phone_bw-35.jpg" ] || { echo "test_serve: batch skipped the HEIC"; exit 1; }
 # looks as files
 printf 'camera=super8\nev=1\n' | curl -s -X PUT --data-binary @- "http://127.0.0.1:$PORT/api/looks?name=__test_serve__" | grep -q '"ok"' || { echo "test_serve: save look"; exit 1; }
 [ -f looks/__test_serve__.recipe ] || { echo "test_serve: look file missing"; exit 1; }

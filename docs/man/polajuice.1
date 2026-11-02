@@ -67,6 +67,8 @@ polavision) take no film.
 .PP
 Input is JPEG, PNG, a 16-bit scene-linear PNG/TIFF
 .RB ( \-\-linear ),
+a HEIC when a converter is installed (see
+.BR HEIC ),
 or a Nikon NEF / DNG raw, which is decoded through a scene-linear door:
 the sensor's white sits a stop above display white and the top stop
 rolls in through a shoulder, so halation and the film curve see real
@@ -307,6 +309,21 @@ Write the look used as a recipe file.
 .B \-\-linear
 Take a 16-bit PNG/TIFF as scene-linear (dcraw \-4 \-T, darktable linear
 export).
+.SH HEIC
+A HEIC is an HEVC image and is not decoded by
+.B polajuice
+itself. When
+.BR heif\-convert " (libheif), " heif\-dec ", " magick ", " convert " (ImageMagick) or " sips
+(macOS) is on the PATH, the file is converted once to
+.I NAME_from_heic.jpg
+beside the source and that JPEG is what opens; the conversion is reused
+while it is newer than the source, and
+.B serve
+leaves it out of the strip and of
+.BR "Apply to folder" .
+Without a converter the file is refused with those ways in. A HEIC is
+told by its ftyp box, whatever its name. Shooting ProRAW (DNG) or
+JPEG avoids the step.
 .SH FILES
 Assets are found in this order, the first existing directory winning:
 .IP 1. 4

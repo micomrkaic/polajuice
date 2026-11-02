@@ -250,10 +250,37 @@ static void encode_band(size_t y0, size_t y1, void *vctx)
         e->out[i] = (unsigned char)lrintf(255.0f * io_linear_to_srgb(e->image->rgb[i]));
 }
 
+/* An ISO-BMFF file whose ftyp box names a HEIF brand: HEIC/HEIF from a
+ * phone (heic, heix, hevc, hevx, mif1, msf1) or AVIF. Read from the
+ * first bytes, so a HEIC renamed .jpg is still told apart. */
+bool pj_image_is_heif(const char *path)
+{
+    FILE *f = path ? fopen(path, "rb") : NULL;
+    if (!f) return false;
+    unsigned char head[32];
+    size_t n = fread(head, 1, sizeof head, f);
+    fclose(f);
+    if (n < 12 || memcmp(head + 4, "ftyp", 4)) return false;
+    static const char *brands[] = { "heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif", "avis" };
+    for (size_t off = 8; off + 4 <= n; off += 4)
+        for (size_t b = 0; b < sizeof brands / sizeof brands[0]; ++b)
+            if (!memcmp(head + off, brands[b], 4)) return true;
+    return false;
+}
+
 PjImage *pj_image_load(const char *path, PjError *error)
 {
     if (!path) {
         pj_set_error(error, "missing input path");
+        return NULL;
+    }
+    if (pj_image_is_heif(path)) {
+        pj_set_error(error,
+                     "'%s' is HEIC/HEIF, an HEVC image, which polajuice does not decode: "
+                     "convert it (heif-convert, magick, or sips -s format jpeg on macOS) or "
+                     "shoot JPEG / ProRAW DNG; the CLI and 'polajuice serve' convert it "
+                     "themselves when heif-convert or ImageMagick is installed",
+                     path);
         return NULL;
     }
     switch (format_from_path(path)) {
@@ -271,7 +298,7 @@ PjImage *pj_image_load(const char *path, PjError *error)
     default:
         pj_set_error(error,
                      "'%s': unsupported format (use .ppm, .png, .jpg, .jpeg, "
-                     ".nef or .dng)",
+                     ".nef or .dng; HEIC needs converting first)",
                      path);
         return NULL;
     }

@@ -502,7 +502,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
     <button id="clipwarn" class="small secondary" title="paint clipped pixels: red where a channel hits white, blue where all three sit at black">clipping</button>
   </div>
   <div class="strip">
-    <div id="drop">drop JPEG, PNG,<br>NEF or DNG here<input id="file" type="file" accept=".jpg,.jpeg,.png,.nef,.dng,image/jpeg,image/png" hidden multiple></div>
+    <div id="drop" title="HEIC is not decoded here: convert it first, or serve the folder with polajuice and a converter installed">drop JPEG, PNG,<br>NEF or DNG here<input id="file" type="file" accept=".jpg,.jpeg,.png,.nef,.dng,.heic,.heif,image/jpeg,image/png" hidden multiple></div>
     <div class="thumbs" id="thumbs"></div>
     <div class="sep"></div>
     <div id="samplestrip" class="samplestrip"></div>
@@ -521,7 +521,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.27.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.27.1";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -926,11 +926,13 @@ async function listFolder() {
     const files = await engine.files();
     for (const f of files) {
       if (images.some(im => im.serverName === f.name)) continue;
-      const raw = /^(nef|dng)$/i.test(f.ext);
+      /* raws and HEICs the browser cannot show come through the server's
+       * develop (a straight print; a HEIC converted beside the source) */
+      const viaServer = /^(nef|dng|heic|heif)$/i.test(f.ext);
       images.push({ name: f.name, ext: f.ext.toLowerCase() === "jpeg" ? "jpg" : f.ext.toLowerCase(),
                     bytes: null, serverName: f.name,
-                    url: raw ? engine.developUrl(f.name, 1600) : engine.fileUrl(f.name),
-                    thumb: raw ? engine.developUrl(f.name, 240) : engine.fileUrl(f.name) });
+                    url: viaServer ? engine.developUrl(f.name, 1600) : engine.fileUrl(f.name),
+                    thumb: viaServer ? engine.developUrl(f.name, 240) : engine.fileUrl(f.name) });
     }
     refreshThumbs();
   } catch (e) { setStatus("cannot list the folder: " + e.message, true); }
@@ -1222,7 +1224,22 @@ function selectImage(i) {
   scheduleRender();
 }
 
+/* HEIC/HEIF/AVIF by content: an ISO-BMFF ftyp box with a HEIF brand,
+ * whatever the file is called */
+function isHeif(bytes) {
+  if (!bytes || bytes.length < 12 || String.fromCharCode(...bytes.subarray(4, 8)) !== "ftyp") return false;
+  const head = String.fromCharCode(...bytes.subarray(8, Math.min(32, bytes.length)));
+  return /heic|heix|hevc|hevx|heim|heis|mif1|msf1|avif|avis/.test(head);
+}
 async function acceptBytes(bytes, name) {
+  if (isHeif(bytes)) {
+    /* an HEVC image: nothing here decodes it, and the browser engine has
+     * no converter to call; the native workspace does when one is installed */
+    setStatus(`${name} is HEIC (an HEVC image), which polajuice does not decode. Convert it first ` +
+              `(heif-convert, magick, or sips -s format jpeg on a Mac), shoot JPEG or ProRAW DNG, or open the ` +
+              `folder with 'polajuice serve', which converts HEIC when heif-convert or ImageMagick is installed.`, true);
+    return;
+  }
   const m = /\.(png|nef|dng)$/i.exec(name);
   const ext = m ? m[1].toLowerCase() : "jpg";
   let url;

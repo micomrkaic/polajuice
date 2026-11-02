@@ -19,8 +19,12 @@ The processing core works in linear floating-point RGB and includes film-like
 tone response, color matrices, optical softness, vignette, halation,
 luminance-dependent grain, square crops, exact-proportion instant-print
 framing, an age stage and standard `.cube` 3D color LUTs. Raw files (Nikon
-NEF, DNG) open through a scene-linear door; HEIC, TIFF and ICC remain
-future work.
+NEF, DNG) open through a scene-linear door. HEIC is an HEVC image and is
+not decoded here by design (an HEVC decoder is the one dependency the
+project will not carry); the CLI and `polajuice serve` convert it on the
+way in when `heif-convert` (libheif-examples) or ImageMagick is installed,
+writing `NAME_from_heic.jpg` beside the source, and refuse it with the
+ways in otherwise. TIFF and ICC remain future work.
 
 ## Build
 
@@ -251,6 +255,22 @@ docs/PRESET_SOURCES.md) where you left them at zero - `polajuice
 inspect` shows what it would set, and the page offers it as *apply
 profile*. Cross-processing on a black-and-white camera is dropped with
 a note (nothing to cross), and the page greys it out.
+
+### HEIC from a phone
+
+An iPhone's default HEIC is an HEVC frame in an ISO-BMFF box. Three
+ways in, in order of preference: shoot ProRAW (DNG, decoded natively),
+or set Settings → Camera → Formats → *Most Compatible* for JPEG; let
+polajuice convert it - with `heif-convert` (Debian/Ubuntu:
+`libheif-examples`; Fedora: `libheif-tools`; Homebrew: `libheif`),
+`heif-dec`, ImageMagick's `magick`/`convert` or macOS's `sips` on the
+PATH, `polajuice apply photo.HEIC …`, `inspect` and the served
+workspace convert the file once to `photo_from_heic.jpg` beside it
+(reused while it is newer than the source, never listed in the strip
+or picked up by a batch) and go on from there; or convert by hand with
+the same tools. The browser page cannot call a converter, so it tells
+the file by its `ftyp` box - whatever the extension - and says so; a
+HEIC renamed `.jpg` is caught the same way everywhere.
 
 ### Raw input: the scene-linear door
 

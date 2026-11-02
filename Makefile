@@ -30,7 +30,7 @@ endif
 
 CORE_SRC = src/core/image.c src/core/image_io.c src/core/lut3d.c src/core/presets.c src/core/pipeline.c src/core/parallel.c src/core/jpegenc.c src/core/recipe.c src/core/rawdec.c src/core/lensdb.c src/core/stb_impl.c
 CORE_OBJ = $(CORE_SRC:.c=.o)
-CLI_OBJ = src/cli/filmlib.o src/cli/recipe.o src/cli/look.o src/cli/serve.o
+CLI_OBJ = src/cli/filmlib.o src/cli/recipe.o src/cli/look.o src/cli/serve.o src/cli/heic.o
 ALL_OBJ = $(CORE_OBJ) src/cli/main.o $(CLI_OBJ) src/movie/superjuice.o tests/test_core.o
 
 .PHONY: all clean clean-wasm check check-wasm install install-files install-luts install-dev uninstall fetch-luts fetch-polaroid-lut wasm serve

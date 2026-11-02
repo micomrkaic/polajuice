@@ -182,5 +182,35 @@ POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --lens
     echo "test_compat: --lens sideways was accepted"; exit 1; }
 echo "recipes: keystone, sharpen, radial, recover round-trip; cross dropped on B&W; --lens auto needs a raw"
 
+# HEIC: refused with the ways in when no converter is on the PATH; with
+# one (a stand-in here that writes a known JPEG) the file is converted
+# beside the source to NAME_from_heic.jpg, reused on the next run, and
+# the render equals the JPEG's. A HEIC renamed .jpg is told by content.
+HEIC="$LIB/phone.heic"
+printf '\000\000\000\030ftypheic\000\000\000\000mif1heic' > "$HEIC"
+FAKEBIN="$LIB/fakebin"; mkdir -p "$FAKEBIN"
+./polajuice apply "$IN" -c 35mm-negative --no-film --strength 0 -o "$LIB/asjpeg.jpg" >/dev/null 2>&1
+printf '#!/bin/sh\ncp "%s" "$4"\n' "$LIB/asjpeg.jpg" > "$FAKEBIN/heif-convert"; chmod +x "$FAKEBIN/heif-convert"
+PATH="/nonexistent" ./polajuice apply "$HEIC" -c super8 --no-film -o "$R11" 2>"$LIB/note.txt" >/dev/null && {
+    echo "test_compat: a HEIC with no converter was accepted"; exit 1; }
+grep -q "HEIC" "$LIB/note.txt" || { echo "test_compat: HEIC refusal does not say HEIC:"; cat "$LIB/note.txt"; exit 1; }
+PATH="$FAKEBIN:$PATH" POLAJUICE_FILMS="$LIB" ./polajuice apply "$HEIC" -c super8 --no-film --seed 3 -o "$R11" 2>"$LIB/note.txt" >/dev/null || {
+    echo "test_compat: HEIC through the converter failed:"; cat "$LIB/note.txt"; exit 1; }
+grep -q "converted with heif-convert" "$LIB/note.txt" || { echo "test_compat: no conversion note"; exit 1; }
+[ -s "$LIB/phone_from_heic.jpg" ] || { echo "test_compat: no derived JPEG beside the HEIC"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$LIB/asjpeg.jpg" -c super8 --no-film --seed 3 -o "$R12" >/dev/null 2>&1
+python3 - "$R11" "$R12" <<'PY' || { echo "test_compat: HEIC render differs from the JPEG's"; exit 1; }
+import sys
+a, b = [open(p, 'rb').read() for p in sys.argv[1:3]]
+def scan(d): return d[d.rfind(b'\xff\xda'):]
+sys.exit(0 if scan(a) == scan(b) else 1)
+PY
+rm -f "$FAKEBIN/heif-convert"
+PATH="$FAKEBIN:/nonexistent" ./polajuice inspect "$HEIC" 2>/dev/null | grep -q "^width:" || { echo "test_compat: the derived JPEG was not reused without a converter"; exit 1; }
+cp "$HEIC" "$LIB/renamed.jpg"
+PATH="/nonexistent" ./polajuice inspect "$LIB/renamed.jpg" 2>"$LIB/note.txt" >/dev/null && { echo "test_compat: a HEIC named .jpg was accepted"; exit 1; }
+grep -q "HEIC" "$LIB/note.txt" || { echo "test_compat: renamed HEIC not told by content"; exit 1; }
+echo "HEIC: refused with the ways in; converted beside the source when a converter is on the PATH; told by content"
+
 rm -f "$IN" "$OUT"
 echo "compatibility matrix tests passed (37 cells + override)"

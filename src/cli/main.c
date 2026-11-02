@@ -4,6 +4,7 @@
 
 #include "polajuice.h"
 #include "filmlib.h"
+#include "heic.h"
 #include "recipe.h"
 
 int serve_main(int argc, char **argv);
@@ -125,6 +126,21 @@ static void usage(FILE *stream)
         stream);
 }
 
+/* the CLI's loader: a HEIC goes through the installed converter to a
+ * JPEG beside it (NAME_from_heic.jpg) and that is what opens; the note
+ * says so once, since the derived file stays */
+static PjImage *load_input(const char *path, PjError *error)
+{
+    if (heic_is(path)) {
+        char jpg[4096];
+        if (!heic_convert(path, jpg, sizeof jpg, error->message, sizeof error->message))
+            return NULL;
+        fprintf(stderr, "note: %s converted with %s -> %s\n", path, heic_converter(), jpg);
+        return pj_image_load(jpg, error);
+    }
+    return pj_image_load(path, error);
+}
+
 static int fail(const PjError *error)
 {
     fprintf(stderr, "polajuice: %s\n", error->message);
@@ -153,7 +169,7 @@ static int inspect_image(const char *path)
 {
     PjError error = {{0}};
     char *embedded = pj_jpeg_read_comment(path);
-    PjImage *image = pj_image_load(path, &error);
+    PjImage *image = load_input(path, &error);
     if (!image) return fail(&error);
     bool raw = pj_image_is_scene_linear(image);
     const float *px = pj_image_pixels_const(image);
@@ -241,7 +257,7 @@ static int develop(int argc, char **argv)
     }
     PjError error = {{0}};
     PjImage *image = linear_input ? pj_image_load_linear(input, &error)
-                                  : pj_image_load(input, &error);
+                                  : load_input(input, &error);
     if (!image) return fail(&error);
     if (!pj_image_is_scene_linear(image))
         fprintf(stderr, "note: %s is display-referred; written back as is\n", input);
@@ -512,7 +528,7 @@ static int apply(int argc, char **argv)
     }
     pj_raw_set_recover(options.recover);
     PjImage *source = linear_input ? pj_image_load_linear(input, &error)
-                                   : pj_image_load(input, &error);
+                                   : load_input(input, &error);
     if (!source) {
         pj_lut3d_free(lut);
         pj_lut3d_free(print_lut);

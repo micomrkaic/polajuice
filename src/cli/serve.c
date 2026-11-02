@@ -39,6 +39,7 @@
 #include "polajuice.h"
 #include "internal.h"
 #include "filmlib.h"
+#include "heic.h"
 #include "look.h"
 #include "recipe.h"
 
@@ -141,7 +142,23 @@ static bool is_image_name(const char *name)
     const char *dot = strrchr(name, '.');
     if (!dot) return false;
     return !strcasecmp(dot, ".jpg") || !strcasecmp(dot, ".jpeg") || !strcasecmp(dot, ".png") ||
-           !strcasecmp(dot, ".nef") || !strcasecmp(dot, ".dng") || !strcasecmp(dot, ".ppm");
+           !strcasecmp(dot, ".nef") || !strcasecmp(dot, ".dng") || !strcasecmp(dot, ".ppm") ||
+           !strcasecmp(dot, ".heic") || !strcasecmp(dot, ".heif");
+}
+
+/* a file of the folder, with a HEIC converted beside it first (when a
+ * converter is installed; the message says what to do otherwise) */
+static PjImage *load_folder_image(const char *path, char *msg, size_t msgsize)
+{
+    PjError error = {{0}};
+    PjImage *image = NULL;
+    if (heic_is(path)) {
+        char jpg[4096];
+        if (!heic_convert(path, jpg, sizeof jpg, msg, msgsize)) return NULL;
+        image = pj_image_load(jpg, &error);
+    } else image = pj_image_load(path, &error);
+    if (!image) snprintf(msg, msgsize, "%s", error.message);
+    return image;
 }
 
 /* NAME_camera.jpg is one of our exports: left out of the strip and of
@@ -150,6 +167,8 @@ static bool is_export_name(const char *name)
 {
     const char *dot = strrchr(name, '.');
     if (!dot || (strcasecmp(dot, ".jpg") && strcasecmp(dot, ".jpeg"))) return false;
+    /* the JPEG a HEIC was converted to is a derivative too */
+    if ((size_t)(dot - name) > 10 && !strncasecmp(dot - 10, "_from_heic", 10)) return true;
     for (size_t i = 0; i < pj_preset_count(); ++i) {
         const char *cam = pj_preset_name(i);
         size_t cl = strlen(cam), nl = (size_t)(dot - name);
@@ -288,9 +307,7 @@ static PjImage *load_request_image(const Request *r, char *msg, size_t msgsize)
         if (!safe_name(name) || !is_image_name(name)) { snprintf(msg, msgsize, "bad file name"); return NULL; }
         char path[2048];
         snprintf(path, sizeof path, "%s/%s", g_dir, name);
-        PjImage *image = pj_image_load(path, &error);
-        if (!image) snprintf(msg, msgsize, "%s", error.message);
-        return image;
+        return load_folder_image(path, msg, msgsize);
     }
     if (!r->body || !r->body_len) { snprintf(msg, msgsize, "no image: give name= or a body"); return NULL; }
     const char *ext = param(r, "ext");
@@ -517,8 +534,8 @@ static bool export_one(const Request *r, const char *name, char *written, size_t
     PjError error = {{0}};
     char path[2048];
     snprintf(path, sizeof path, "%s/%s", g_dir, name);
-    PjImage *source = pj_image_load(path, &error);
-    if (!source) { snprintf(msg, msgsize, "%s", error.message); return false; }
+    PjImage *source = load_folder_image(path, msg, msgsize);
+    if (!source) return false;
     Look look;
     PjImage *result = render_with_params(r, source, 0, &look, msg, msgsize);
     pj_image_free(source);
