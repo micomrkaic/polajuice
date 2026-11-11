@@ -1,0 +1,23 @@
+1.28.0: Super 8 that looks like Super 8
+
+The Super 8 still was nearly indistinguishable from its high-resolution
+source: softness was a one-pixel blur whatever the input, and the
+canonical stock was the most saturated slide film in the library.
+
+- format resolution: a preset can state what its format resolves, in
+  cycles across the frame at MTF50, applied as a gaussian of that
+  width. Super 8: 145 cycles (about 25 lp/mm on a 5.8 mm frame). A
+  24 MP still and a 720-line movie frame now soften alike.
+- grain sized to the frame for such a format (3.5 px on a 6000-wide
+  frame), so stills carry the coarse grain movies always had.
+- projection stage after the film, LUT or scalar: saturation 0.74,
+  blacks lifted 3.5%, a little warmth, contrast 0.92.
+- scalar tone calmed (contrast 1.08, saturation 0.96); canonical stock
+  kodak_kodachrome_64 instead of kodak_ektachrome_100_vs.
+- other cameras are untouched (their renders are byte-identical).
+
+Tests: stripes at 60 and 300 cycles per frame at two image sizes (the
+coarse kept, the fine gone, at both); a saturated red comes out no
+more saturated than it went in and far less than off a 35mm slide; the
+Super 8 reference image regenerated.
+Docs: PRESET_SOURCES.md.

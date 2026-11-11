@@ -1144,6 +1144,54 @@ int main(void)
                 assert(dp[nb] > np[nb] + 1e-4f);     /* into its neighbors */
                 pj_image_free(d); pj_image_free(n); pj_image_free(flat);
             }
+            /* Super 8 resolves about 145 cycles across the frame whatever
+             * the pixel count: 60-cycle stripes survive, 400-cycle stripes
+             * are gone, at 1200 px and at 600 px alike; and the projected
+             * color is muted against the same frame at strength 0 */
+            for (int size = 1200; size >= 600; size /= 2) {
+                PjImage *st = pj_image_new((size_t)size, (size_t)(size * 3 / 4), &error); assert(st);
+                float *sp = pj_image_pixels(st);
+                size_t sw = (size_t)size, shh = (size_t)(size * 3 / 4);
+                for (size_t y = 0; y < shh; ++y)
+                    for (size_t x = 0; x < sw; ++x) {
+                        double cyc = y < shh / 2 ? 60.0 : 300.0;
+                        float v = 0.25f + 0.2f * (float)sin(6.283185307 * cyc * (double)x / (double)sw);
+                        sp[(y * sw + x) * 3] = sp[(y * sw + x) * 3 + 1] = sp[(y * sw + x) * 3 + 2] = v;
+                    }
+                PjRenderOptions so = {.seed = 1, .strength = 1.0f, .crop = PJ_CROP_FULL};
+                PjImage *o = pj_render(st, "super8", &so, &error); assert(o);
+                float amp[2];
+                for (int band = 0; band < 2; ++band) {
+                    size_t y = band ? shh * 3 / 4 : shh / 4;
+                    /* grain rides on top: average a few rows, then take the swing */
+                    float lo = 1e9f, hi = -1e9f;
+                    for (size_t x = sw / 4; x < sw * 3 / 4; ++x) {
+                        float acc = 0;
+                        for (size_t dy = 0; dy < 40; ++dy) acc += luma_at(o, x, y + dy - 20);
+                        acc /= 40.0f;
+                        if (acc < lo) lo = acc;
+                        if (acc > hi) hi = acc;
+                    }
+                    amp[band] = hi - lo;
+                }
+                assert(amp[0] > 0.12f);              /* coarse detail kept */
+                assert(amp[1] < amp[0] * 0.2f);      /* fine detail gone */
+                pj_image_free(o); pj_image_free(st);
+            }
+            {
+                PjImage *col = pj_image_new(64, 48, &error); assert(col);
+                float *cp = pj_image_pixels(col);
+                for (size_t i = 0; i < 64 * 48; ++i) { cp[i * 3] = 0.5f; cp[i * 3 + 1] = 0.1f; cp[i * 3 + 2] = 0.1f; }
+                PjRenderOptions so = {.seed = 1, .strength = 1.0f, .crop = PJ_CROP_FULL};
+                PjImage *o = pj_render(col, "super8", &so, &error); assert(o);
+                const float *q = pj_image_pixels_const(o) + (24 * 64 + 32) * 3;
+                /* a saturated red comes out no more saturated than it went
+                 * in, and far less than off a 35mm slide */
+                PjImage *sl = pj_render(col, "35mm-slide", &so, &error); assert(sl);
+                const float *r = pj_image_pixels_const(sl) + (24 * 64 + 32) * 3;
+                assert(q[1] / q[0] > 0.1f / 0.5f && q[1] / q[0] > 2.0f * r[1] / r[0]);
+                pj_image_free(sl); pj_image_free(o); pj_image_free(col);
+            }
             /* HEIC: told by its ftyp box whatever the name, refused with
              * the ways in; the extension alone is not enough */
             {

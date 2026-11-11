@@ -242,6 +242,54 @@ static void apply_softness(PjImage *image, float amount)
     scratch_put(blurred);
 }
 
+/* The format's resolving power: a gaussian (three box passes) whose
+ * MTF falls to a half at `cycles` across the long edge. A gaussian of
+ * sigma s has MTF50 at 0.1874/s cycles per pixel, so s = 0.1874 L / cycles;
+ * three boxes of radius r have variance r(r+1), hence r from s. */
+static void apply_resolution(PjImage *image, float cycles)
+{
+    if (cycles <= 0.0f) return;
+    float longest = (float)(image->width > image->height ? image->width : image->height);
+    float sigma = 0.1874f * longest / cycles;
+    if (sigma < 0.5f) return;                 /* the input is already coarser */
+    unsigned radius = (unsigned)lrintf((sqrtf(4.0f * sigma * sigma + 1.0f) - 1.0f) * 0.5f);
+    if (radius < 1) radius = 1;
+    for (int pass = 0; pass < 3; ++pass)
+        box_blur(image->rgb, image->width, image->height, radius);
+}
+
+/* The frame as it reaches the eye off a projector or a telecine: less
+ * saturated than the stock on a light table, blacks lifted by flare,
+ * the lamp's warmth, a gentler contrast. Display-referred. */
+static void projection_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    size_t w = c->image->width;
+    const float sat = c->f[0], lift = c->f[1], warm = c->f[2], contrast = c->f[3];
+    for (size_t i = y0 * w; i < y1 * w; ++i) {
+        float *p = c->image->rgb + i * 3;
+        float v[3];
+        for (int ch = 0; ch < 3; ++ch) v[ch] = linear_to_srgb(clamp01(p[ch]));
+        float y = 0.2126f * v[0] + 0.7152f * v[1] + 0.0722f * v[2];
+        for (int ch = 0; ch < 3; ++ch) {
+            float x = y + sat * (v[ch] - y);
+            x = 0.5f + (x - 0.5f) * contrast;
+            x = lift + (1.0f - lift) * x;
+            v[ch] = x;
+        }
+        v[0] *= 1.0f + warm; v[1] *= 1.0f + 0.35f * warm; v[2] *= 1.0f - warm;
+        for (int ch = 0; ch < 3; ++ch) p[ch] = srgb_to_linear(clamp01(v[ch]));
+    }
+}
+
+static void apply_projection(PjImage *image, const PjPreset *p, float strength)
+{
+    if (p->proj_saturation <= 0.0f) return;
+    Ctx ctx = {.image = image, .f = {mixf(1.0f, p->proj_saturation, strength), p->proj_lift * strength,
+                                     p->proj_warm * strength, mixf(1.0f, p->proj_contrast > 0.0f ? p->proj_contrast : 1.0f, strength)}};
+    pj_parallel_rows(image->height, projection_band, &ctx);
+}
+
 static void vignette_band(size_t y0, size_t y1, void *vctx)
 {
     Ctx *c = vctx;
@@ -1861,6 +1909,8 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     apply_direct_flash(image, preset, strength);
     stage_mark("filter+flash");
     apply_softness(image, preset->softness * strength);
+    if (strength >= 0.999f) apply_resolution(image, preset->resolve);
+    else if (strength > 0.0f && preset->resolve > 0.0f) apply_resolution(image, preset->resolve / strength);
     stage_mark("softness");
     apply_vignette(image, preset->vignette * strength);
     stage_mark("vignette");
@@ -1880,6 +1930,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         apply_builtin_tone(image, preset, strength);
         apply_builtin_color(image, preset, strength);
     }
+    apply_projection(image, preset, strength);
     stage_mark(lut ? "film LUT" : "tone+color");
     {
         const char *process = options ? options->film_process : NULL;
@@ -1900,6 +1951,14 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
                              preset->default_film, process,
                              &film_amount, &film_scale);
 
+        /* a format that states its resolving power sizes its grain to
+         * the frame as well (grain_scale is then in pixels of a 6000-wide
+         * frame), so a still and a 720-line movie frame carry the same
+         * grain relative to the picture */
+        if (preset->resolve > 0.0f) {
+            float longest = (float)(image->width > image->height ? image->width : image->height);
+            film_scale *= longest / 6000.0f;
+        }
         /* the film is developed: edge effects, then (silver) its grain */
         apply_edge_effects(image, edge, mono);
         stage_mark("edge");

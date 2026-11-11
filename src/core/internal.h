@@ -49,6 +49,15 @@ typedef struct {
     float flash_cool;
     float vignette;
     float softness;
+    float resolve;      /* what the format resolves: cycles across the frame's
+                           long edge at MTF50; a gaussian of that width, so
+                           the softening follows the frame, not the pixel
+                           count. 0 = as sharp as the input. */
+    float proj_saturation; /* the frame as projected or telecined: saturation
+                           (0 = leave), black lift, warmth and contrast,
+                           applied after the film whether it is a LUT or
+                           the scalar engine */
+    float proj_lift, proj_warm, proj_contrast;
     float halation;
     unsigned halation_radius;
     float grain;

@@ -69,10 +69,30 @@ than version 0.1.0:
 - <https://www.kodak.com/en/still-film/product/professional/ektachrome-e100-film/>
 - <https://www.kodak.com/content/products-brochures/Film/Super-8-EKTACHROME-100D-Color-Reversal-Film-Technical-data.pdf>
 
-The Super 8 preset retains slightly more visible grain and softness than the
-35 mm slide preset because enlargement and projection make the small frame more
-apparent; this is a format/rendering adjustment rather than a claim that 100D
-itself is coarse-grained.
+Super 8 (reworked in 1.28.0). The earlier preset softened by about a
+pixel whatever the input, so a 24 MP still came out as sharp as it went
+in, and its canonical stock was Ektachrome 100 VS, the most saturated
+slide film in the library. Three things changed:
+
+- **Resolution follows the frame.** The preset states what the format
+  resolves: 145 cycles across the frame at MTF50, which is about
+  25 lp/mm on a 5.8 mm frame - Kodachrome 40 through a consumer zoom,
+  hand-held. It is applied as a gaussian of that width, so a 6000-pixel
+  still and a 720-line movie frame soften alike. (The stock alone
+  resolves more; the lens, focus and gate do not.)
+- **Grain follows the frame** as well: about 3.5 px on a 6000-wide
+  frame, scaled with the image, since the grain is enlarged with the
+  picture.
+- **Projected color.** A stage after the film (LUT or scalar engine):
+  saturation 0.74, blacks lifted 3.5% by flare, a little lamp warmth,
+  contrast 0.92 - the frame as it comes off a projector or a telecine,
+  not the stock on a light table. The scalar tone was calmed to match
+  (contrast 1.08, saturation 0.96) and the canonical stock is now
+  kodak_kodachrome_64, the nearest library stock to Kodachrome 40.
+
+The figures were chosen from three bracketed candidates (190/145/110
+cycles); they are an estimate from the format's geometry and published
+resolving power, not a measurement of a reel.
 
 ## Black and white documentary
 
