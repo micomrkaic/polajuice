@@ -145,10 +145,16 @@ with a recipe file or a rendered JPEG. Grain, softness, halation,
 vignette and the frame are not color and are not in the cube.
 .TP
 .BI curves " \-o NAME.svg"
-Chart what the look does to color, in four views: R, G, B against a
+Chart what the look does to color, in six views: R, G, B against a
 gray ramp; hue turned and chroma scaled around the hue circle; a color
-plane with an arrow from each color to where it goes; and the 24
-ColorChecker patches as numbers (lightness, chroma %, hue degrees).
+plane with an arrow from each color to where it goes; the 24
+ColorChecker patches as numbers (lightness, chroma %, hue degrees);
+and two views by wavelength: the spectral sensitivity of the rendered
+brightness against the eye's, and the shift in dominant wavelength and
+the change in purity of light of each wavelength. The last two describe
+what the look does to a camera's rendering of a wavelength (an RGB
+pipeline holds three numbers of a spectrum), not a film's measured
+spectral curves.
 .BI \-\-vs " FILM"
 overlays the same look on another film
 .RB ( none

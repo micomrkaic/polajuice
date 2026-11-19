@@ -167,7 +167,7 @@ for pattern in '*.jpg' '*.JPG' '*.jpeg' '*.png' '*.ppm' 'data/luts/' \
                'web/polajuice.wasm' 'web/films/' 'third_party/wasi-sdk*' \
                'web/_pagecheck.mjs' '*.d' '/superjuice' '/tests/test_web_shim' \
                '!web/samples/*.jpg' '!web/samples/*.json' \
-               '*.DNG' '*.dng' '*.NEF' '*.nef' '*.xmp' '/*.cube' \
+               '*.DNG' '*.dng' '*.NEF' '*.nef' '*.xmp' '/*.cube' '/*.svg' '/*.dtstyle' \
                'node_modules' 'scripts/package.json' 'scripts/package-lock.json' \
                '!tests/raw/*'; do
     grep -qxF "$pattern" .gitignore || echo "$pattern" >> .gitignore

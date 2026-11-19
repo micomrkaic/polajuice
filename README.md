@@ -299,7 +299,7 @@ there end to end - darktable's render of the style lands within about
 ### Seeing what a film does: `polajuice curves`
 
 A 3D LUT is not a curve, so one chart cannot show it. `curves` runs the
-look's whole color path through a lattice and draws four views in one
+look's whole color path through a lattice and draws six views in one
 SVG:
 
 ```sh
@@ -315,6 +315,30 @@ polajuice curves -c 35mm-negative -f kodak_portra_400 --vs kodak_gold_200 -o por
 4. **ColorChecker patches** - the move of each of the 24 patches as
    numbers: lightness, chroma %, hue degrees. `--table` prints these to
    the terminal (alone, without `-o`, if that is all you want).
+
+5. **Spectral sensitivity of the rendered brightness** against
+   wavelength, with the eye's V(λ) dotted for reference: how strongly
+   light of each wavelength drives the result's brightness. A red
+   filter on a black-and-white camera moves the curve toward red and
+   takes it to nothing in the blue; an unfiltered panchromatic look
+   sits on the eye's curve.
+6. **By wavelength, the color** - white light with monochromatic light
+   of each wavelength mixed in (excitation purity 0.20, the purest sRGB
+   can hold at every wavelength) is followed through the look: how many
+   nanometres its dominant wavelength moves, and how its purity is
+   scaled. Given for 445-645 nm, outside which the hue of light barely
+   changes with wavelength.
+
+`--table` prints both as numbers per wavelength as well. A caution a
+physicist will want up front: an RGB pipeline holds three numbers of a
+spectrum, so the sensitivity in panel 5 is necessarily a combination of
+the observer's three color-matching functions (it is computed from the
+look's response to each primary around a middle gray: S(λ) = g · M
+c̄(λ)). It is what the look does to a camera's rendering of each
+wavelength, not a film's measured spectral sensitivity, and it is blind
+to whatever sRGB does not encode - an infrared stock's infrared, for
+one. CIE 1931 observer by the analytic fit of Wyman, Sloan and Shirley
+(2013).
 
 `--vs FILM` overlays the same look on another stock in thin lines and
 adds its columns to the table (`--vs none` is the built-in scalar

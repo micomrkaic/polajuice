@@ -599,7 +599,7 @@ static int apply(int argc, char **argv)
             CurvesLook a = {name_a, cube_a, N}, b = {name_b, cube_b, N};
             if (output_given && !curves_svg(output, &a, cube_b ? &b : NULL)) goto curves_done;
             if (output_given) printf("%s\n", output);
-            if (curves_table_out) curves_table(stdout, &a, cube_b ? &b : NULL);
+            if (curves_table_out) { curves_table(stdout, &a, cube_b ? &b : NULL); curves_spectral_table(stdout, &a, cube_b ? &b : NULL); }
             status = EXIT_SUCCESS;
         }
 curves_done:

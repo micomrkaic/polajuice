@@ -277,8 +277,8 @@ import sys, xml.etree.ElementTree as ET
 t = ET.parse(sys.argv[1]).getroot()
 ns = "{http://www.w3.org/2000/svg}"
 titles = [e.text for e in t.iter(ns + "text") if e.text and e.text[:2] in ("1.", "2.", "3.", "4.")]
-assert len(titles) == 4, titles
-assert len(list(t.iter(ns + "polyline"))) == 5          # R, G, B; hue turn, chroma scale
+assert len(titles) == 4, titles           # panels 5 and 6 are checked by name below
+assert len(list(t.iter(ns + "polyline"))) >= 9          # R, G, B; hue turn, chroma scale; eye, sensitivity; shift, purity
 lines = open(sys.argv[2]).read().splitlines()
 first = [i for i, l in enumerate(lines) if l.startswith("dark skin")][0]
 rows = lines[first:first + 24]
@@ -293,9 +293,27 @@ for l in open(sys.argv[1]).read().splitlines()[2:26]:
     nums = [float(x.rstrip("%\u00b0")) for x in l.split()[-3:] if x != "-"]
     assert all(abs(v) < 1.5 for v in nums), l
 PY
+# by wavelength: the identity has the eye's own sensitivity, moves no hue
+# and keeps the purity; a red filter on a B&W camera weighs red up and
+# blue-green down; the chart gains its two wavelength panels
+python3 - "$DT/out/ident.txt" <<'PY' || { echo "test_compat: identity is not the eye's sensitivity by wavelength"; exit 1; }
+import sys
+rows = [l.split() for l in open(sys.argv[1]).read().splitlines() if l.strip().endswith(("x1.00", "-")) and " nm " in l and l.lstrip()[0].isdigit()]
+assert len(rows) == 14, len(rows)
+for r in rows:
+    assert abs(float(r[2])) < 0.03, r
+    if r[-1] != "-": assert r[-1] == "x1.00" and abs(float(r[6])) <= 1, r
+PY
+POLAJUICE_FILMS="$LIB" ./polajuice curves -c bw-35 --no-film --filter red --table > "$DT/out/redfilter.txt"
+python3 - "$DT/out/redfilter.txt" <<'PY' || { echo "test_compat: a red filter does not weigh red up and blue-green down"; exit 1; }
+import sys
+v = {l.split()[0]: l.split()[2] for l in open(sys.argv[1]).read().splitlines() if " nm " in l and l.lstrip()[0].isdigit()}
+assert float(v["640"]) > 0.5 and float(v["480"]) < -1.0 and abs(float(v["560"])) < 0.2, v
+PY
+grep -q '5. Spectral sensitivity' "$DT/out/slide.svg" && grep -q '6. By wavelength' "$DT/out/slide.svg" || { echo "test_compat: chart lacks the wavelength panels"; exit 1; }
 POLAJUICE_FILMS="$LIB" ./polajuice curves -c 35mm-negative --no-film --vs ilford_hp_5_plus_400 --table 2>/dev/null | head -1 | grep -q '|' || { echo "test_compat: --vs added no second look"; exit 1; }
 POLAJUICE_FILMS="$LIB" ./polajuice curves -c 35mm-slide --no-film >/dev/null 2>&1 && { echo "test_compat: curves with neither -o nor --table accepted"; exit 1; }
-echo "curves: the look charted as SVG and tabulated; identity moves nothing; --vs overlays a second film"
+echo "curves: the look charted as SVG and tabulated, by patch and by wavelength; identity moves nothing; --vs overlays a second film"
 
 echo "export: look as a .cube and as a darktable style (lut3d, grain, vignette, lowpass); --install; from a recipe"
 

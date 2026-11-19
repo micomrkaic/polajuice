@@ -1,0 +1,24 @@
+1.31.0: curves by wavelength
+
+'polajuice curves' gains two panels and a second table, for reading a
+look as a physicist would:
+
+- spectral sensitivity of the rendered brightness against wavelength,
+  with the eye's V(lambda) for reference. Computed from the look's
+  response to each primary around a middle gray: S = g . M cmf(lambda).
+  A red filter on a B&W camera moves it toward red and to nothing in
+  the blue; the identity is the eye's own curve.
+- by wavelength, the color: white with monochromatic light mixed in at
+  an excitation purity of 0.20 (what sRGB holds at every wavelength),
+  followed through the look - dominant wavelength shift in nm and
+  purity out over in, for 445-645 nm, where hue has a wavelength.
+- --table prints both per wavelength.
+- stated on the chart and in the docs: an RGB pipeline holds three
+  numbers of a spectrum, so these describe the look's treatment of a
+  camera's rendering of each wavelength, not a film's measured curves.
+  CIE 1931 observer by the analytic fit of Wyman, Sloan, Shirley (2013).
+- release.sh keeps charts and styles written into the repo's top folder
+  out of the way (/*.svg, /*.dtstyle ignored).
+
+Tests: compat (identity = the eye, no hue shift, purity 1; red filter
+weighs red up and blue-green down; the panels are in the chart).

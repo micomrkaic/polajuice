@@ -36,4 +36,6 @@ looks/__test_serve__.recipe
 node_modules
 scripts/package.json
 scripts/package-lock.json
+/*.svg
+/*.dtstyle
 !tests/raw/*
