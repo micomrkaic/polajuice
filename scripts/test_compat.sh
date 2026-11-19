@@ -257,6 +257,17 @@ POLAJUICE_FILMS="$LIB" ./polajuice lut --recipe "$R11" -o "$DT/out/fromjpeg.cube
 cmp -s "$DT/out/fromjpeg.cube" "$DT/out/neg.cube" || {
     # the titles differ by name; the lattice must not
     [ "$(grep '^[0-9]' "$DT/out/fromjpeg.cube" | cksum)" = "$(grep '^[0-9]' "$DT/out/neg.cube" | cksum)" ] || { echo "test_compat: cube from the recipe differs from the flags'"; exit 1; } ; }
+# a stock shelved twice under one name (Tri-X in the black-and-white
+# pack and in a color-negative pack): the camera decides which file
+mkdir -p "$LIB/negative_old"
+cp "$LIB/bw/ilford_hp_5_plus_400.cube" "$LIB/bw/kodak_tri-x_400.cube"
+cp "$LIB/negative_new/kodak_portra_400.cube" "$LIB/negative_old/kodak_tri-x_400.cube"
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c bw-35 -f kodak_tri-x_400 -o "$R11" >/dev/null 2>"$LIB/note.txt" || { echo "test_compat: bw-35 refused the twice-shelved Tri-X:"; cat "$LIB/note.txt"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative -f kodak_tri-x_400 -o "$R12" >/dev/null 2>"$LIB/note.txt" || { echo "test_compat: 35mm-negative refused the twice-shelved Tri-X:"; cat "$LIB/note.txt"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice curves -c bw-35 -f kodak_tri-x_400 --vs ilford_hp_5_plus_400 --table >/dev/null 2>&1 || { echo "test_compat: curves on the twice-shelved Tri-X failed"; exit 1; }
+rm -f "$LIB/bw/kodak_tri-x_400.cube" "$LIB/negative_old/kodak_tri-x_400.cube"
+echo "library: a stock shelved twice under one name resolves to the file the camera takes"
+
 # 1.30: the look's color charted. The SVG is well-formed with its four
 # panels; the table has 24 patches; an identity look (strength 0) moves
 # nothing; --vs adds the second look's columns; -o or --table is required.

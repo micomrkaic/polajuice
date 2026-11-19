@@ -48,6 +48,7 @@ bool look_prepare(Look *look, const char *tool, char *msg, size_t msgsize)
                 "use --any-film to override", tool, camera);
             return false;
         }
+        film_prefer_camera(camera);
         film_path = resolve_film(look->film_request, look->quiet);
         if (!film_path) {
             say(msg, msgsize, "%s: film '%s' not found in the library", tool, look->film_request);

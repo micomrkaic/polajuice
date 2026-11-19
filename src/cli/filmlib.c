@@ -194,6 +194,17 @@ const char *film_process_of(const char *path)
  * substring.  Returns a malloc'd path, or NULL with a message on stderr
  * (unless quiet, used for camera defaults which fall back to scalars).
  */
+/* The camera the film is for. The library holds some stocks twice under
+ * one name - Tri-X sits in the black-and-white pack and again in a
+ * color-negative pack - and a name alone cannot choose between them;
+ * the camera can: of several files with the requested name, the one
+ * whose process the camera takes wins. */
+static char prefer_camera[64];
+void film_prefer_camera(const char *camera)
+{
+    snprintf(prefer_camera, sizeof prefer_camera, "%s", camera ? camera : "");
+}
+
 char *resolve_film(const char *request, bool quiet)
 {
     struct stat info;
@@ -224,8 +235,12 @@ char *resolve_film(const char *request, bool quiet)
     for (size_t i = 0; i < library.count; ++i) {
         film_stem(library.paths[i], stem, sizeof stem);
         if (!strcasecmp(stem, request)) {
-            exact = strdup(library.paths[i]);
-            break;
+            const char *process = film_process_of(library.paths[i]);
+            bool fits = !prefer_camera[0] || !process || pj_preset_accepts_film(prefer_camera, process);
+            if (!exact) exact = strdup(library.paths[i]);
+            else if (fits) { free(exact); exact = strdup(library.paths[i]); }
+            if (fits) break;
+            continue;
         }
         if (contains_nocase(stem, request))
             film_list_add(&matches, library.paths[i]);

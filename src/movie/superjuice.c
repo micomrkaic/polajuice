@@ -334,6 +334,7 @@ int main(int argc, char **argv)
                     "no film (--any-film overrides)\n", camera);
             return EXIT_FAILURE;
         }
+        film_prefer_camera(camera);
         film_path = resolve_film(film_request, false);
         if (!film_path) return EXIT_FAILURE;
         const char *process = film_process_of(film_path);

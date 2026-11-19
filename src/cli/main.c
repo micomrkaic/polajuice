@@ -494,6 +494,7 @@ static int apply(int argc, char **argv)
         fprintf(stderr, "note: %s develops inside the film unit; "
                 "--edge is ignored for instant cameras\n", camera);
 
+    film_prefer_camera(camera);
     /* Choose the film: explicit request > camera default > scalar engine. */
     char *film_path = NULL;
     if (film_request) {

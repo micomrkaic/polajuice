@@ -12,6 +12,9 @@ const char *film_library_root(void);
 const char *print_library_root(void);
 const char *web_root(void);
 const char *film_process_of(const char *path);
+/* of several library files with the same name, prefer the one this
+ * camera's process takes (NULL clears) */
+void film_prefer_camera(const char *camera);
 char *resolve_film(const char *request, bool quiet);
 int list_films(const char *filter);
 
