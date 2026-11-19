@@ -5,6 +5,8 @@
 #include "polajuice.h"
 #include "filmlib.h"
 #include "heic.h"
+#include "dtstyle.h"
+#include "curves.h"
 #include "recipe.h"
 
 int serve_main(int argc, char **argv);
@@ -29,6 +31,18 @@ static void usage(FILE *stream)
         "  polajuice describe CAMERA\n"
         "  polajuice films [NAME]\n"
         "  polajuice inspect INPUT\n"
+        "  polajuice lut -c CAMERA [look options | --recipe FILE] -o NAME.cube [--size 33]\n"
+        "      the look's color as a 3D LUT (sRGB in and out) for any editor\n"
+        "  polajuice darktable -c CAMERA [look options | --recipe FILE] -o NAME [--install]\n"
+        "      the look as a darktable style: NAME.cube for the 3D LUT module\n"
+        "      plus NAME.dtstyle (grain, vignette, format softness from the\n"
+        "      camera); --install puts both where darktable looks\n"
+        "  polajuice curves -c CAMERA [look options | --recipe FILE] -o NAME.svg\n"
+        "                   [--vs FILM|none] [--table]\n"
+        "      what the look does to color, charted: gray ramp, hue turn and\n"
+        "      chroma scale around the hue circle, a color plane with arrows,\n"
+        "      and the ColorChecker patches as numbers; --vs overlays another\n"
+        "      film, --table prints the numbers\n"
         "  polajuice paths\n"
         "      where the film library, print stocks and web page are found\n"
         "  polajuice serve [DIR] [--port 8000]\n"
@@ -273,9 +287,18 @@ static int develop(int argc, char **argv)
 
 /* ---- apply ------------------------------------------------------------ */
 
+/* 'lut' and 'darktable' take a look exactly as 'apply' does - recipe,
+ * camera, film, every flag - and export it instead of rendering a
+ * photograph; main() routes them through apply() with this set */
+static const char *g_export;    /* NULL, "lut", "darktable" or "curves" */
+
 static int apply(int argc, char **argv)
 {
+    bool output_given = false;
     const char *input = argc > 2 ? argv[2] : NULL;
+    int cube_size = 33;
+    bool install_style = false, curves_table_out = false;
+    const char *vs_request = NULL;   /* curves: a second film to overlay; "none" = the scalar engine */
     const char *output = NULL;
     const char *camera = NULL;
     const char *film_request = NULL;
@@ -309,6 +332,15 @@ static int apply(int argc, char **argv)
             film_request = argv[++i];
         else if (!strcmp(argv[i], "--no-film"))
             no_film = true;
+        else if (g_export && !strcmp(argv[i], "--size") && i + 1 < argc) {
+            cube_size = atoi(argv[++i]);
+            if (cube_size < 2 || cube_size > 129) { fprintf(stderr, "polajuice: --size takes 2..129 (17, 33 and 65 are usual)\n"); return EXIT_FAILURE; }
+        } else if (g_export && !strcmp(g_export, "darktable") && !strcmp(argv[i], "--install"))
+            install_style = true;
+        else if (g_export && !strcmp(g_export, "curves") && !strcmp(argv[i], "--vs") && i + 1 < argc)
+            vs_request = argv[++i];
+        else if (g_export && !strcmp(g_export, "curves") && !strcmp(argv[i], "--table"))
+            curves_table_out = true;
         else if (!strcmp(argv[i], "--lens") && i + 1 < argc) {
             const char *mode = argv[++i];
             if (!strcmp(mode, "auto")) lens_auto = true;
@@ -414,6 +446,14 @@ static int apply(int argc, char **argv)
     }
     if (!input || !camera) {
         usage(stderr);
+        return EXIT_FAILURE;
+    }
+    output_given = output != NULL;
+    if (g_export && !output && !(!strcmp(g_export, "curves") && curves_table_out)) {
+        fprintf(stderr, "polajuice %s: name the %s\n", g_export,
+                !strcmp(g_export, "lut") ? "look with -o NAME.cube"
+                : !strcmp(g_export, "curves") ? "chart with -o NAME.svg (or ask for --table)"
+                : "look with -o NAME (NAME.cube and NAME.dtstyle are written)");
         return EXIT_FAILURE;
     }
     if (no_film && film_request) {
@@ -523,6 +563,66 @@ static int apply(int argc, char **argv)
     if (!options.film_process)
         options.film_process = pj_preset_primary_process(camera);
 
+    if (g_export && !strcmp(g_export, "curves")) {
+        /* the look's color as a lattice, charted; --vs overlays the same
+         * look on another film (or on the scalar engine: --vs none) */
+        enum { N = 33 };
+        float *cube_a = malloc((size_t)N * N * N * 3 * sizeof *cube_a), *cube_b = NULL;
+        char name_a[400], name_b[400];
+        PjLut3D *vs_lut = NULL;
+        int status = EXIT_FAILURE;
+        snprintf(name_a, sizeof name_a, "%s / %s", camera, lut ? options.film_stem : "scalar engine");
+        if (!cube_a || !pj_look_cube(camera, &options, N, cube_a, &error)) { fprintf(stderr, "polajuice: %s\n", cube_a ? error.message : "out of memory"); goto curves_done; }
+        if (vs_request) {
+            PjRenderOptions other = options;
+            other.color_lut = NULL; other.film_stem = NULL;
+            other.film_process = pj_preset_primary_process(camera);
+            snprintf(name_b, sizeof name_b, "%s / scalar engine", camera);
+            if (strcmp(vs_request, "none")) {
+                char *vs_path = resolve_film(vs_request, false);
+                if (!vs_path) goto curves_done;
+                static char vs_stem[256];
+                film_stem_of_path(vs_path, vs_stem, sizeof vs_stem);
+                other.film_process = film_process_of(vs_path);
+                if (!other.film_process) other.film_process = pj_preset_primary_process(camera);
+                vs_lut = pj_lut3d_load_cube(vs_path, &error);
+                free(vs_path);
+                if (!vs_lut) { fprintf(stderr, "polajuice: %s\n", error.message); goto curves_done; }
+                other.color_lut = vs_lut; other.film_stem = vs_stem;
+                snprintf(name_b, sizeof name_b, "%s / %s", camera, vs_stem);
+            }
+            cube_b = malloc((size_t)N * N * N * 3 * sizeof *cube_b);
+            if (!cube_b || !pj_look_cube(camera, &other, N, cube_b, &error)) { fprintf(stderr, "polajuice: %s\n", cube_b ? error.message : "out of memory"); goto curves_done; }
+        }
+        {
+            CurvesLook a = {name_a, cube_a, N}, b = {name_b, cube_b, N};
+            if (output_given && !curves_svg(output, &a, cube_b ? &b : NULL)) goto curves_done;
+            if (output_given) printf("%s\n", output);
+            if (curves_table_out) curves_table(stdout, &a, cube_b ? &b : NULL);
+            status = EXIT_SUCCESS;
+        }
+curves_done:
+        free(cube_a); free(cube_b);
+        pj_lut3d_free(vs_lut); pj_lut3d_free(lut); pj_lut3d_free(print_lut);
+        return status;
+    }
+    if (g_export) {
+        static char look_text[1024];
+        char print_stem[256];
+        const char *pstem = NULL;
+        if (print_request) {
+            char *print_path = resolve_film(print_request, true);
+            pstem = film_stem_of_path(print_path, print_stem, sizeof print_stem);
+            free(print_path);
+        }
+        pj_recipe_format(camera, lut ? options.film_stem : "none", pstem, &options, look_text, sizeof look_text);
+        int status = !strcmp(g_export, "lut")
+                   ? export_cube(camera, &options, look_text, output, cube_size)
+                   : export_darktable(camera, &options, look_text, output, cube_size, install_style);
+        pj_lut3d_free(lut); pj_lut3d_free(print_lut);
+        return status;
+    }
+
     const char *prof = getenv("POLAJUICE_PROFILE");
     bool profiling = prof && *prof && *prof != '0';
     struct timespec t0, t1;
@@ -622,6 +722,17 @@ int main(int argc, char **argv)
     }
     if (!strcmp(argv[1], "apply"))
         return apply(argc, argv);
+    if (!strcmp(argv[1], "lut") || !strcmp(argv[1], "darktable") || !strcmp(argv[1], "curves")) {
+        /* the look's flags start where apply's input would be */
+        char **shifted = calloc((size_t)argc + 2, sizeof *shifted);
+        if (!shifted) return EXIT_FAILURE;
+        shifted[0] = argv[0]; shifted[1] = argv[1]; shifted[2] = "-";
+        for (int i = 2; i < argc; ++i) shifted[i + 1] = argv[i];
+        g_export = argv[1];
+        int status = apply(argc + 1, shifted);
+        free(shifted);
+        return status;
+    }
     if (!strcmp(argv[1], "cameras") || !strcmp(argv[1], "presets"))
         return list_cameras();
     if (!strcmp(argv[1], "films"))

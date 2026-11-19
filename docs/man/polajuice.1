@@ -27,6 +27,30 @@ polajuice \- photographic process emulator: cameras, film stocks, prints
 .RB [ \-\-web
 .IR PATH ]
 .br
+.B polajuice lut \-c
+.I CAMERA
+.RI [ "look options" ]
+.B \-o
+.I NAME.cube
+.RB [ \-\-size
+.IR N ]
+.br
+.B polajuice curves \-c
+.I CAMERA
+.RI [ "look options" ]
+.B \-o
+.I NAME.svg
+.RB [ \-\-vs
+.IR FILM ]
+.RB [ \-\-table ]
+.br
+.B polajuice darktable \-c
+.I CAMERA
+.RI [ "look options" ]
+.B \-o
+.I NAME
+.RB [ \-\-install ]
+.br
 .B polajuice cameras
 .br
 .B polajuice describe
@@ -107,6 +131,47 @@ The page itself comes from the installed web directory (see
 .BR FILES ),
 or from
 .BR \-\-web " " \fIPATH\fR.
+.TP
+.BI lut " \-o NAME.cube"
+Export the look's color as a 3D LUT (.cube, sRGB in and out,
+.B \-\-size
+points a side, default 33) for any editor with a LUT module. The look
+is given exactly as for
+.BR apply :
+.BR \-c ", " \-f ,
+any option, or
+.B \-\-recipe
+with a recipe file or a rendered JPEG. Grain, softness, halation,
+vignette and the frame are not color and are not in the cube.
+.TP
+.BI curves " \-o NAME.svg"
+Chart what the look does to color, in four views: R, G, B against a
+gray ramp; hue turned and chroma scaled around the hue circle; a color
+plane with an arrow from each color to where it goes; and the 24
+ColorChecker patches as numbers (lightness, chroma %, hue degrees).
+.BI \-\-vs " FILM"
+overlays the same look on another film
+.RB ( none
+for the scalar engine);
+.B \-\-table
+prints the patch numbers, and may be used without
+.BR \-o .
+The look is given as for
+.BR apply .
+.TP
+.BI darktable " \-o NAME"
+Export the look as a darktable style:
+.I NAME.cube
+for darktable's 3D LUT module and
+.I NAME.dtstyle
+which loads it and sets darktable's grain, vignette and, for a format
+with a stated resolution (Super 8), lowpass from the camera. With
+.B \-\-install
+the cube goes under darktable's 3D lut root folder (from darktablerc)
+and the style into darktable's styles folder; import it once from
+lighttable > styles. Apply the style after developing the picture. Not
+carried: halation, a direct flash, the instant frame, graduated and
+radial filters.
 .TP
 .B cameras
 List the camera archetypes with their traits, admissible film
@@ -355,6 +420,12 @@ under the served directory.
 .B POLAJUICE_FILMS, POLAJUICE_PRINTS, POLAJUICE_WEB, POLAJUICE_HOME
 See
 .BR FILES .
+.TP
+.B POLAJUICE_DARKTABLE_CONFIG
+darktable's configuration directory for
+.BR "darktable \-\-install" ,
+when it is not
+.IR ~/.config/darktable .
 .TP
 .B POLAJUICE_THREADS
 Number of render threads (default: all cores). The output is identical

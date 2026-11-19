@@ -1,0 +1,29 @@
+1.29.0: looks exported as 3D LUTs and darktable styles
+
+- 'polajuice lut ... -o NAME.cube': the look's color as a .cube (sRGB in
+  and out, 33 points a side, --size). A lattice is run through the
+  pipeline with everything spatial left out (the new color_only render
+  option; pj_look_cube), so the cube carries white balance, exposure,
+  the film, print stock, development, age and a format's projected
+  color, and nothing that depends on where a pixel is.
+- 'polajuice darktable ... -o NAME [--install]': NAME.cube plus
+  NAME.dtstyle. The style loads the cube in darktable's 3D LUT module
+  and sets darktable's grain, vignette and (for a format with a stated
+  resolution) lowpass from the camera. --install puts the cube under
+  darktable's 3D lut root folder and the style in its styles folder,
+  and says how to set a lut root when there is none.
+- both take the look exactly as 'apply' does: flags, or --recipe with a
+  recipe file or a rendered JPEG.
+- module parameters are darktable 4.6's structs (lut3d v3, grain v2,
+  vignette v4, lowpass v4), hex-encoded; blend parameters left to the
+  modules' defaults. Checked against darktable 4.6.1: its importer reads
+  the style, its render of the 3D LUT matches the cube applied directly
+  to 0.7/255, and the full style lands within about 2/255 of polajuice's
+  own render in color with grain and softness matched by measurement.
+- pj_preset_character(): what a camera does that a LUT cannot carry.
+
+Tests: core (cube lattice against the color-only render, interpolation
+error, color_only keeps the frame and is deterministic), compat (cube
+shape, style structure and struct sizes, --install, guidance without a
+lut root, export from a rendered JPEG).
+Docs: README, man page, completions.

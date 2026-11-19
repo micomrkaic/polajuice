@@ -17,12 +17,12 @@ _polajuice() {
     _init_completion 2>/dev/null || { COMPREPLY=(); cur=${COMP_WORDS[COMP_CWORD]}; prev=${COMP_WORDS[COMP_CWORD-1]}; words=("${COMP_WORDS[@]}"); cword=$COMP_CWORD; }
     local sub=${words[1]}
     if [ "$cword" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "apply develop serve cameras describe films inspect paths --help" -- "$cur"))
+        COMPREPLY=($(compgen -W "apply develop serve lut darktable curves cameras describe films inspect paths --help" -- "$cur"))
         return
     fi
     case "$prev" in
         -c|--camera) COMPREPLY=($(compgen -W "$(_polajuice_cameras)" -- "$cur")); return ;;
-        -f|--film|--print) COMPREPLY=($(compgen -W "$(_polajuice_films)" -- "$cur")); _filedir cube 2>/dev/null; return ;;
+        -f|--film|--print|--vs) COMPREPLY=($(compgen -W "$(_polajuice_films)" -- "$cur")); _filedir cube 2>/dev/null; return ;;
         --develop) COMPREPLY=($(compgen -W "normal push+1 push+2 push+3 push+4 push+0.5 push+1.5 pull-1 pull-2 pull-3 cross cross+1 cross+2" -- "$cur")); return ;;
         --crop) COMPREPLY=($(compgen -W "camera full" -- "$cur")); return ;;
         --grain) COMPREPLY=($(compgen -W "classic silver" -- "$cur")); return ;;
@@ -38,6 +38,9 @@ _polajuice() {
                 COMPREPLY=($(compgen -W "-c --camera -f --film --no-film --any-film --print -o --output --strength --develop --crop \
 --age --grain --edge --seed --ev --halation --filter --lens --linear --recipe --save-recipe $(_polajuice_scene_flags)" -- "$cur"))
             else _filedir '@(jpg|jpeg|JPG|JPEG|png|PNG|ppm|nef|NEF|dng|DNG|tif|tiff)' 2>/dev/null; fi ;;
+        lut|darktable|curves)
+            COMPREPLY=($(compgen -W "--vs --table -c --camera -f --film --no-film --any-film --print -o --output --size --install --strength --develop \
+--age --ev --filter --recipe $(_polajuice_scene_flags)" -- "$cur")) ;;
         develop)
             if [[ "$cur" == -* ]]; then COMPREPLY=($(compgen -W "-o --output --ev --linear" -- "$cur"))
             else _filedir '@(nef|NEF|dng|DNG|png|tif|tiff)' 2>/dev/null; fi ;;

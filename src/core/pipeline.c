@@ -818,16 +818,26 @@ static void tone_band(size_t y0, size_t y1, void *vctx)
 {
     Ctx *c = vctx;
     PjImage *image = c->image;
+    const float s = c->f[3];
+    if (s >= 1.0f) {
+        for (size_t i = y0 * image->width * 3; i < y1 * image->width * 3; ++i)
+            image->rgb[i] = film_curve(image->rgb[i], c->f[0], c->f[1], c->f[2]);
+        return;
+    }
     for (size_t i = y0 * image->width * 3; i < y1 * image->width * 3; ++i)
-        image->rgb[i] = film_curve(image->rgb[i], c->f[0], c->f[1], c->f[2]);
+        image->rgb[i] += s * (film_curve(image->rgb[i], c->f[0], c->f[1], c->f[2]) - image->rgb[i]);
 }
 
+/* The camera's curve at full strength, blended with the input by the
+ * strength. (Until 1.30 the parameters were blended instead, toward a
+ * roll-off of 1 - which is still a shoulder, so strength 0 was not the
+ * input. Strength 1 is unchanged to the bit.) */
 static void apply_builtin_tone(PjImage *image, const PjPreset *p, float strength)
 {
-    float contrast = mixf(1.0f, p->contrast, strength);
-    float lift = p->black_lift * strength;
-    float rolloff = mixf(1.0f, p->highlight_rolloff, strength);
-    Ctx ctx = {.image = image, .f = {contrast, lift, rolloff}};
+    float contrast = p->contrast;
+    float lift = p->black_lift;
+    float rolloff = p->highlight_rolloff;
+    Ctx ctx = {.image = image, .f = {contrast, lift, rolloff, strength}};
     pj_parallel_rows(image->height, tone_band, &ctx);
 }
 
@@ -1862,6 +1872,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     uint64_t seed = options ? options->seed : UINT64_C(0x504f4c414a554943);
     const PjLut3D *lut = options ? options->color_lut : NULL;
     strength = clamp01(strength);
+    const bool co = options && options->color_only;
 
     stage_mark(NULL);
     PjImage *prepared = prepare_input(input, options, error);
@@ -1869,7 +1880,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     PjImage *image;
     PjGeometry geom;
     preset_geometry(preset, prepared->width, prepared->height,
-                    options ? options->crop : PJ_CROP_CAMERA, &geom);
+                    co ? PJ_CROP_FULL : options ? options->crop : PJ_CROP_CAMERA, &geom);
     if (geom.crop_w == prepared->width && geom.crop_h == prepared->height)
         image = prepared;
     else {
@@ -1906,15 +1917,17 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     apply_contrast_filter(image,
                           options ? options->contrast_filter : NULL,
                           strength);
-    apply_direct_flash(image, preset, strength);
+    if (!co) apply_direct_flash(image, preset, strength);
     stage_mark("filter+flash");
-    apply_softness(image, preset->softness * strength);
-    if (strength >= 0.999f) apply_resolution(image, preset->resolve);
-    else if (strength > 0.0f && preset->resolve > 0.0f) apply_resolution(image, preset->resolve / strength);
+    if (!co) {
+        apply_softness(image, preset->softness * strength);
+        if (strength >= 0.999f) apply_resolution(image, preset->resolve);
+        else if (strength > 0.0f && preset->resolve > 0.0f) apply_resolution(image, preset->resolve / strength);
+    }
     stage_mark("softness");
-    apply_vignette(image, preset->vignette * strength);
+    if (!co) apply_vignette(image, preset->vignette * strength);
     stage_mark("vignette");
-    {
+    if (!co) {
         float h = options ? options->halation : 0.0f;
         float scale = h == 0.0f ? 1.0f : (h < 0.0f ? 0.0f : h);
         apply_halation(image, preset->halation * strength * scale,
@@ -1940,7 +1953,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
                       !strcmp(options->grain_model, "silver");
         float push = options ? push_effective(options->push) : 0.0f;
         bool cross = options ? options->cross_process : false;
-        float edge = options ? options->edge * strength : 0.0f;
+        float edge = options && !co ? options->edge * strength : 0.0f;
         if (preset->instant_frame) { push = 0.0f; cross = false; edge = 0.0f; }
         if (mono) cross = false;   /* crossed color curves mean nothing on B&W */
         uint64_t grain_seed = temporal
@@ -1962,7 +1975,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         /* the film is developed: edge effects, then (silver) its grain */
         apply_edge_effects(image, edge, mono);
         stage_mark("edge");
-        if (silver) {
+        if (silver && !co) {
             /* develop's contrast gain already amplifies grain formed
              * before it, so push adds less here than in classic */
             float silver_gain = 1.0f + 0.30f * fmaxf(0.0f, push)
@@ -1982,7 +1995,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         float age = preset->fade * strength + (options ? options->age : 0.0f);
         apply_age(image, age, process);
         stage_mark("print+develop+age");
-        if (!silver) {
+        if (!silver && !co) {
             /* pushed development coarsens grain; pulling calms it */
             float grain_gain = 1.0f + 0.45f * fmaxf(0.0f, push)
                                     + 0.15f * fminf(0.0f, push);
@@ -1995,10 +2008,50 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     }
 
     stage_mark("classic grain");
-    if (preset->instant_frame) {
+    if (preset->instant_frame && !co) {
         PjImage *framed = instant_frame(image, &geom, error);
         pj_image_free(image);
         return framed;
     }
     return image;
+}
+
+bool pj_look_cube(const char *preset, const PjRenderOptions *options, int n, float *out, PjError *error)
+{
+    if (n < 2 || n > 129 || !out) { pj_set_error(error, "cube size must be 2..129"); return false; }
+    PjRenderOptions o = {.seed = 1, .strength = 1.0f};
+    if (options) o = *options;
+    o.color_only = true;
+    o.temporal = false;
+    o.crop = PJ_CROP_FULL;
+    /* nothing that depends on where a pixel is */
+    o.grad = 0.0f; o.radial = 0.0f; o.denoise = 0.0f; o.sharpen = 0.0f;
+    o.distortion = 0.0f; o.devignette = 0.0f; o.rotate = 0.0f;
+    o.keystone_v = o.keystone_h = 0.0f;
+    o.trim_x = o.trim_y = o.trim_w = o.trim_h = 0.0f;
+    o.edge = 0.0f;
+    /* the lattice as an image: n*n wide (green by blue), n... laid out so
+     * that index = r + n*(g + n*b) reads straight across */
+    size_t nn = (size_t)n;
+    PjImage *lattice = pj_image_new(nn * nn, nn, error);
+    if (!lattice) return false;
+    pj_srgb_tables_init();
+    for (size_t b = 0; b < nn; ++b)
+        for (size_t g = 0; g < nn; ++g)
+            for (size_t r = 0; r < nn; ++r) {
+                float *p = lattice->rgb + ((b * nn + g) * nn + r) * 3;
+                p[0] = pj_srgb_decode((float)r / (float)(n - 1));
+                p[1] = pj_srgb_decode((float)g / (float)(n - 1));
+                p[2] = pj_srgb_decode((float)b / (float)(n - 1));
+            }
+    PjImage *graded = pj_render(lattice, preset, &o, error);
+    pj_image_free(lattice);
+    if (!graded) return false;
+    bool ok = graded->width == nn * nn && graded->height == nn;
+    if (ok)
+        for (size_t i = 0; i < nn * nn * nn * 3; ++i)
+            out[i] = pj_srgb_encode(clamp01(graded->rgb[i]));
+    else pj_set_error(error, "the look changed the lattice's shape");
+    pj_image_free(graded);
+    return ok;
 }

@@ -1192,6 +1192,48 @@ int main(void)
                 assert(q[1] / q[0] > 0.1f / 0.5f && q[1] / q[0] > 2.0f * r[1] / r[0]);
                 pj_image_free(sl); pj_image_free(o); pj_image_free(col);
             }
+            /* the look as a 3D LUT: lattice points are the color-only
+             * render exactly; between them a 33-point cube interpolated
+             * trilinearly stays within a level and a half of it; and
+             * color-only leaves out grain, softness and the frame */
+            {
+                enum { N = 33 };
+                float *cube = malloc((size_t)N * N * N * 3 * sizeof *cube); assert(cube);
+                PjRenderOptions lo = {.seed = 5, .strength = 1.0f, .temp = 0.4f, .contrast = 0.2f};
+                assert(pj_look_cube("super8", &lo, N, cube, &error));
+                assert(!pj_look_cube("super8", &lo, 1, cube, &error) && !pj_look_cube("nope", &lo, N, cube, &error));
+                PjImage *pat = pj_image_new(64, 48, &error); assert(pat);
+                fill_test_pattern(pat);
+                PjRenderOptions co = lo; co.color_only = true;
+                PjImage *a = pj_render(pat, "super8", &co, &error), *b = pj_render(pat, "super8", &co, &error);
+                assert(a && b && pj_image_width(a) == 64 && pj_image_height(a) == 48);   /* no gate crop */
+                assert(memcmp(pj_image_pixels_const(a), pj_image_pixels_const(b), 64 * 48 * 3 * sizeof(float)) == 0);
+                const float *src = pj_image_pixels_const(pat), *out = pj_image_pixels_const(a);
+                double total = 0.0, worst = 0.0;
+                for (size_t i = 0; i < 64 * 48; ++i) {
+                    float v[3], f[3]; int k[3];
+                    for (int c = 0; c < 3; ++c) {
+                        float e = pj_srgb_encode(src[i * 3 + c] < 0 ? 0 : src[i * 3 + c] > 1 ? 1 : src[i * 3 + c]) * (N - 1);
+                        k[c] = (int)e; if (k[c] > N - 2) k[c] = N - 2;
+                        f[c] = e - (float)k[c];
+                    }
+                    for (int c = 0; c < 3; ++c) {
+                        v[c] = 0.0f;
+                        for (int corner = 0; corner < 8; ++corner) {
+                            int dr = corner & 1, dg = (corner >> 1) & 1, db = corner >> 2;
+                            float w = (dr ? f[0] : 1 - f[0]) * (dg ? f[1] : 1 - f[1]) * (db ? f[2] : 1 - f[2]);
+                            v[c] += w * cube[(((size_t)(k[2] + db) * N + (size_t)(k[1] + dg)) * N + (size_t)(k[0] + dr)) * 3 + c];
+                        }
+                        double d = fabs((double)v[c] - (double)pj_srgb_encode(out[i * 3 + c])) * 255.0;
+                        total += d; if (d > worst) worst = d;
+                    }
+                }
+                assert(total / (64 * 48 * 3) < 0.5 && worst < 4.0);
+                PjPresetCharacter ch;
+                assert(pj_preset_character("super8", &ch) && ch.resolve == 145.0f && ch.grain > 0.0f && !ch.flash);
+                assert(pj_preset_character("disposable-flash", &ch) && ch.flash && !pj_preset_character("nope", &ch));
+                pj_image_free(a); pj_image_free(b); pj_image_free(pat); free(cube);
+            }
             /* HEIC: told by its ftyp box whatever the name, refused with
              * the ways in; the extension alone is not enough */
             {

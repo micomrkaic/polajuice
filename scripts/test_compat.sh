@@ -210,6 +210,84 @@ PATH="$FAKEBIN:/nonexistent" ./polajuice inspect "$HEIC" 2>/dev/null | grep -q "
 cp "$HEIC" "$LIB/renamed.jpg"
 PATH="/nonexistent" ./polajuice inspect "$LIB/renamed.jpg" 2>"$LIB/note.txt" >/dev/null && { echo "test_compat: a HEIC named .jpg was accepted"; exit 1; }
 grep -q "HEIC" "$LIB/note.txt" || { echo "test_compat: renamed HEIC not told by content"; exit 1; }
+# 1.29: a look exported as a 3D LUT and as a darktable style. The cube
+# has its header and n^3 rows; the style names four modules for Super 8
+# (lowpass, lut3d, vignette, grain) with parameter blobs of darktable
+# 4.6's struct sizes and the cube's path inside the lut3d blob; --install
+# puts the files under darktable's lut root and styles folder, and says
+# what to set when darktable has no lut root; a recipe (a rendered JPEG)
+# exports like flags do.
+DT="$LIB/dt"; mkdir -p "$DT/out" "$DT/cfg" "$DT/luts"
+POLAJUICE_FILMS="$LIB" ./polajuice lut -c 35mm-negative --no-film --temp 0.5 -o "$DT/out/neg.cube" --size 9 >/dev/null || { echo "test_compat: lut export failed"; exit 1; }
+[ "$(grep -c '^[0-9]' "$DT/out/neg.cube")" = 729 ] || { echo "test_compat: cube does not hold 9^3 rows"; exit 1; }
+grep -q '^LUT_3D_SIZE 9$' "$DT/out/neg.cube" || { echo "test_compat: cube header"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice lut -c 35mm-negative --no-film -o "$DT/out/plain.cube" --size 9 >/dev/null
+cmp -s "$DT/out/neg.cube" "$DT/out/plain.cube" && { echo "test_compat: --temp did not reach the cube"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice lut -c 35mm-negative --no-film --size 9 >/dev/null 2>&1 && { echo "test_compat: lut without -o accepted"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice darktable -c super8 --no-film -o "$DT/out/reel" --size 9 >/dev/null || { echo "test_compat: darktable export failed"; exit 1; }
+[ -s "$DT/out/reel.cube" ] && [ -s "$DT/out/reel.dtstyle" ] || { echo "test_compat: darktable export wrote no files"; exit 1; }
+python3 - "$DT/out/reel.dtstyle" <<'PY' || { echo "test_compat: style structure wrong"; exit 1; }
+import sys, struct, xml.etree.ElementTree as ET
+t = ET.parse(sys.argv[1]).getroot()
+assert t.tag == "darktable_style" and t.find("info/name").text == "reel"
+ops = {p.find("operation").text: (int(p.find("module").text), bytes.fromhex(p.find("op_params").text)) for p in t.findall("style/plugin")}
+assert list(ops) == ["lowpass", "lut3d", "vignette", "grain"], list(ops)
+sizes = {"lowpass": (4, 28), "lut3d": (3, 512 + 12 + 2048 * 6 + 128), "vignette": (4, 44), "grain": (2, 16)}
+for op, (ver, size) in sizes.items():
+    assert ops[op][0] == ver and len(ops[op][1]) == size, (op, ops[op][0], len(ops[op][1]))
+lut = ops["lut3d"][1]
+assert lut[:512].rstrip(b"\0") == b"reel.cube" and struct.unpack("<3i", lut[512:524]) == (0, 0, 0)
+radius = struct.unpack("<f", ops["lowpass"][1][4:8])[0]
+assert abs(radius - 0.1874 * 6000 / 145) < 0.01, radius
+channel, scale, strength, bias = struct.unpack("<i3f", ops["grain"][1])
+assert channel == 2 and 0 < strength <= 100 and 0 < scale <= 6400 / 213.2 + 0.01 and 0 <= bias <= 100
+assert struct.unpack("<f", ops["vignette"][1][8:12])[0] < 0      # darkens
+assert "Not carried: halation" in t.find("info/description").text and "camera=super8" in t.find("info/description").text
+PY
+POLAJUICE_FILMS="$LIB" ./polajuice darktable -c bw-35 --no-film -o "$DT/out/bw" --size 9 >/dev/null
+grep -q '<operation>lowpass</operation>' "$DT/out/bw.dtstyle" && { echo "test_compat: lowpass in a style for a camera without a stated resolution"; exit 1; }
+POLAJUICE_DARKTABLE_CONFIG="$DT/cfg" ./polajuice darktable -c super8 --no-film -o reel --install --size 9 >/dev/null 2>"$LIB/note.txt" && { echo "test_compat: --install without a lut root accepted"; exit 1; }
+grep -q "3D lut root folder" "$LIB/note.txt" || { echo "test_compat: no guidance for a missing lut root"; exit 1; }
+printf 'something=1\nplugins/darkroom/lut3d/def_path=%s\n' "$DT/luts" > "$DT/cfg/darktablerc"
+POLAJUICE_DARKTABLE_CONFIG="$DT/cfg" ./polajuice darktable -c super8 --no-film -o reel --install --size 9 >/dev/null || { echo "test_compat: --install failed"; exit 1; }
+[ -s "$DT/luts/polajuice/reel.cube" ] && [ -s "$DT/cfg/styles/reel.dtstyle" ] || { echo "test_compat: --install put nothing in place"; exit 1; }
+grep -q "$(printf 'polajuice/reel.cube' | od -An -tx1 | tr -d ' \n')" "$DT/cfg/styles/reel.dtstyle" || { echo "test_compat: installed style does not point at polajuice/reel.cube"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$IN" -c 35mm-negative --no-film --temp 0.5 -o "$R11" >/dev/null 2>&1
+POLAJUICE_FILMS="$LIB" ./polajuice lut --recipe "$R11" -o "$DT/out/fromjpeg.cube" --size 9 >/dev/null || { echo "test_compat: lut from a rendered JPEG failed"; exit 1; }
+cmp -s "$DT/out/fromjpeg.cube" "$DT/out/neg.cube" || {
+    # the titles differ by name; the lattice must not
+    [ "$(grep '^[0-9]' "$DT/out/fromjpeg.cube" | cksum)" = "$(grep '^[0-9]' "$DT/out/neg.cube" | cksum)" ] || { echo "test_compat: cube from the recipe differs from the flags'"; exit 1; } ; }
+# 1.30: the look's color charted. The SVG is well-formed with its four
+# panels; the table has 24 patches; an identity look (strength 0) moves
+# nothing; --vs adds the second look's columns; -o or --table is required.
+POLAJUICE_FILMS="$LIB" ./polajuice curves -c 35mm-slide --no-film -o "$DT/out/slide.svg" --table > "$DT/out/table.txt" || { echo "test_compat: curves failed"; exit 1; }
+python3 - "$DT/out/slide.svg" "$DT/out/table.txt" <<'PY' || { echo "test_compat: curves output wrong"; exit 1; }
+import sys, xml.etree.ElementTree as ET
+t = ET.parse(sys.argv[1]).getroot()
+ns = "{http://www.w3.org/2000/svg}"
+titles = [e.text for e in t.iter(ns + "text") if e.text and e.text[:2] in ("1.", "2.", "3.", "4.")]
+assert len(titles) == 4, titles
+assert len(list(t.iter(ns + "polyline"))) == 5          # R, G, B; hue turn, chroma scale
+lines = open(sys.argv[2]).read().splitlines()
+first = [i for i, l in enumerate(lines) if l.startswith("dark skin")][0]
+rows = lines[first:first + 24]
+assert len(rows) == 24 and rows[0].startswith("dark skin") and rows[23].startswith("black")
+red = [l for l in rows if l.startswith("red ")][0].split()
+assert float(red[2].rstrip("%")) > 20        # a slide stock saturates a red
+PY
+POLAJUICE_FILMS="$LIB" ./polajuice curves -c 35mm-slide --no-film --strength 0 --table > "$DT/out/ident.txt" || { echo "test_compat: curves --table alone failed"; exit 1; }
+python3 - "$DT/out/ident.txt" <<'PY' || { echo "test_compat: an identity look moves the patches"; exit 1; }
+import sys
+for l in open(sys.argv[1]).read().splitlines()[2:26]:
+    nums = [float(x.rstrip("%\u00b0")) for x in l.split()[-3:] if x != "-"]
+    assert all(abs(v) < 1.5 for v in nums), l
+PY
+POLAJUICE_FILMS="$LIB" ./polajuice curves -c 35mm-negative --no-film --vs ilford_hp_5_plus_400 --table 2>/dev/null | head -1 | grep -q '|' || { echo "test_compat: --vs added no second look"; exit 1; }
+POLAJUICE_FILMS="$LIB" ./polajuice curves -c 35mm-slide --no-film >/dev/null 2>&1 && { echo "test_compat: curves with neither -o nor --table accepted"; exit 1; }
+echo "curves: the look charted as SVG and tabulated; identity moves nothing; --vs overlays a second film"
+
+echo "export: look as a .cube and as a darktable style (lut3d, grain, vignette, lowpass); --install; from a recipe"
+
 echo "HEIC: refused with the ways in; converted beside the source when a converter is on the PATH; told by content"
 
 rm -f "$IN" "$OUT"

@@ -355,6 +355,15 @@ bool pj_preset_is_instant(const char *name)
     return preset && preset->instant_frame;
 }
 
+bool pj_preset_character(const char *name, PjPresetCharacter *out)
+{
+    const PjPreset *p = pj_find_preset(name);
+    if (!p || !out) return false;
+    *out = (PjPresetCharacter){ p->grain, p->grain_scale, p->grain_midtone_bias, p->vignette, p->softness,
+                                p->resolve, p->halation, p->monochrome, p->instant_frame, p->flash_ev != 0.0f };
+    return true;
+}
+
 bool pj_preset_is_monochrome(const char *name)
 {
     const PjPreset *preset = pj_find_preset(name);

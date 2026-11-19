@@ -1,0 +1,22 @@
+1.30.0: polajuice curves - what a look does to color, charted
+
+- 'polajuice curves -c CAMERA [look] -o NAME.svg [--vs FILM] [--table]':
+  the look's color path run through a 33-point lattice and drawn four
+  ways in one SVG - R, G, B against a gray ramp; hue turned and chroma
+  scaled around the CIELAB hue circle; a color plane with an arrow from
+  each color to where it goes; the 24 ColorChecker patches as numbers
+  (dL, chroma %, hue degrees). --vs overlays the same look on another
+  film (none = the scalar engine); --table prints the patch numbers,
+  with or without -o. Readable without color vision: labelled, dashed
+  lines, named hues, numbers.
+- fix, found with it: --strength 0 was not the input on the scalar
+  engine. The tone curve's parameters were blended toward a roll-off of
+  1, which is still a shoulder (a red patch came out 17% more
+  saturated at strength 0). The curve is now applied at full strength
+  and blended with the input. Strength 1 is unchanged to the bit;
+  renders at strengths between 0 and 1 without a film LUT change
+  slightly.
+
+Tests: compat (SVG structure, table, identity at strength 0, --vs,
+-o or --table required).
+Docs: README, man page, completions.

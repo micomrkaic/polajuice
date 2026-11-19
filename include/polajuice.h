@@ -42,6 +42,10 @@ typedef struct {
     bool cross_process;  /* E-6-in-C-41 style cross development: high
                     contrast, green-yellow highlights, crossed curves.
                     Also ignored for instant cameras. */
+    bool color_only; /* render the look's color alone: no softness or
+                    format resolution, vignette, halation, flash, grain,
+                    edge effects or frame, and no geometry. What a 3D LUT
+                    can carry; pj_look_cube() sets it. */
     bool temporal;  /* movie mode: enables per-frame gate weave, exposure
                     flicker, and frame-decorrelated grain for cameras that
                     define them. Stills leave this false and render
@@ -244,6 +248,27 @@ bool pj_image_is_scene_linear(const PjImage *image);
 /* One line describing the structure of the last raw file loaded
  * (container, layout, bit depth, compression, tiling, camera). */
 const char *pj_raw_description(void);
+
+/* What a camera does that a 3D LUT cannot carry, for exporters that
+ * hand those parts to a host's own modules. Amounts as the presets hold
+ * them: grain as a display-referred deviation (0.024 is a 35mm
+ * negative), grain_scale in pixels (of a 6000-wide frame when the
+ * format states its resolution), resolve in cycles across the frame at
+ * MTF50 (0 = none stated). */
+typedef struct {
+    float grain, grain_scale, grain_midtone_bias;
+    float vignette, softness, resolve, halation;
+    bool monochrome, instant, flash;
+} PjPresetCharacter;
+bool pj_preset_character(const char *name, PjPresetCharacter *out);
+
+/* The color of a look as a 3D LUT: an n x n x n lattice of sRGB-encoded
+ * input values run through the pipeline with everything spatial left
+ * out (see color_only), sRGB-encoded out. out holds n*n*n*3 floats, red
+ * fastest - the order a .cube file lists them. n is 2..129. What the
+ * lattice cannot carry (grain, softness, halation, vignette, the frame)
+ * is for the host's own modules. */
+bool pj_look_cube(const char *preset, const PjRenderOptions *options, int n, float *out, PjError *error);
 
 /* true when the file is HEIC/HEIF/AVIF by content (an ISO-BMFF ftyp box
  * with a HEIF brand), whatever its extension; such a file is refused

@@ -258,6 +258,71 @@ inspect` shows what it would set, and the page offers it as *apply
 profile*. Cross-processing on a black-and-white camera is dropped with
 a note (nothing to cross), and the page greys it out.
 
+### Looks for other programs: 3D LUTs and darktable styles
+
+A look's color - white balance, exposure, the film (LUT or scalar
+engine), print stock, development, age, a Super 8 frame's projected
+color - can leave polajuice as a standard `.cube`:
+
+```sh
+polajuice lut -c 35mm-negative -f kodak_portra_400 --temp 0.3 -o portra_warm.cube
+polajuice lut --recipe photo_super8.jpg -o reel.cube        # from any rendered JPEG
+```
+
+It is made by running a lattice (33 points a side; `--size` changes
+it) through the pipeline with everything spatial left out, sRGB in and
+sRGB out, so any editor with a LUT module applies it to a finished,
+display-referred picture. Grain, softness, halation, vignette and the
+frame are not color and are not in it.
+
+For darktable there is more:
+
+```sh
+polajuice darktable --recipe photo_super8.jpg -o reel --install
+```
+
+writes `reel.cube` and `reel.dtstyle`. The style loads the cube in
+darktable's *3D LUT* module and sets darktable's own *grain*,
+*vignette* and - for a format that states its resolution, like Super 8
+- *lowpass* from the camera, calibrated against polajuice's render on
+a 24 MP frame. `--install` puts the cube under darktable's 3D lut root
+folder (read from `darktablerc`; it tells you how to set one if there
+is none) and the style in darktable's `styles/` folder; importing it
+is darktable's step: lighttable > styles > import. Apply it after your
+own development of the picture; it sits late in the pipeline, after
+the tone mapping. Not carried: halation, a direct flash's falloff, the
+instant print's frame, graduated and radial filters. Parameter layouts
+are darktable 4.6's (newer releases upgrade them on import); checked
+there end to end - darktable's render of the style lands within about
+2/255 of polajuice's in color.
+
+### Seeing what a film does: `polajuice curves`
+
+A 3D LUT is not a curve, so one chart cannot show it. `curves` runs the
+look's whole color path through a lattice and draws four views in one
+SVG:
+
+```sh
+polajuice curves -c 35mm-negative -f kodak_portra_400 -o portra.svg
+polajuice curves -c 35mm-negative -f kodak_portra_400 --vs kodak_gold_200 -o portra_vs_gold.svg --table
+```
+
+1. **Gray ramp** - R, G and B out against gray in: contrast, toe and
+   shoulder, and where the three lines part, the color cast there.
+2. **Around the hue circle** - how many degrees each hue is turned and
+   how its chroma is scaled, with the hues named on the axis.
+3. **Color plane** - an arrow from each color to where it goes.
+4. **ColorChecker patches** - the move of each of the 24 patches as
+   numbers: lightness, chroma %, hue degrees. `--table` prints these to
+   the terminal (alone, without `-o`, if that is all you want).
+
+`--vs FILM` overlays the same look on another stock in thin lines and
+adds its columns to the table (`--vs none` is the built-in scalar
+engine). Hue and chroma are CIELAB's. Nothing in the chart depends on
+telling colors apart: lines are labelled and dashed differently, and
+the table is numbers. It takes the look as `apply` does, a recipe or a
+rendered JPEG included.
+
 ### HEIC from a phone
 
 An iPhone's default HEIC is an HEVC frame in an ISO-BMFF box. Three
