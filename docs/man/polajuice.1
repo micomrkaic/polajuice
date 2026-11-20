@@ -267,8 +267,16 @@ development). Not for instant cameras.
 .BI \-\-seed " INTEGER"
 Deterministic grain seed.
 .TP
-.BI \-\-ev " N"
-Exposure in stops, \-4..+4 (default 0).
+.BI \-\-ev " STOPS"
+Exposure, \-4..+4 (default 0): +1 doubles the light reaching the film,
+\-1 halves it. It acts on the scene, before the film, so it moves every
+tone along the film's curve: brightness first, and with it contrast,
+saturation and what is bright enough to halate. A raw file already
+opens one stop up;
+.B \-\-ev
+adds to that. Development does not brighten (see
+.BR \-\-develop ):
+for a real push, set the brightness here.
 .TP
 .BI \-\-halation " N"
 Scale the camera's halation 0..2 (0 off, default 1).
@@ -476,6 +484,24 @@ Work on a folder in the browser:
 .nf
     polajuice serve ~/Pictures/cats
 .fi
+.SH NOTES
+Several controls are the same control in other coordinates: a lens
+filter is
+.BR \-\-ev ", " \-\-temp " and " \-\-tint
+together;
+.B \-\-shadows
+is
+.B \-\-contrast
+from middle gray to four stops under it;
+.BR \-\-ev ", " \-\-grad ", " \-\-radial ", " \-\-devignette
+and a camera's vignette are one operation applied in different places.
+The README's annex lists these identities and the controls that are
+linked without being identical.
+.PP
+Older spellings still work:
+.BR \-p " and " \-\-preset " for " \-\-camera ,
+.BR \-\-lut " for " \-\-film ,
+.BR presets " for " cameras .
 .SH EXIT STATUS
 0 on success, 1 on any error (unknown camera or film, incompatible
 process, unreadable input, a value out of range).

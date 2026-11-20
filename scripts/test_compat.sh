@@ -268,6 +268,27 @@ POLAJUICE_FILMS="$LIB" ./polajuice curves -c bw-35 -f kodak_tri-x_400 --vs ilfor
 rm -f "$LIB/bw/kodak_tri-x_400.cube" "$LIB/negative_old/kodak_tri-x_400.cube"
 echo "library: a stock shelved twice under one name resolves to the file the camera takes"
 
+# --help explains every flag the parser takes (and every scene key),
+# fits 80 columns, and says what --ev does
+./polajuice --help > "$LIB/help.txt" 2>&1
+python3 - "$LIB/help.txt" src/cli/main.c src/cli/serve.c src/core/recipe.c <<'PY' || { echo "test_compat: --help is missing an option the program takes"; exit 1; }
+import re, sys
+text = open(sys.argv[1]).read()
+flags = set()
+for src in sys.argv[2:4]:
+    flags |= set(re.findall(r'strcmp\(argv\[[^\]]*\], "(-[^"]*)"\)', open(src).read()))
+keys = re.findall(r'\{"([a-z]+)", -?[0-9.]+f, -?[0-9.]+f\}', open(sys.argv[4]).read())
+assert len(keys) >= 25, keys
+missing = [f for f in sorted(flags) if not re.search(r'(?<![\w-])' + re.escape(f) + r'(?![\w-])', text)]
+missing += ["--" + k for k in keys if not re.search(r'--' + k + r'(?![\w-])', text)]
+assert not missing, missing
+wide = [l for l in text.splitlines() if len(l) > 79]
+assert not wide, wide
+assert "doubles the" in text and "light reaching the film" in text
+PY
+./superjuice --help 2>&1 | grep -q -- "--print" || { echo "test_compat: superjuice --help lacks --print"; exit 1; }
+echo "help: every option the parser takes is explained, within 80 columns"
+
 # The README's annex states which controls are the same control; the
 # exact identities are pinned here. (1) a yellow filter is ev, temp and
 # tint together; (2) shadows is contrast from middle gray to four stops

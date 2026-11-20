@@ -1,0 +1,27 @@
+1.31.2: --help rewritten; every option explained
+
+'polajuice --help' said "--ev NUMBER  exposure in stops" at the bottom
+of a list headed "Lens and framing", and left out --web. Rewritten:
+
+- grouped by what the options do: the look; exposure and development;
+  the light before the camera; lens and framing; files; the options
+  only curves, lut and darktable take; raw files; where things are
+  found; environment.
+- every option says what it does, its range, its default, and which
+  way + and - go. --ev: +1 doubles the light reaching the film, acts
+  before the film so it moves contrast, saturation and halation with
+  the brightness, adds to a raw's built-in stop. --develop: a push adds
+  contrast, saturation and grain and does not brighten.
+- added what was missing: serve --web, --lens none, --size for
+  darktable, the environment variables (POLAJUICE_THREADS,
+  POLAJUICE_PROFILE, POLAJUICE_DARKTABLE_CONFIG), the exit status, the
+  older spellings (-p/--preset, --lut, 'presets'), a pointer to the
+  README's annex on linked controls.
+- superjuice --help: --print added; refers to polajuice --help for
+  meanings.
+- man page: --ev in full, a NOTES section (control identities, older
+  spellings).
+
+Test: compat checks that --help mentions every flag the parsers take
+and every scene key, and fits 80 columns - so it cannot fall behind
+again unnoticed.
