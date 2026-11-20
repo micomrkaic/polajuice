@@ -268,6 +268,60 @@ POLAJUICE_FILMS="$LIB" ./polajuice curves -c bw-35 -f kodak_tri-x_400 --vs ilfor
 rm -f "$LIB/bw/kodak_tri-x_400.cube" "$LIB/negative_old/kodak_tri-x_400.cube"
 echo "library: a stock shelved twice under one name resolves to the file the camera takes"
 
+# The README's annex states which controls are the same control; the
+# exact identities are pinned here. (1) a yellow filter is ev, temp and
+# tint together; (2) shadows is contrast from middle gray to four stops
+# under it; (3) the camera's crop is a centered trim with the full frame.
+mkdir -p "$LIB/ident"
+python3 - "$LIB/ident" <<'PY' || { echo "test_compat: a control identity stated in the README's annex no longer holds"; exit 1; }
+import subprocess, sys, math
+d = sys.argv[1]
+def cube(*args, n=9):
+    subprocess.run(["./polajuice", "lut", "-c", "35mm-negative", "--no-film", "-o", d + "/t.cube", "--size", str(n), *args], check=True, capture_output=True)
+    return [[float(x) for x in l.split()] for l in open(d + "/t.cube") if l[0].isdigit()]
+def worst(a, b, keep=None):
+    return max(abs(x - y) for i, (p, q) in enumerate(zip(a, b)) if keep is None or keep[i] for x, y in zip(p, q)) * 255
+t = (1.0, 0.95, 0.35)
+L = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
+a, b, c = (math.log2(v / L) for v in t)
+ev = (a + b + c) / 3; temp = a - c; tint = 2 * (ev - b)
+assert abs(temp) <= 2 and abs(tint) <= 1
+assert worst(cube("--filter", "yellow"), cube("--ev", f"{ev:.6f}", "--temp", f"{temp:.6f}", "--tint", f"{tint:.6f}")) < 0.05
+n = 17
+dec = lambda v: v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+lat = [(r / (n - 1), g / (n - 1), bl / (n - 1)) for bl in range(n) for g in range(n) for r in range(n)]
+Y = [0.2126 * dec(p[0]) + 0.7152 * dec(p[1]) + 0.0722 * dec(p[2]) for p in lat]
+under = [0.18 / 16 * 1.02 < y < 0.18 * 0.98 for y in Y]
+s = -0.5
+assert worst(cube("--shadows", str(s), n=n), cube("--contrast", f"{2 * math.log2(1 - s / 4):.6f}", n=n), under) < 0.05
+cc = 0.5
+assert worst(cube("--contrast", str(cc), "--shadows", f"{4 * (2 ** (cc / 2) - 1):.6f}", n=n), cube(n=n), under) < 0.05
+PY
+python3 - "$LIB/ident/field.ppm" <<'PY'
+import sys
+# 640x480 of a deterministic pattern: Super 8's gate takes 640x470, whole-pixel margins
+W, H = 640, 480
+body = bytes((x * 7 + y * 13 + c * 29) % 256 for y in range(H) for x in range(W) for c in range(3))
+open(sys.argv[1], "wb").write(b"P6\n%d %d\n255\n" % (W, H) + body)
+PY
+POLAJUICE_FILMS="$LIB" ./polajuice apply "$LIB/ident/field.ppm" -c super8 --no-film --seed 3 -o "$LIB/ident/cam.ppm" >/dev/null 2>&1
+python3 - "$LIB/ident/field.ppm" "$LIB/ident" <<'PY' || { echo "test_compat: the camera's crop is no longer a centered trim"; exit 1; }
+import subprocess, sys
+def size(p):
+    f = open(p, "rb"); assert f.readline().strip() == b"P6"
+    l = f.readline()
+    while l.startswith(b"#"): l = f.readline()
+    return tuple(int(v) for v in l.split())
+W, H = size(sys.argv[1]); w, h = size(sys.argv[2] + "/cam.ppm")
+tw, th = w / W, h / H
+subprocess.run(["./polajuice", "apply", sys.argv[1], "-c", "super8", "--no-film", "--seed", "3", "--crop", "full",
+                "--trimx", f"{(1 - tw) / 2:.6f}", "--trimy", f"{(1 - th) / 2:.6f}", "--trimw", f"{tw:.6f}", "--trimh", f"{th:.6f}",
+                "-o", sys.argv[2] + "/trim.ppm"], check=True, capture_output=True)
+a, b = open(sys.argv[2] + "/cam.ppm", "rb").read(), open(sys.argv[2] + "/trim.ppm", "rb").read()
+sys.exit(0 if a == b else 1)
+PY
+echo "identities: yellow filter = ev+temp+tint; shadows = contrast under gray; camera crop = centered trim"
+
 # 1.30: the look's color charted. The SVG is well-formed with its four
 # panels; the table has 24 patches; an identity look (strength 0) moves
 # nothing; --vs adds the second look's columns; -o or --table is required.

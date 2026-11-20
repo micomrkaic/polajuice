@@ -1,0 +1,24 @@
+1.31.1: README annex - which controls are the same control
+
+Documentation, with the exact identities pinned by tests. No change to
+any render.
+
+- Annex to the README: which controls are collinear (the same operation
+  in other coordinates) and which are functionally linked.
+  Exact: a lens filter is ev, temp and tint together (yellow is
+  reachable with the sliders: --ev -0.405 --temp 1.515 --tint -0.911);
+  shadows is contrast from middle gray to four stops under it
+  (c = 2 log2(1 - s/4)); ev, grad, radial, devignette and the camera's
+  vignette are one operation, with the devignette value that cancels
+  each camera's vignette; the camera's crop is a centered trim.
+  Linked: what else moves brightness (tint, temp, black), the four
+  contrast controls, development not compensating exposure, what
+  exposure decides for halation and the raw controls, the black level,
+  saturation having no control of its own, sharpening lost under a
+  format's resolution, grain, geometry. Controls without effect where
+  they do not apply. What is independent: nine scene controls, eight
+  dimensions.
+- figures measured on the engine (polajuice lut, flat fields, renders).
+
+Tests: compat pins the yellow-filter identity, shadows = contrast under
+gray, contrast confined above gray, and crop = trim.

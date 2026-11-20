@@ -740,3 +740,187 @@ See `docs/ARCHITECTURE.md`, `docs/PRESET_SOURCES.md` and `docs/ROADMAP.md`.
 ## License
 
 GNU General Public License version 3 or later. See `COPYING`.
+
+## Annex: which controls are the same control
+
+polajuice has some thirty controls and fewer degrees of freedom. This
+annex says which controls are *collinear* - exactly the same operation
+in other coordinates - and which are *functionally linked* - different
+operations that move the same thing in the picture. The identities were
+checked on the engine itself (through `polajuice lut` and renders of
+test fields); the figures are from those runs, and the exact ones are
+pinned by the test suite.
+
+### A. Exact identities
+
+**1. `--filter` is `--ev`, `--temp` and `--tint` together.** All four
+multiply the three channels by constants, so they live in one
+three-dimensional space of channel gains. In stops,
+
+    red   =  ev + temp/2 + tint/4
+    green =  ev          - tint/2
+    blue  =  ev - temp/2 + tint/4
+
+and a lens filter is one fixed point in that space (its transmittances
+divided by their luminance, so a filter never moves a gray). Solved for
+the five filters:
+
+| filter | ev | temp | tint | reachable with the sliders |
+|---|---|---|---|---|
+| yellow | -0.405 | +1.515 | -0.911 | yes: identical to 0.001/255 |
+| orange | -0.528 | +2.644 | -0.843 | no (temp stops at 2) |
+| red | -0.842 | +4.644 | 0 | no |
+| green | -1.087 | +0.322 | -2.881 | no (tint stops at 1) |
+| blue | +0.013 | -3.322 | +0.101 | no |
+
+So `--filter yellow` and `--ev -0.405 --temp 1.515 --tint -0.911` are
+the same picture, and on a black-and-white camera `--temp` and `--tint`
+*are* a continuously variable filter: warm is yellow-orange, cool is
+blue. The identity holds while `--black`, `--shadows` and `--contrast`
+are zero (they sit between the exposure and the filter). One
+difference: `--strength` scales the filter and leaves `--temp`,
+`--tint` and `--ev` alone.
+
+**2. `--shadows` is `--contrast`, from middle gray to four stops under
+it.** Both scale the luminance in log space about middle gray (0.18);
+contrast everywhere, shadows only below gray, saturating four stops
+down. In that range
+
+    --shadows s    is    --contrast c   with   c = 2 log2(1 - s/4)
+
+(to 0.000/255 on the lattice: `--shadows -0.5` and `--contrast 0.34`
+agree there; above gray they differ by up to 20/255, since only
+contrast acts). The pair therefore spans two things, the slope below
+gray and the slope above it, and `--contrast c --shadows 4(2^(c/2) - 1)`
+is a contrast change confined to the tones above middle gray:
+`--contrast 0.5 --shadows 0.757` leaves everything within four stops
+under gray untouched.
+
+**3. `--ev`, `--grad`, `--radial`, `--devignette` and the camera's own
+vignette are one operation.** Each multiplies the light by a gain;
+they differ only in where: everywhere, across an edge, inside an
+ellipse, rising or falling with the square of the distance from the
+center. So `--devignette` cancels a camera's vignette exactly at
+
+    devignette = -log2(1 - vignette)
+
+| cameras | their vignette | `--devignette` that removes it |
+|---|---|---|
+| 35mm-slide | 0.04 | 0.059 |
+| technicolor-3strip | 0.05 | 0.074 |
+| 35mm-negative, polaroid-600, cinestill-night | 0.06 | 0.089 |
+| super8, polaroid-packfilm | 0.08 | 0.120 |
+| bw-35, polaroid-sx70 | 0.10 | 0.152 |
+| midcentury-rangefinder | 0.14 | 0.218 |
+| autochrome | 0.15 | 0.234 |
+| disposable-flash | 0.18 | 0.286 |
+| polavision | 0.20 | 0.322 |
+| toy-camera-120 | 0.45 | 0.862 |
+
+(measured on a flat field for three of them: the corner comes back to
+within 0.002 stops). This is exact with `--crop full`; with the
+camera's own crop the correction is made on the whole input frame and
+the vignette on the cropped one, so it is close but not exact. A raw
+file's built-in stop (`.nef`/`.dng` open one stop up) is the same
+`--ev` again.
+
+**4. `--crop camera` is a centered `--trim` with `--crop full`.** The
+camera's format crop and a trim to the same rectangle give the same
+pixels, byte for byte (checked for 35mm-negative and super8), as long
+as the margins are whole pixels; a half-pixel margin is rounded down by
+the crop and to the nearest by the trim, which can shift the frame by
+one pixel. `--trimw` or `--trimh` at 0 means no trim, whatever the
+other three say.
+
+### B. Functionally linked
+
+**Brightness is moved by more than `--ev`.** On a middle gray:
+
+| control | moves middle gray by |
+|---|---|
+| `--tint +1` / `-1` | -0.24 / +0.32 stops |
+| `--temp +1` / `-1` | +0.09 / -0.05 stops |
+| `--black +0.05` / `-0.05` | -0.38 / +0.27 stops |
+| `--contrast`, `--shadows`, any `--filter` | 0 (they pivot on gray, or are normalized) |
+
+So a strong tint or black-point change wants an `--ev` correction with
+it; contrast, shadows and filters do not.
+
+**Contrast has four controls and one camera.** `--contrast` (a power
+law on scene luminance about middle gray, before the film),
+`--develop` (push: +16% display contrast per stop about a fixed pivot,
++6% saturation, coarser grain; pull the reverse), `--age` (contrast
+lost about mid-scale, with fog and fading), the camera's own curve, and
+`--strength`, which blends that curve in. They are not interchangeable
+- the first keeps the colors' ratios, development steepens each
+channel and so saturates - but they all turn the same knob first.
+
+**`--develop` does not compensate `--ev`.** On film a push is an
+underexposure made good in the developer. Here push models only what
+the longer development does (contrast, saturation, grain); the density
+is `--ev`'s alone. `--ev -1 --develop push+1` is therefore a darker and
+harder picture, not a rescued one: a mid-gray patch comes out 19
+lightness units under, against 17 for `--ev -1` alone. To imitate a
+real push, leave `--ev` where the picture looks right and add the push.
+
+**`--ev` decides what several other controls can do.** It places the
+tones on the film's curve, so it changes contrast and saturation as
+well as brightness. Halation feeds on highlights: on one test scene its
+contribution was nil at `--ev -1` and grew by 70% from `--ev 0` to
+`--ev +1`. On a raw file `--highlights` (the shoulder's knee) and
+`--recover` (clipped channels rebuilt) act only on what `--ev` pushes
+toward white.
+
+**The black level has five hands on it.** `--black` (scene light,
+before the film), `--shadows` (the tones under gray), `--age` (fog
+lifts it), the camera's own black, and for Super 8 the projection
+stage's lift. `--black` and `--age` pull in opposite directions at
+opposite ends of the pipeline.
+
+**Saturation has no control of its own.** It is set by the film and
+moved, as a side effect, by `--develop` (push up, pull down, cross
+strongly up), `--age` (down), `--strength`, the print stock, and Super
+8's projection stage (down).
+
+**Sharpness is settled by the camera, not by `--sharpen`.**
+`--sharpen` and `--denoise` act on the input; the camera's softness
+and, for a format with a stated resolution, its blur come after and
+are much wider. Sharpening at 2 changed a 35mm-negative render by
+3.6/255 on average and a Super 8 render by 0.6: five sixths of it is
+lost under the format's own resolution. `--edge` (development edge
+effects) raises contrast at edges too, after the blur, and survives.
+
+**Grain** is the camera's amount times the film's character times
+`--strength`, raised by a push and lowered by a pull; `--grain` picks
+the model and `--seed` only the pattern.
+
+**Geometry is one resampling.** `--rotate`, `--distortion`,
+`--keystonev` and `--keystoneh` are applied together and each trims or
+stretches the frame, so they interact at the edges: a rotation trims
+to the largest clean rectangle, and what `--trim` then removes is
+measured on what is left.
+
+### C. Controls that do nothing where they do not apply
+
+| control | has no effect |
+|---|---|
+| `--highlights`, `--recover`, `--lens auto` | on anything but a raw file |
+| `--develop`, `--edge` | on instant cameras |
+| `--develop cross` | on a black-and-white camera or film |
+| `--halation` | where nothing in the frame is bright enough to bleed |
+| `--film`, `--any-film` | with `--no-film`; on sealed-process cameras |
+| `--trimx`, `--trimy` | while `--trimw` or `--trimh` is 0 |
+| `--gradangle`, `--gradpos`; `--radialx`, `--radialy`, `--radialsize` | while `--grad`; `--radial` is 0 |
+
+### D. What is actually independent
+
+For the color of a picture, the nine scene controls - `--ev`, `--temp`,
+`--tint`, `--filter`, `--black`, `--shadows`, `--contrast`,
+`--highlights`, `--recover` - span eight dimensions (the filter lies in
+the plane of the first three), six of them on a non-raw. Beyond those
+the look is a handful of choices rather than dials: camera, film,
+print stock, development, age, strength. Everything else is where
+(crop, trim, straighten, perspective, the graduated and radial
+filters) or texture (grain, softness, halation, edge effects).
+`polajuice curves` shows what any combination does, and two
+combinations whose charts and tables agree are the same edit.
