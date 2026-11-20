@@ -222,6 +222,25 @@ try {
   const nolens = await engine.lens({ inputBytes: jpgSrc, ext: jpgExt });
   if (nolens !== null) throw new Error("a JPEG reported a lens");
   console.log("highlight recovery and the lens query through the wasm");
+  // 1.32: grain amount and size. They rest at 1, and amount 0 is "no grain",
+  // which must reach the engine rather than be dropped as an unset key
+  {
+    const gbase = { inputBytes: jpgSrc, ext: jpgExt, camera: "35mm-negative", seed: 5 };
+    const gdef = await engine.render(gbase);
+    const gone = await engine.render({ ...gbase, scene: { grainamount: 1, grainsize: 1 } });
+    const gnone = await engine.render({ ...gbase, scene: { grainamount: 0 } });
+    const gnone2 = await engine.render({ ...gbase, seed: 6, scene: { grainamount: 0 } });
+    const gbig = await engine.render({ ...gbase, scene: { grainsize: 2 } });
+    if (Buffer.compare(Buffer.from(gdef), Buffer.from(gone)) !== 0) throw new Error("grainamount 1, grainsize 1 is not the default through wasm");
+    if (Buffer.compare(Buffer.from(gdef), Buffer.from(gnone)) === 0) throw new Error("grainamount 0 was dropped on the way to the wasm");
+    const scan = b => { const d = Buffer.from(b); return d.subarray(d.lastIndexOf(Buffer.from([0xff, 0xda]))); };
+    if (Buffer.compare(scan(gnone), scan(gnone2)) !== 0) throw new Error("grainamount 0 still left seeded grain through wasm");
+    if (Buffer.compare(Buffer.from(gdef), Buffer.from(gbig)) === 0) throw new Error("grainsize 2 had no effect through wasm");
+    let bad = false;
+    try { await engine.render({ ...gbase, scene: { grainsize: 9 } }); } catch (e) { bad = true; }
+    if (!bad) throw new Error("grainsize 9 accepted by wasm");
+    console.log("grain amount and size through the wasm (1 and 1 the default, 0 none)");
+  }
   // a HEIC (a stub with the ftyp box) is refused with a message that says HEIC, whatever it is called
   const heic = new Uint8Array([0,0,0,24, 0x66,0x74,0x79,0x70, 0x68,0x65,0x69,0x63, 0,0,0,0, 0x6d,0x69,0x66,0x31, 0x68,0x65,0x69,0x63]);
   for (const ext of ["heic", "jpg"]) {

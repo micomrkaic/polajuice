@@ -15,10 +15,16 @@ import { WASI, WASIProcExit, File, PreopenDirectory, ConsoleStdout }
 export const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
                            "radial", "radialx", "radialy", "radialsize",
                            "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
-                           "trimx", "trimy", "trimw", "trimh"];
+                           "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize"];
+/* the value at which a key changes nothing: 0, but the multipliers rest at 1
+ * (and grainamount=0 is a setting - no grain - not the absence of one) */
+export const SCENE_NEUTRAL = { grainamount: 1, grainsize: 1 };
+export const sceneNeutral = k => SCENE_NEUTRAL[k] ?? 0;
+const sceneSet = (scene, k) => scene[k] !== undefined && scene[k] !== null && scene[k] !== "" &&
+                               Number.isFinite(Number(scene[k])) && Number(scene[k]) !== sceneNeutral(k);
 function sceneArg(scene) {
     if (!scene) return "-";
-    const parts = SCENE_KEYS.filter(k => scene[k] !== undefined && scene[k] !== null && Number(scene[k]) !== 0)
+    const parts = SCENE_KEYS.filter(k => sceneSet(scene, k))
                             .map(k => k + "=" + String(scene[k]));
     return parts.length ? parts.join(",") : "-";
 }
@@ -174,7 +180,7 @@ export function createNativeEngine(base, info) {
     function sceneParams(scene) {
         const out = {};
         if (!scene) return out;
-        for (const k of SCENE_KEYS) if (scene[k] !== undefined && scene[k] !== null && Number(scene[k]) !== 0) out[k] = scene[k];
+        for (const k of SCENE_KEYS) if (sceneSet(scene, k)) out[k] = scene[k];
         return out;
     }
     function lookParams(o) {

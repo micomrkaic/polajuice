@@ -79,7 +79,7 @@ One command, movie in, vintage movie out:
 superjuice drives FFmpeg itself (decoding, H.264 encoding at `--crf 18`
 by default, audio passthrough); it needs `ffmpeg` on PATH and tells you
 so if it is missing. All the stills options apply: `-f` for the film,
-`--develop`, `--crop`, `--age`, `--grain`, `--edge`, `--strength`,
+`--develop`, `--crop`, `--age`, `--grain`, `--grainamount`, `--grainsize`, `--edge`, `--strength`,
 `--seed`, `-o` for an explicit output path. For custom pipelines (different codecs, filters, no
 re-encode of your choosing), plumbing mode remains: with no input file,
 superjuice reads YUV4MPEG2 on stdin and writes it on stdout, and the
@@ -475,6 +475,20 @@ fogged grain. Color stock gets three partly correlated dye-cloud layers,
 the fast blue-sensitive top layer grainiest; silver stock one luminance
 field. Mid gray carries the same RMS in both models for the same camera
 and film, so switching changes texture, not noisiness.
+
+Two numbers set the grain itself, in either model. `--grainamount N`
+is how much: a multiplier of what the camera, the film and the
+development give, 0 none, 1 their own (the default), 2 double, up to 4.
+`--grainsize N` is how coarse: a multiplier of the camera's grain size,
+0.5 to 4, with the strength held - at 2 the same deviation is spread
+over clumps twice as wide. On a flat gray field through `35mm-negative`
+the grain's deviation is 1.7/255 at the default, 3.4 at
+`--grainamount 2` and still 1.7 at `--grainsize 2`, where the
+correlation between neighboring pixels goes from 0.03 to 0.65.
+Classic grain is never finer than a pixel of the render, so a size
+under 1 shows on the coarse cameras, with `--grain silver` and on big
+pictures. Both are recipe keys, sliders on the page, `superjuice`
+options, and go into the darktable style.
 
 `--edge 0..2` is the developer running out where density forms.
 Developer exhausts locally, so the dense side of a boundary sees
@@ -900,8 +914,13 @@ lost under the format's own resolution. `--edge` (development edge
 effects) raises contrast at edges too, after the blur, and survives.
 
 **Grain** is the camera's amount times the film's character times
-`--strength`, raised by a push and lowered by a pull; `--grain` picks
-the model and `--seed` only the pattern.
+`--strength` times `--grainamount`, raised by a push and lowered by a
+pull: five things multiplying one number, so `--grainamount 0.5` and a
+camera with half the grain are the same picture. `--grainsize` is kept
+off that axis on purpose - it rescales the amount so that the deviation
+stays put and only the clump size moves - which makes amount and size
+independent to within a few percent. `--grain` picks the model and
+`--seed` only the pattern.
 
 **Geometry is one resampling.** `--rotate`, `--distortion`,
 `--keystonev` and `--keystoneh` are applied together and each trims or

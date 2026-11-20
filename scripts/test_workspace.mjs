@@ -200,6 +200,17 @@ await page.waitForFunction(() => /\ntemp=0.6\n/.test(document.getElementById("re
 if (!/--temp 0.6/.test(await page.$eval("#cli", e => e.textContent))) fail("CLI line lacks --temp");
 await page.$eval("#temp", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
 await page.waitForFunction(() => /\ntemp=0\n/.test(document.getElementById("recipe").value), null, { timeout: 60000 });
+// 1.32: the grain sliders rest at 1; amount 0 is a setting, shown as "none",
+// and comes back in the recipe of the render it made
+if (!/\ngrainamount=1\ngrainsize=1\n/.test(await page.$eval("#recipe", e => e.value))) fail("recipe at rest lacks grainamount=1, grainsize=1");
+await page.$eval("#grainamount", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.$eval("#grainsize", e => { e.value = "2"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.waitForFunction(() => /\ngrainamount=0\ngrainsize=2\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+if (await page.$eval("#grainamountval", e => e.textContent) !== "none") fail("grain amount 0 is not labelled none");
+if (!/--grainamount 0 --grainsize 2/.test(await page.$eval("#cli", e => e.textContent))) fail("CLI line lacks the grain flags");
+await page.$eval("#grainamount", e => { e.value = "1"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.$eval("#grainsize", e => { e.value = "1"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+await page.waitForFunction(() => /\ngrainamount=1\ngrainsize=1\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
 // 1.25: a straightened, trimmed render wipes against the original with the
 // left image rotated back about the file's center and offset by the trim
 await page.$eval("#rotate", e => { e.value = "5"; e.dispatchEvent(new Event("input", { bubbles: true })); });

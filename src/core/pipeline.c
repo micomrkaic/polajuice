@@ -1528,6 +1528,11 @@ static void apply_silver_grain(PjImage *image, float amount, float scale,
     scratch_put(coarse);
 }
 
+float pj_grain_rms(float scale)
+{
+    return classic_grain_rms(scale, 0.0f);
+}
+
 bool pj_grain_model_known(const char *name)
 {
     return !name || !strcmp(name, "classic") || !strcmp(name, "silver");
@@ -1972,6 +1977,23 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
             float longest = (float)(image->width > image->height ? image->width : image->height);
             film_scale *= longest / 6000.0f;
         }
+        /* the photographer's own say over the grain, on top of camera,
+         * film and development: how much and how coarse (1 and 1 unset) */
+        float user_amount = options ? 1.0f + options->grain_amount : 1.0f;
+        float user_size = options ? 1.0f + options->grain_size : 1.0f;
+        if (user_amount < 0.0f) user_amount = 0.0f;
+        if (user_size < 0.25f) user_size = 0.25f;
+        if (user_size != 1.0f && user_amount > 0.0f) {
+            /* size alone: smoothing the noise over more pixels lowers its
+             * deviation, so the amount is raised to hold the RMS where
+             * the camera had it - coarser, not also weaker */
+            float base = preset->grain_scale * film_scale;
+            float r0 = classic_grain_rms(base, 0.0f);
+            float r1 = classic_grain_rms(base * user_size, 0.0f);
+            if (r1 > 0.0f) user_amount *= r0 / r1;
+        }
+        film_amount *= user_amount;
+        film_scale *= user_size;
         /* the film is developed: edge effects, then (silver) its grain */
         apply_edge_effects(image, edge, mono);
         stage_mark("edge");

@@ -166,6 +166,15 @@ typedef struct {
     float radial_size; /* its radius as a fraction of the half-diagonal,
                     0.05..1; 0 means the default 0.35; the edge feathers
                     over the outer half of the radius */
+    float grain_amount; /* the grain's strength relative to the camera's
+                    own, less one, so a zeroed struct is the camera's grain:
+                    -1 none, 0 the camera's, +1 double (the grainamount key
+                    takes the multiplier itself: 0 off, 1 the camera's,
+                    2 double, up to 4) */
+    float grain_size;  /* the grain's coarseness the same way: -0.5 half
+                    the size, 0 the camera's, +1 double (the grainsize key
+                    takes the multiplier, 0.5..4). The classic model's
+                    grain is never finer than a pixel */
     float recover;  /* raw highlight reconstruction, 0..1: 0 clips every
                     sensor channel at white (dcraw's default); 1 rebuilds
                     a clipped channel from the unclipped ones so a
@@ -215,7 +224,10 @@ size_t pj_geometry_format(const PjGeometry *g, char *buf, size_t size);
  * that reads them as text: pj_scene_keys() lists them, pj_scene_set()
  * parses "key=value" style pairs into the options (false when the key
  * is not a scene key or the value is out of range). */
-typedef struct { const char *key; float lo, hi; } PjSceneKey;
+typedef struct { const char *key; float lo, hi;
+                 float neutral;   /* the value that changes nothing: 0 for
+                                     all but the multipliers, which rest at 1 */
+} PjSceneKey;
 const PjSceneKey *pj_scene_keys(size_t *count);
 bool pj_scene_is_key(const char *key);
 bool pj_scene_set(PjRenderOptions *o, const char *key, const char *value);
@@ -359,6 +371,11 @@ const char *pj_preset_primary_process(const char *camera);
 bool pj_contrast_filter_known(const char *name);
 /* True for NULL, "classic" and "silver". */
 bool pj_grain_model_known(const char *name);
+/* The deviation of unit-amount classic grain at a grain size in pixels
+ * (1 at one pixel, falling to about three quarters as the noise is
+ * spread over more of them): what holds the strength still when only the
+ * size changes, and what an exporter needs to do the same. */
+float pj_grain_rms(float scale);
 
 PjImage *pj_render(const PjImage *input,
                    const char *preset_name,

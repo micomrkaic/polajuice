@@ -272,6 +272,20 @@ Storage aging 0 (fresh) .. 1: fog, faded contrast, magenta drift.
 grain formed from exposure inside the film, coarse in the shadows and
 fine in the highlights.
 .TP
+.BI \-\-grainamount " N"
+How much grain, 0..4, as a multiplier of what the camera, the film and
+the development give: 0 none, 1 their own (default), 2 double. On a flat
+gray field the grain's deviation scales with it.
+.TP
+.BI \-\-grainsize " N"
+How coarse the grain is, 0.5..4, as a multiplier of the camera's own
+grain size: 1 the camera's (default), 2 twice as coarse. The strength
+is held: the deviation stays where it was and is spread over bigger
+clumps. Classic grain is never finer than a pixel of the render, so
+values under 1 show on the coarse-grained cameras, with
+.B \-\-grain silver
+and on big pictures.
+.TP
 .BI \-\-edge " N"
 Development edge effects 0..2 (1 dilute developer, 2 stand
 development). Not for instant cameras.

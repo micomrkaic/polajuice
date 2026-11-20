@@ -44,6 +44,8 @@ render. `key=value` sources into a shell, which is why it is not JSON.
     trimy=0
     trimw=0
     trimh=0
+    grainamount=1
+    grainsize=1
 
 | key | values |
 |---|---|
@@ -81,6 +83,12 @@ render. `key=value` sources into a shell, which is why it is not JSON.
 | recover | raw highlight reconstruction, 0..1: clipped sensor channels rebuilt from the unclipped ones instead of clipped at white (raw input only) |
 | keystonev | vertical perspective, -1..1: + widens the top edge, - the bottom; 1 is a 50% stretch of that edge, its sides running off the frame |
 | keystoneh | horizontal perspective, -1..1: + widens the left edge, - the right |
+| grainamount | how much grain, 0..4, a multiplier of the camera's, film's and development's own: 0 none, **1 unchanged**, 2 double |
+| grainsize | how coarse the grain, 0.5..4, a multiplier of the camera's grain size at the same strength: **1 unchanged** |
+
+Every key rests at 0 except `halation`, `grainamount` and `grainsize`,
+which are multipliers and rest at 1; a recipe written before 1.32 has no
+grain keys and reads as 1 and 1.
 
 The lens profile (`--lens auto`, the page's *apply profile*) is not a
 key: it resolves to `distortion` and `devignette` values at render time,

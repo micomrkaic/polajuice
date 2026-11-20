@@ -191,6 +191,13 @@ git add -f web/samples tests/raw
 # index once, idempotently
 git rm -q --cached --ignore-unmatch -- '*.d' superjuice tests/test_web_shim \
     >/dev/null 2>&1 || true
+# five curve charts written under a broken derived name ("-_CAMERA") while
+# 1.30.0 was being made rode along in every tarball up to 1.31.3 and were
+# committed with them. The copy above cannot delete, so they are named
+# here; the commit below then records their removal
+for gone in -_35mm-negative -_35mm-slide -_bw-35 -_polaroid-600 -_super8; do
+    [ -e "$SRC/$gone" ] || rm -f -- "./$gone"
+done
 
 echo "== building and testing from the repo state"
 make clean

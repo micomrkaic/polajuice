@@ -277,8 +277,8 @@ text = open(sys.argv[1]).read()
 flags = set()
 for src in sys.argv[2:4]:
     flags |= set(re.findall(r'strcmp\(argv\[[^\]]*\], "(-[^"]*)"\)', open(src).read()))
-keys = re.findall(r'\{"([a-z]+)", -?[0-9.]+f, -?[0-9.]+f\}', open(sys.argv[4]).read())
-assert len(keys) >= 25, keys
+keys = re.findall(r'\{"([a-z]+)", -?[0-9.]+f, -?[0-9.]+f, -?[0-9.]+f\}', open(sys.argv[4]).read())
+assert len(keys) >= 27, keys
 missing = [f for f in sorted(flags) if not re.search(r'(?<![\w-])' + re.escape(f) + r'(?![\w-])', text)]
 missing += ["--" + k for k in keys if not re.search(r'--' + k + r'(?![\w-])', text)]
 assert not missing, missing
@@ -393,6 +393,61 @@ echo "curves: the look charted as SVG and tabulated, by patch and by wavelength;
 echo "export: look as a .cube and as a darktable style (lut3d, grain, vignette, lowpass); --install; from a recipe"
 
 echo "HEIC: refused with the ways in; converted beside the source when a converter is on the PATH; told by content"
+
+# 1.32: --grainamount and --grainsize. Multipliers resting at 1: spelled
+# out at 1 they are the default to the byte, 0 is no grain (not "unset"),
+# they ride in the recipe and replay, stay out of a color LUT, and reach
+# the darktable style (no grain module at 0, a coarser and stronger one
+# otherwise)
+G0="$LIB/g0.png"; G1="$LIB/g1.png"; G2="$LIB/g2.png"; G3="$LIB/g3.jpg"; G4="$LIB/g4.jpg"
+PJ() { POLAJUICE_FILMS="$LIB" ./polajuice "$@"; }
+PJ apply "$IN" -c 35mm-negative --no-film -o "$G1" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 1 --grainsize 1 -o "$G2" >/dev/null 2>&1
+cmp -s "$G1" "$G2" || { echo "test_compat: --grainamount 1 --grainsize 1 is not the default"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 -o "$G0" >/dev/null 2>&1
+cmp -s "$G0" "$G1" && { echo "test_compat: --grainamount 0 rendered the camera's grain"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --seed 99 -o "$G2" >/dev/null 2>&1
+cmp -s "$G0" "$G2" || { echo "test_compat: --grainamount 0 still depends on the grain seed"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --grainsize 2 -o "$G2" >/dev/null 2>&1
+cmp -s "$G1" "$G2" && { echo "test_compat: --grainsize 2 changed nothing"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --grainsize 2.5 -o "$G3" >/dev/null 2>&1
+./polajuice inspect "$G3" | grep -q '^grainamount=0$' || { echo "test_compat: recipe lacks grainamount=0"; exit 1; }
+./polajuice inspect "$G3" | grep -q '^grainsize=2.5$' || { echo "test_compat: recipe lacks grainsize=2.5"; exit 1; }
+PJ apply "$IN" --recipe "$G3" -o "$G4" >/dev/null 2>&1
+cmp -s "$G3" "$G4" || { echo "test_compat: grain recipe replay differs"; exit 1; }
+./polajuice inspect "$R11" | grep -q '^grainamount=1$' || { echo "test_compat: a default recipe does not say grainamount=1"; exit 1; }
+# a recipe from before 1.32 has no grain keys and reads as the camera's own
+PJ apply "$IN" -c 35mm-negative --no-film --save-recipe "$LIB/new.recipe" -o "$G3" >/dev/null 2>&1
+grep -v '^grain[as]' "$LIB/new.recipe" > "$LIB/old.recipe"
+grep -q '^grainamount' "$LIB/old.recipe" && { echo "test_compat: old-recipe fixture still has grain keys"; exit 1; }
+PJ apply "$IN" --recipe "$LIB/old.recipe" -o "$G4" >/dev/null 2>&1
+cmp -s "$G3" "$G4" || { echo "test_compat: a pre-1.32 recipe renders differently"; exit 1; }
+for bad in '--grainamount -1' '--grainamount 4.5' '--grainsize 0' '--grainsize 0.4' '--grainsize 5'; do
+    PJ apply "$IN" -c 35mm-negative --no-film $bad -o "$G4" >/dev/null 2>&1 && { echo "test_compat: $bad was accepted"; exit 1; }
+done
+PJ lut -c 35mm-negative --no-film --size 5 -o "$LIB/ga.cube" >/dev/null
+PJ lut -c 35mm-negative --no-film --size 5 --grainamount 3 --grainsize 3 -o "$LIB/gb.cube" >/dev/null
+tail -n +4 "$LIB/ga.cube" > "$LIB/ga.body"; tail -n +4 "$LIB/gb.cube" > "$LIB/gb.body"
+cmp -s "$LIB/ga.body" "$LIB/gb.body" || { echo "test_compat: grain reached a color LUT"; exit 1; }
+PJ darktable -c bw-35 --no-film --size 5 -o "$LIB/dt1" >/dev/null
+PJ darktable -c bw-35 --no-film --size 5 --grainamount 0 -o "$LIB/dt0" >/dev/null
+PJ darktable -c bw-35 --no-film --size 5 --grainamount 2 --grainsize 2 -o "$LIB/dt2" >/dev/null
+grep -q '<operation>grain</operation>' "$LIB/dt1.dtstyle" || { echo "test_compat: style lost its grain module"; exit 1; }
+grep -q '<operation>grain</operation>' "$LIB/dt0.dtstyle" && { echo "test_compat: grain module in a style with --grainamount 0"; exit 1; }
+python3 - "$LIB/dt1.dtstyle" "$LIB/dt2.dtstyle" <<'PY' || { echo "test_compat: style grain did not follow --grainamount/--grainsize"; exit 1; }
+import struct, sys
+import xml.etree.ElementTree as ET
+def grain(path):
+    for p in ET.parse(path).getroot().iter("plugin"):
+        if p.find("operation").text == "grain":
+            return struct.unpack("<iff f".replace(" ", ""), bytes.fromhex(p.find("op_params").text))
+a, b = grain(sys.argv[1]), grain(sys.argv[2])
+# channel, scale (coarseness), strength, midtone bias
+assert a[0] == b[0] == 2 and a[3] == b[3], (a, b)
+assert b[1] > a[1] * 1.5, (a, b)     # twice the size: coarser
+assert b[2] > a[2] * 1.2, (a, b)     # twice the amount: stronger, after darktable's coarseness allowance
+PY
+echo "grain: amount and size rest at 1, 0 is none, recipes replay, old recipes unchanged, LUTs untouched, darktable follows"
 
 rm -f "$IN" "$OUT"
 echo "compatibility matrix tests passed (37 cells + override)"

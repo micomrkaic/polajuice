@@ -197,6 +197,23 @@ elems["camera"].value = "35mm-slide";
 elems["camera"].handlers["change"]();
 if (elems["develop"].options.find(o => o.value === "cross").disabled) throw new Error("cross stuck disabled on a color camera");
 console.log("1.27 controls present; keys in the recipe and CLI line; cross disabled on B&W");
+// 1.32: grain amount and size. At rest (1 and 1) they stay off the CLI
+// line; amount 0 is a setting and must appear, in the line and the recipe
+for (const id of ["grainamount", "grainsize"]) if (!elems[id]) throw new Error(id + " control absent");
+elems["grainamount"].value = "1"; elems["grainsize"].value = "1";
+elems["grainamount"].handlers["input"]();
+await new Promise(r => setTimeout(r, 400));
+if (/--grain(amount|size)/.test(elems["cli"].textContent)) throw new Error("CLI line names the grain controls at rest: " + elems["cli"].textContent);
+if (!/\ngrainamount=1\n/.test(elems["recipe"].value) || !/\ngrainsize=1\n/.test(elems["recipe"].value)) throw new Error("recipe at rest lacks grainamount=1/grainsize=1:\n" + elems["recipe"].value);
+elems["grainamount"].value = "0"; elems["grainsize"].value = "2.5";
+elems["grainamount"].handlers["input"]();
+await new Promise(r => setTimeout(r, 400));
+if (!/--grainamount 0\b/.test(elems["cli"].textContent) || !/--grainsize 2.5\b/.test(elems["cli"].textContent)) throw new Error("CLI line lacks the grain flags: " + elems["cli"].textContent);
+if (!/\ngrainamount=0\n/.test(elems["recipe"].value) || !/\ngrainsize=2.5\n/.test(elems["recipe"].value)) throw new Error("recipe lacks grainamount=0/grainsize=2.5:\n" + elems["recipe"].value);
+if (elems["grainamountval"].textContent !== "none") throw new Error("grain amount 0 not labelled none: " + elems["grainamountval"].textContent);
+elems["grainamount"].value = "1"; elems["grainsize"].value = "1";
+elems["grainamount"].handlers["input"]();
+console.log("grain amount and size: sliders present, at rest off the CLI line, 0 carried as a setting");
 // a dropped HEIC is told by its bytes and refused with the ways in, not sent to the engine
 {
   const heic = new Uint8Array([0,0,0,24, 0x66,0x74,0x79,0x70, 0x68,0x65,0x69,0x63, 0,0,0,0, 0x6d,0x69,0x66,0x31, 0x68,0x65,0x69,0x63]);

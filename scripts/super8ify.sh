@@ -38,6 +38,10 @@
 #   ROTATE KEYSTONEV KEYSTONEH TRIMX TRIMY TRIMW TRIMH
 #            [0]                   scene, lens and framing, as polajuice's
 #                                   --temp etc.; only set ones are passed
+#   GRAINAMOUNT [1]                 how much grain: 0 none, 1 the camera's
+#                                   own, 2 double (0..4)
+#   GRAINSIZE   [1]                 how coarse: 1 the camera's own, 2 twice
+#                                   the size at the same strength (0.5..4)
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
 #                                   2 = worn projector, 0 = tripod-locked
 #   SOUND    [stripe]              stripe = audiotard tape mangle;
@@ -71,7 +75,8 @@ SET_EV=${EV+x}; SET_HALATION=${HALATION+x}
 SET_DEVELOP=${DEVELOP+x}; SET_CROP=${CROP+x}
 scene_args() {
     for k in TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS RADIAL RADIALX RADIALY RADIALSIZE \
-             DENOISE SHARPEN DISTORTION DEVIGNETTE ROTATE KEYSTONEV KEYSTONEH TRIMX TRIMY TRIMW TRIMH; do
+             DENOISE SHARPEN DISTORTION DEVIGNETTE ROTATE KEYSTONEV KEYSTONEH TRIMX TRIMY TRIMW TRIMH \
+             GRAINAMOUNT GRAINSIZE; do
         eval "v=\${$k+x}"
         if [ -n "$v" ]; then
             eval "val=\$$k"

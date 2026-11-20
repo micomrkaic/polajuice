@@ -22,16 +22,19 @@ static void put_num(char *out, size_t size, float v)
 }
 
 static const PjSceneKey scene_keys[] = {
-    {"temp", -2.0f, 2.0f}, {"tint", -1.0f, 1.0f}, {"black", -0.1f, 0.1f},
-    {"shadows", -2.0f, 2.0f}, {"highlights", -1.0f, 1.0f}, {"contrast", -1.0f, 1.0f},
-    {"grad", 0.0f, 3.0f}, {"gradangle", 0.0f, 360.0f}, {"gradpos", -0.5f, 0.5f},
-    {"denoise", 0.0f, 3.0f}, {"distortion", -0.3f, 0.3f}, {"devignette", 0.0f, 2.0f},
-    {"rotate", -15.0f, 15.0f},
-    {"trimx", 0.0f, 1.0f}, {"trimy", 0.0f, 1.0f}, {"trimw", 0.0f, 1.0f}, {"trimh", 0.0f, 1.0f},
-    {"keystonev", -1.0f, 1.0f}, {"keystoneh", -1.0f, 1.0f},
-    {"sharpen", 0.0f, 2.0f},
-    {"radial", -2.0f, 2.0f}, {"radialx", -0.5f, 0.5f}, {"radialy", -0.5f, 0.5f}, {"radialsize", 0.0f, 1.0f},
-    {"recover", 0.0f, 1.0f},
+    {"temp", -2.0f, 2.0f, 0.0f}, {"tint", -1.0f, 1.0f, 0.0f}, {"black", -0.1f, 0.1f, 0.0f},
+    {"shadows", -2.0f, 2.0f, 0.0f}, {"highlights", -1.0f, 1.0f, 0.0f}, {"contrast", -1.0f, 1.0f, 0.0f},
+    {"grad", 0.0f, 3.0f, 0.0f}, {"gradangle", 0.0f, 360.0f, 0.0f}, {"gradpos", -0.5f, 0.5f, 0.0f},
+    {"denoise", 0.0f, 3.0f, 0.0f}, {"distortion", -0.3f, 0.3f, 0.0f}, {"devignette", 0.0f, 2.0f, 0.0f},
+    {"rotate", -15.0f, 15.0f, 0.0f},
+    {"trimx", 0.0f, 1.0f, 0.0f}, {"trimy", 0.0f, 1.0f, 0.0f}, {"trimw", 0.0f, 1.0f, 0.0f}, {"trimh", 0.0f, 1.0f, 0.0f},
+    {"keystonev", -1.0f, 1.0f, 0.0f}, {"keystoneh", -1.0f, 1.0f, 0.0f},
+    {"sharpen", 0.0f, 2.0f, 0.0f},
+    {"radial", -2.0f, 2.0f, 0.0f}, {"radialx", -0.5f, 0.5f, 0.0f}, {"radialy", -0.5f, 0.5f, 0.0f}, {"radialsize", 0.0f, 1.0f, 0.0f},
+    {"recover", 0.0f, 1.0f, 0.0f},
+    /* multipliers of what the camera does: these rest at 1, and the
+     * options hold them less one so a zeroed struct is still "no change" */
+    {"grainamount", 0.0f, 4.0f, 1.0f}, {"grainsize", 0.5f, 4.0f, 1.0f},
 };
 
 const PjSceneKey *pj_scene_keys(size_t *count)
@@ -67,6 +70,8 @@ static float *scene_slot(PjRenderOptions *o, const char *key)
     if (!strcmp(key, "radialy")) return &o->radial_y;
     if (!strcmp(key, "radialsize")) return &o->radial_size;
     if (!strcmp(key, "recover")) return &o->recover;
+    if (!strcmp(key, "grainamount")) return &o->grain_amount;
+    if (!strcmp(key, "grainsize")) return &o->grain_size;
     return NULL;
 }
 
@@ -84,7 +89,7 @@ bool pj_scene_set(PjRenderOptions *o, const char *key, const char *value)
         char *end = NULL;
         float v = strtof(value, &end);
         if (!end || end == value || *end || v < scene_keys[i].lo || v > scene_keys[i].hi) return false;
-        *scene_slot(o, key) = v;
+        *scene_slot(o, key) = v - scene_keys[i].neutral;
         return true;
     }
     return false;
@@ -93,7 +98,10 @@ bool pj_scene_set(PjRenderOptions *o, const char *key, const char *value)
 float pj_scene_get(const PjRenderOptions *o, const char *key)
 {
     float *slot = scene_slot((PjRenderOptions *)o, key);
-    return slot ? *slot : 0.0f;
+    if (!slot) return 0.0f;
+    for (size_t i = 0; i < sizeof scene_keys / sizeof scene_keys[0]; ++i)
+        if (!strcmp(scene_keys[i].key, key)) return *slot + scene_keys[i].neutral;
+    return *slot;
 }
 
 int pj_crop_parse(const char *name)

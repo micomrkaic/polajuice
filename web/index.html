@@ -362,6 +362,19 @@ act on it as they act on the image.">Grain model</label>
       </select>
     </div>
     <div class="field">
+      <label for="grainamount" title="How much grain: a multiplier of what the camera, the film and the
+development give. 0 none, 1 their own, 2 double.">Grain amount <span class="val" id="grainamountval">1.0</span></label>
+      <input id="grainamount" type="range" min="0" max="4" step="0.1" value="1">
+    </div>
+    <div class="field">
+      <label for="grainsize" title="How coarse the grain is: a multiplier of the camera's own grain size.
+2 is twice as coarse at the same strength (the same deviation, spread
+over bigger clumps). Classic grain is never finer than a pixel of the
+render, so below 1 it shows on the coarse cameras, the silver model and
+big pictures.">Grain size <span class="val" id="grainsizeval">1.0</span></label>
+      <input id="grainsize" type="range" min="0.5" max="4" step="0.1" value="1">
+    </div>
+    <div class="field">
       <label for="edge" title="Development edge effects. Developer exhausts locally, so the dense
 side of a boundary develops denser and a small dense detail more than a
 large one (border, fringe and Eberhard effects). 1 is a dilute developer,
@@ -475,6 +488,8 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
       <option value="radial">radial</option>
       <option value="sharpen">sharpen</option>
       <option value="keystonev">keystone</option>
+      <option value="grainamount">grain amount</option>
+      <option value="grainsize">grain size</option>
       <option value="film">film stocks (contact sheet)</option>
     </select>
     <span class="spacer"></span>
@@ -521,7 +536,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.31.3";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.32.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -608,7 +623,12 @@ function parseRecipe(text) {
 const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
                     "radial", "radialx", "radialy", "radialsize",
                     "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
-                    "trimx", "trimy", "trimw", "trimh"];
+                    "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize"];
+/* the value at which a key changes nothing: 0, except the multipliers,
+ * which rest at 1 - and there 0 is a setting (no grain), not "unset" */
+const SCENE_NEUTRAL = { grainamount: 1, grainsize: 1 };
+const sceneNeutral = k => SCENE_NEUTRAL[k] ?? 0;
+const sceneNum = (k, v) => { const f = parseFloat(v); return Number.isFinite(f) ? f : sceneNeutral(k); };
 /* the trim is four margins in the page (left, top, right, bottom, in %)
  * and x, y, width, height in fractions in the recipe */
 function trimFromControls() {
@@ -629,7 +649,7 @@ function trimToControls(r) {
 }
 function sceneFromControls() {
   const o = {};
-  for (const k of SCENE_KEYS) if (!k.startsWith("trim")) o[k] = parseFloat($(k).value) || 0;
+  for (const k of SCENE_KEYS) if (!k.startsWith("trim")) o[k] = sceneNum(k, $(k).value);
   return { ...o, ...trimFromControls() };
 }
 function recipeFromControls() {
@@ -663,7 +683,7 @@ function cliLine(r) {
   if (r.halation !== undefined && parseFloat(r.halation) !== 1) parts.push("--halation", r.halation);
   if (r.seed !== undefined) parts.push("--seed", r.seed);
   if (r.crop === "full") parts.push("--crop", "full");
-  for (const k of SCENE_KEYS) if (r[k] !== undefined && parseFloat(r[k]) !== 0) parts.push("--" + k, r[k]);
+  for (const k of SCENE_KEYS) if (r[k] !== undefined && sceneNum(k, r[k]) !== sceneNeutral(k)) parts.push("--" + k, r[k]);
   return parts.join(" ");
 }
 
@@ -672,7 +692,7 @@ function recipeText(r) {
           `filter=${r.filter}`, `strength=${r.strength}`, `develop=${r.develop}`,
           `age=${r.age}`, `grain=${r.grain}`, `edge=${r.edge}`, `ev=${r.ev}`,
           `halation=${r.halation}`, `seed=${r.seed}`, `crop=${r.crop || "camera"}`,
-          ...SCENE_KEYS.map(k => `${k}=${r[k] ?? 0}`), ""].join("\n");
+          ...SCENE_KEYS.map(k => `${k}=${r[k] ?? sceneNeutral(k)}`), ""].join("\n");
 }
 
 function showRecipe(text) {
@@ -999,7 +1019,7 @@ function lookFromRecipe(r) {
     grainModel: r.grain || "classic", edge: parseFloat(r.edge ?? 0),
     ev: parseFloat(r.ev ?? 0), halation: parseFloat(r.halation ?? 1),
     crop: r.crop === "full" ? "full" : "camera",
-    scene: Object.fromEntries(SCENE_KEYS.map(k => [k, parseFloat(r[k] ?? 0) || 0])) };
+    scene: Object.fromEntries(SCENE_KEYS.map(k => [k, sceneNum(k, r[k])])) };
 }
 function lookFromControls() {
   const stem = customCube ? customCube.stem : resolveFilmStem();
@@ -1134,6 +1154,9 @@ function syncValueLabels() {
   $("evval").textContent = (ev > 0 ? "+" : "") + ev.toFixed(1);
   const hal = parseFloat($("halation").value);
   $("halval").textContent = hal === 0 ? "off" : hal.toFixed(1);
+  const ga0 = parseFloat($("grainamount").value);
+  $("grainamountval").textContent = ga0 === 0 ? "none" : "×" + ga0.toFixed(1);
+  $("grainsizeval").textContent = "×" + parseFloat($("grainsize").value).toFixed(1);
   const signed = (v, d) => (v > 0 ? "+" : "") + v.toFixed(d);
   $("tempval").textContent = signed(parseFloat($("temp").value), 2);
   $("tintval").textContent = signed(parseFloat($("tint").value), 2);
@@ -1750,6 +1773,8 @@ const BRACKETS = {
   radial:   () => [-1.5, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 1.5],
   sharpen:  () => [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
   keystonev: () => [-0.6, -0.4, -0.2, -0.1, 0, 0.1, 0.2, 0.4, 0.6],
+  grainamount: () => [0, 0.3, 0.5, 0.7, 1, 1.5, 2, 3, 4],
+  grainsize: () => [0.5, 0.7, 1, 1.3, 1.6, 2, 2.5, 3, 4],
   /* the contact sheet: every stock the camera takes, as the film select lists them */
   film:     () => [...$("film").options].map(o => o.value).filter(v => !v.startsWith("__")),
 };

@@ -70,6 +70,18 @@ cmp -s "$TMP/clip.jpg" "$TMP/recon.jpg" && { echo "test_serve: recover=1 rendere
 ./polajuice inspect "$TMP/recon.jpg" | grep -q '^recover=1$' || { echo "test_serve: served recipe lacks recover"; exit 1; }
 ./polajuice apply "$TMP/dir/tiny.dng" -c 35mm-negative --no-film --recover 1 -o "$TMP/recon_cli.jpg" >/dev/null 2>&1
 cmp -s "$TMP/recon.jpg" "$TMP/recon_cli.jpg" || { echo "test_serve: served recover render differs from the CLI"; exit 1; }
+# 1.32: grain amount and size are query parameters; 0 is a setting (no
+# grain), not the absence of one, and the served render is the CLI's
+curl -s "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&max=0" -o "$TMP/gdef.jpg"
+curl -s "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&max=0&grainamount=1&grainsize=1" -o "$TMP/gone.jpg"
+curl -s "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&max=0&grainamount=0" -o "$TMP/gnone.jpg"
+curl -s "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&max=0&grainamount=2&grainsize=2" -o "$TMP/gbig.jpg"
+cmp -s "$TMP/gdef.jpg" "$TMP/gone.jpg" || { echo "test_serve: grainamount=1&grainsize=1 is not the default"; exit 1; }
+cmp -s "$TMP/gdef.jpg" "$TMP/gnone.jpg" && { echo "test_serve: grainamount=0 rendered the camera's grain"; exit 1; }
+./polajuice inspect "$TMP/gnone.jpg" | grep -q '^grainamount=0$' || { echo "test_serve: served recipe lacks grainamount=0"; exit 1; }
+./polajuice apply "$TMP/dir/cat.jpg" -c 35mm-negative --no-film --grainamount 2 --grainsize 2 -o "$TMP/gbig_cli.jpg" >/dev/null 2>&1
+cmp -s "$TMP/gbig.jpg" "$TMP/gbig_cli.jpg" || { echo "test_serve: served grain render differs from the CLI"; exit 1; }
+curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&grainsize=9" | grep -q '^4' || { echo "test_serve: grainsize=9 was accepted"; exit 1; }
 # a dropped image travels in the body
 curl -s -o "$TMP/body.jpg" -X POST --data-binary "@$TMP/dir/cat.jpg" "http://127.0.0.1:$PORT/api/render?ext=jpg&camera=super8&film=none&ev=-0.5&halation=1.5&grain=silver&edge=1&seed=7&filter=orange"
 cmp -s "$TMP/body.jpg" "$TMP/cli.jpg" || { echo "test_serve: body render differs"; exit 1; }

@@ -153,13 +153,19 @@ static void lut3d_params(Blob *b, const char *relative_path)
  * negative) and darktable's strength a percentage whose default 25 is
  * a like amount; its coarseness is an ISO over 213.2, and a grain_scale
  * of 1 px on a 24 MP frame sits near ISO 400, growing with the area. */
-static void grain_params(Blob *b, const PjPresetCharacter *c, float strength)
+static void grain_params(Blob *b, const PjPresetCharacter *c, float strength,
+                         float user_amount, float user_size)
 {
     /* calibrated against darktable 4.6 on a 24 MP frame: matching
      * high-frequency deviation for the fine-grained cameras, and by eye
      * for Super 8, where darktable's coarse grain reads stronger */
-    float coarse = c->grain_scale > 1.0f ? c->grain_scale : 1.0f;
-    float amount = c->grain * 850.0f * strength / sqrtf(coarse);
+    /* --grainamount and --grainsize as the renderer takes them: the size
+     * multiplies the camera's, with the amount raised to hold the
+     * deviation where it was */
+    float scale = c->grain_scale * user_size;
+    float hold = pj_grain_rms(scale) > 0.0f ? pj_grain_rms(c->grain_scale) / pj_grain_rms(scale) : 1.0f;
+    float coarse = scale > 1.0f ? scale : 1.0f;
+    float amount = c->grain * user_amount * hold * 850.0f * strength / sqrtf(coarse);
     if (amount > 100.0f) amount = 100.0f;
     float iso = 400.0f * powf(coarse, 2.3f);
     if (iso < 100.0f) iso = 100.0f;
@@ -211,6 +217,8 @@ static bool write_style(const char *path, const char *name, const char *cube_rel
     PjPresetCharacter c;
     if (!pj_preset_character(camera, &c)) return false;
     float strength = options ? options->strength : 1.0f;
+    float user_amount = options ? fmaxf(0.0f, 1.0f + options->grain_amount) : 1.0f;
+    float user_size = options ? fmaxf(0.25f, 1.0f + options->grain_size) : 1.0f;
     FILE *f = fopen(path, "w");
     if (!f) { fprintf(stderr, "polajuice: cannot write %s: %s\n", path, strerror(errno)); return false; }
     fprintf(f, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<darktable_style version=\"1.0\">\n<info>\n  <name>");
@@ -244,8 +252,8 @@ static bool write_style(const char *path, const char *name, const char *cube_rel
         plugin(f, num++, "vignette", 4, &b, "polajuice");
         b.len = 0;
     }
-    if (c.grain > 0.0f && strength > 0.0f) {
-        grain_params(&b, &c, strength);
+    if (c.grain > 0.0f && strength > 0.0f && user_amount > 0.0f) {
+        grain_params(&b, &c, strength, user_amount, user_size);
         plugin(f, num++, "grain", 2, &b, "polajuice");
         b.len = 0;
     }

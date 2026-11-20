@@ -120,6 +120,8 @@ static void usage(FILE *stream)
         "      --strength NUMBER   0..1\n"
         "      --grain MODEL       classic (default) or silver (grain from\n"
         "                          exposure: coarse shadows, fine highlights)\n"
+        "      --grainamount N     how much grain 0..4 (0 none, 1 the camera's)\n"
+        "      --grainsize N       how coarse 0.5..4 (1 the camera's)\n"
         "      --edge NUMBER       development edge effects 0..2\n"
         "      --ev STOPS          exposure, -4..+4: +1 doubles the light on\n"
         "                          the film, -1 halves it\n"

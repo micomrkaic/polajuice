@@ -1052,7 +1052,7 @@ int main(void)
             assert(pj_scene_set(&t, "gradangle", "270") && t.grad_angle == 270.0f);
             assert(!pj_scene_set(&t, "temp", "3") && !pj_scene_set(&t, "grad", "-1") && !pj_scene_set(&t, "black", "x"));
             assert(pj_scene_get(&t, "temp") == 0.5f);
-            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 25);
+            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 27);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\ntemp=0.5\n") && strstr(text, "\ngradangle=270\n") && strstr(text, "\ngrad=0\n"));
@@ -1255,7 +1255,7 @@ int main(void)
             assert(pj_scene_set(&t, "rotate", "-3.5") && t.rotate == -3.5f);
             assert(pj_scene_set(&t, "trimw", "0.5") && t.trim_w == 0.5f);
             assert(!pj_scene_set(&t, "rotate", "20") && !pj_scene_set(&t, "distortion", "0.5"));
-            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 25);
+            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 27);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\nrotate=-3.5\n") && strstr(text, "\ntrimw=0.5\n") && strstr(text, "\ndenoise=0\n"));
@@ -1407,6 +1407,79 @@ int main(void)
                 char text[2048];
                 pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
                 assert(strstr(text, "\nkeystonev=0.5\n") && strstr(text, "\nradial=-1\n") && strstr(text, "\nrecover=1\n") && strstr(text, "\nsharpen=0\n"));
+            }
+            /* 1.32: grain amount and size. Multipliers that rest at 1, held
+             * in the options less one so a zeroed struct is the camera's
+             * grain; measured on a flat field against the grainless render */
+            {
+                PjRenderOptions t = {0};
+                char text[2048];
+                pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
+                assert(strstr(text, "\ngrainamount=1\n") && strstr(text, "\ngrainsize=1\n"));
+                assert(pj_scene_get(&t, "grainamount") == 1.0f && pj_scene_get(&t, "grainsize") == 1.0f);
+                assert(pj_scene_set(&t, "grainamount", "0") && t.grain_amount == -1.0f);
+                assert(pj_scene_get(&t, "grainamount") == 0.0f);
+                assert(pj_scene_set(&t, "grainamount", "1") && t.grain_amount == 0.0f);
+                assert(pj_scene_set(&t, "grainsize", "2") && t.grain_size == 1.0f);
+                assert(pj_scene_set(&t, "grainamount", "2.5") && pj_scene_get(&t, "grainamount") == 2.5f);
+                pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
+                assert(strstr(text, "\ngrainamount=2.5\n") && strstr(text, "\ngrainsize=2\n"));
+                assert(!pj_scene_set(&t, "grainamount", "-0.5") && !pj_scene_set(&t, "grainamount", "4.5"));
+                assert(!pj_scene_set(&t, "grainsize", "0") && !pj_scene_set(&t, "grainsize", "5"));
+                size_t nk = 0;
+                const PjSceneKey *keys = pj_scene_keys(&nk);
+                for (size_t i = 0; i < nk; ++i) {
+                    bool mult = !strcmp(keys[i].key, "grainamount") || !strcmp(keys[i].key, "grainsize");
+                    assert(keys[i].neutral == (mult ? 1.0f : 0.0f));
+                }
+
+                PjImage *flat = pj_image_new(192, 192, &error);
+                assert(flat);
+                fill_uniform(flat, 0.2f);
+                const char *models[] = {"classic", "silver"};
+                for (int m = 0; m < 2; ++m) {
+                    /* [0] none, [1] the camera's, [2] double, [3] twice the size,
+                     * [4] the keys at rest spelled out */
+                    PjImage *g[5];
+                    float amount[5] = {-1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
+                    float size[5] = {0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+                    for (int i = 0; i < 5; ++i) {
+                        PjRenderOptions o = {.seed = 11, .strength = 1.0f, .crop = PJ_CROP_FULL,
+                                             .grain_model = models[m],
+                                             .grain_amount = amount[i], .grain_size = size[i]};
+                        if (i == 4) assert(pj_scene_set(&o, "grainamount", "1") && pj_scene_set(&o, "grainsize", "1"));
+                        g[i] = pj_render(flat, "35mm-negative", &o, &error);
+                        assert(g[i]);
+                    }
+                    size_t w = pj_image_width(g[0]), h = pj_image_height(g[0]), n = w * h;
+                    const float *px[5];
+                    for (int i = 0; i < 5; ++i) px[i] = pj_image_pixels(g[i]);
+                    assert(!memcmp(px[1], px[4], n * 3 * sizeof(float)));
+                    double sd[4] = {0}, r1[4] = {0};
+                    for (int i = 1; i < 4; ++i) {
+                        double sum = 0, sum2 = 0, cov = 0;
+                        for (size_t k = 0; k < n; ++k) {
+                            double d = (double)px[i][k * 3 + 1] - px[0][k * 3 + 1];
+                            sum += d; sum2 += d * d;
+                        }
+                        double mean = sum / (double)n, var = sum2 / (double)n - mean * mean;
+                        for (size_t y = 0; y < h; ++y)
+                            for (size_t x = 0; x + 1 < w; ++x) {
+                                size_t k = y * w + x;
+                                cov += ((double)px[i][k * 3 + 1] - px[0][k * 3 + 1] - mean) *
+                                       ((double)px[i][(k + 1) * 3 + 1] - px[0][(k + 1) * 3 + 1] - mean);
+                            }
+                        sd[i] = sqrt(var);
+                        r1[i] = cov / (double)(h * (w - 1)) / var;
+                    }
+                    assert(sd[1] > 0.001);                              /* there is grain to scale */
+                    assert(sd[2] / sd[1] > 1.85 && sd[2] / sd[1] < 2.15);  /* 2 doubles it */
+                    assert(sd[3] / sd[1] > 0.88 && sd[3] / sd[1] < 1.12);  /* size holds the strength */
+                    assert(r1[3] > 0.5 && r1[3] > r1[1] + 0.3);          /* and coarsens it */
+                    assert(fabs(r1[2] - r1[1]) < 0.08);                 /* amount leaves the size alone */
+                    for (int i = 0; i < 5; ++i) pj_image_free(g[i]);
+                }
+                pj_image_free(flat);
             }
             pj_image_free(ref);
             pj_image_free(src);

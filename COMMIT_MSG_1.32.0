@@ -1,0 +1,54 @@
+1.32.0: grain amount and grain size
+
+Until now the amount of grain could only be moved by its side doors:
+the camera, the film, --strength (which takes the whole look with it)
+and a push. Two controls of its own:
+
+--grainamount N, 0..4: a multiplier of what the camera, the film and
+the development give. 0 none, 1 their own (the default), 2 double.
+
+--grainsize N, 0.5..4: a multiplier of the camera's grain size. The
+strength is held: the amount is rescaled so the deviation stays where
+it was and only the clump size moves, which keeps the two controls
+independent. Classic grain is never finer than a pixel of the render,
+so sizes under 1 show on the coarse cameras, in the silver model and on
+big pictures.
+
+Measured on a flat gray field through 35mm-negative, grain alone
+(render minus the grainless render), classic model: deviation 1.72/255
+at rest, 3.36 at --grainamount 2, 1.65 at --grainsize 2; correlation
+between neighboring pixels 0.03 at rest, 0.65 at --grainsize 2 and
+unchanged by the amount. The silver model gives the same figures.
+
+Both act in either grain model, are recipe keys, sliders on the page
+(Development), query parameters of serve, superjuice options, super8ify
+variables (GRAINAMOUNT, GRAINSIZE) and are carried into the darktable
+style (no grain module at 0). They are not in a color LUT, like the
+rest of the grain.
+
+How: they are scene keys, and scene keys now carry the value at which
+they change nothing (PjSceneKey.neutral): 0 for the 25 old ones, 1 for
+these two. The options hold a multiplier less one, so a zeroed
+PjRenderOptions is still "no change", and every front end that walks
+the key table got them without being told. The page and the wasm
+bridge, which dropped a key whose value was 0 as "unset", compare with
+the neutral value instead: grainamount=0 is a setting.
+
+Nothing else renders differently: with both at 1, or absent, output is
+byte-identical to 1.31.3, and a recipe written before 1.32 has no grain
+keys and reads as 1 and 1.
+
+Housekeeping: five stray curve charts named -_CAMERA (written under a
+broken derived name while 1.30.0 was being made) had been riding in
+every tarball since and were committed with them. They are gone from
+the tree and release.sh removes them from the repository.
+
+New: pj_grain_rms() in the library (the deviation of unit grain at a
+size), used by the renderer to hold the strength and by the darktable
+export to do the same.
+
+Tests: core (keys, neutral values, recipe text, and on a flat field in
+both models: 2 doubles the deviation, size holds it and raises the
+neighbor correlation, amount leaves the correlation alone, 1 and 1 is
+the default to the byte); CLI (replay, pre-1.32 recipe, ranges, LUT
+untouched, darktable style follows); serve; wasm; page.
