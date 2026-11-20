@@ -38,4 +38,5 @@ scripts/package.json
 scripts/package-lock.json
 /*.svg
 /*.dtstyle
+docs/GUIDE.html
 !tests/raw/*

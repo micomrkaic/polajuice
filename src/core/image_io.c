@@ -184,6 +184,13 @@ PjImage *pj_image_apply_orientation(PjImage *image, int orientation,
 }
 
 /* The first COM segment of a JPEG that holds a polajuice recipe. */
+static int jpeg_quality = 92;
+
+void pj_jpeg_set_quality(int quality)
+{
+    jpeg_quality = quality < 1 ? 1 : quality > 100 ? 100 : quality;
+}
+
 char *pj_jpeg_read_comment(const char *path)
 {
     FILE *f = fopen(path, "rb");
@@ -340,7 +347,7 @@ bool pj_image_save(const PjImage *image, const char *path, PjError *error)
                             encoded, (int)(image->width * 3));
     else {
         bool wrote = pj_jpeg_write(path, encoded, image->width, image->height,
-                                   92, image->comment, error);
+                                   jpeg_quality, image->comment, error);
         free(encoded);
         return wrote;
     }

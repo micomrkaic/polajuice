@@ -397,6 +397,11 @@ bool pj_image_set_comment(PjImage *image, const char *text);
 const char *pj_image_comment(const PjImage *image);
 /* The recipe embedded in a JPEG file, or NULL; the caller frees. */
 char *pj_jpeg_read_comment(const char *path);
+/* The quality of the JPEGs pj_image_write makes from here on, 1..100
+ * (92 unless set; out-of-range values are clamped). It sets how coarsely
+ * the picture is quantized - the file's size against its fidelity - and
+ * nothing about the look. */
+void pj_jpeg_set_quality(int quality);
 
 const char *pj_version_string(void);
 /* Threads the pipeline will use (cores, or POLAJUICE_THREADS). */

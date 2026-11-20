@@ -449,5 +449,29 @@ assert b[2] > a[2] * 1.2, (a, b)     # twice the amount: stronger, after darktab
 PY
 echo "grain: amount and size rest at 1, 0 is none, recipes replay, old recipes unchanged, LUTs untouched, darktable follows"
 
+# 1.33: --quality. The default is 92 to the byte; lower is smaller, higher
+# larger; the recipe rides along at any quality and replays to the same
+# pixels; PNG ignores it; out of range is refused; develop takes it too
+PJ apply "$IN" -c 35mm-negative --no-film -o "$LIB/q_def.jpg" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --quality 92 -o "$LIB/q_92.jpg" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --quality 40 -o "$LIB/q_40.jpg" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --quality 100 -o "$LIB/q_100.jpg" >/dev/null 2>&1
+cmp -s "$LIB/q_def.jpg" "$LIB/q_92.jpg" || { echo "test_compat: --quality 92 is not the default"; exit 1; }
+[ "$(wc -c < "$LIB/q_40.jpg")" -lt "$(wc -c < "$LIB/q_def.jpg")" ] || { echo "test_compat: --quality 40 is not smaller"; exit 1; }
+[ "$(wc -c < "$LIB/q_100.jpg")" -gt "$(wc -c < "$LIB/q_def.jpg")" ] || { echo "test_compat: --quality 100 is not larger"; exit 1; }
+./polajuice inspect "$LIB/q_40.jpg" | grep -q '^camera=35mm-negative$' || { echo "test_compat: recipe missing at --quality 40"; exit 1; }
+PJ apply "$IN" --recipe "$LIB/q_40.jpg" -o "$LIB/q_replay.png" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film -o "$LIB/q_direct.png" >/dev/null 2>&1
+cmp -s "$LIB/q_replay.png" "$LIB/q_direct.png" || { echo "test_compat: a low-quality JPEG's recipe replays to other pixels"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --quality 5 -o "$LIB/q_5.png" >/dev/null 2>&1
+cmp -s "$LIB/q_5.png" "$LIB/q_direct.png" || { echo "test_compat: --quality changed a PNG"; exit 1; }
+for bad in 0 101 -3 high; do
+    PJ apply "$IN" -c 35mm-negative --no-film --quality $bad -o "$LIB/q_bad.jpg" >/dev/null 2>&1 && { echo "test_compat: --quality $bad was accepted"; exit 1; }
+done
+./polajuice develop tests/raw/lossless14.nef --quality 30 -o "$LIB/q_dev30.jpg" >/dev/null 2>&1 || { echo "test_compat: develop refused --quality"; exit 1; }
+./polajuice develop tests/raw/lossless14.nef -o "$LIB/q_dev.jpg" >/dev/null 2>&1
+[ "$(wc -c < "$LIB/q_dev30.jpg")" -lt "$(wc -c < "$LIB/q_dev.jpg")" ] || { echo "test_compat: develop --quality 30 is not smaller"; exit 1; }
+echo "quality: 92 is the default, size follows it, the recipe and a PNG do not care, develop takes it"
+
 rm -f "$IN" "$OUT"
 echo "compatibility matrix tests passed (37 cells + override)"

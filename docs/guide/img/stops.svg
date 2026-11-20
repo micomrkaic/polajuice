@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="330" viewBox="0 0 760 330" font-family="DejaVu Sans,Helvetica,Arial,sans-serif">
+<rect width="100%" height="100%" fill="#fcfcfb"/>
+<text x="20.0" y="26.0" font-size="15" fill="#0b0b0b" text-anchor="start" font-weight="bold">One stop = twice (or half) the light</text>
+<text x="20.0" y="166.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">light</text>
+<line x1="96.0" y1="170.0" x2="752.0" y2="170.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<rect x="108.0" y="169.0" width="44.0" height="1.0" rx="0" fill="#2a78d6"/>
+<text x="130.0" y="162.0" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×⅛</text>
+<text x="130.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">-3</text>
+<rect x="192.0" y="168.3" width="44.0" height="1.7" rx="0" fill="#2a78d6"/>
+<text x="214.0" y="161.3" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×¼</text>
+<text x="214.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">-2</text>
+<rect x="276.0" y="166.6" width="44.0" height="3.4" rx="0" fill="#2a78d6"/>
+<text x="298.0" y="159.6" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×½</text>
+<text x="298.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">-1</text>
+<rect x="360.0" y="163.1" width="44.0" height="6.9" rx="2" fill="#2a78d6"/>
+<text x="382.0" y="156.1" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×1</text>
+<text x="382.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">0</text>
+<rect x="444.0" y="156.2" width="44.0" height="13.8" rx="2" fill="#2a78d6"/>
+<text x="466.0" y="149.2" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×2</text>
+<text x="466.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">+1</text>
+<rect x="528.0" y="142.5" width="44.0" height="27.5" rx="2" fill="#2a78d6"/>
+<text x="550.0" y="135.5" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×4</text>
+<text x="550.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">+2</text>
+<rect x="612.0" y="115.0" width="44.0" height="55.0" rx="2" fill="#2a78d6"/>
+<text x="634.0" y="108.0" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×8</text>
+<text x="634.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">+3</text>
+<rect x="696.0" y="60.0" width="44.0" height="110.0" rx="2" fill="#2a78d6"/>
+<text x="718.0" y="53.0" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">×16</text>
+<text x="718.0" y="190.0" font-size="13" fill="#0b0b0b" text-anchor="middle" font-weight="bold">+4</text>
+<text x="20.0" y="190.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">stops</text>
+<line x1="20.0" y1="207.0" x2="740.0" y2="207.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="20.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">aperture</text>
+<text x="130.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/16</text>
+<text x="214.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/11</text>
+<text x="298.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/8</text>
+<text x="382.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/5.6</text>
+<text x="466.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/4</text>
+<text x="550.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/2.8</text>
+<text x="634.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/2</text>
+<text x="718.0" y="226.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">f/1.4</text>
+<line x1="20.0" y1="237.0" x2="740.0" y2="237.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="20.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">shutter</text>
+<text x="130.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/1000</text>
+<text x="214.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/500</text>
+<text x="298.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/250</text>
+<text x="382.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/125</text>
+<text x="466.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/60</text>
+<text x="550.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/30</text>
+<text x="634.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/15</text>
+<text x="718.0" y="256.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1/8</text>
+<line x1="20.0" y1="267.0" x2="740.0" y2="267.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="20.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">ISO</text>
+<text x="130.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">100</text>
+<text x="214.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">200</text>
+<text x="298.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">400</text>
+<text x="382.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">800</text>
+<text x="466.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">1600</text>
+<text x="550.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">3200</text>
+<text x="634.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">6400</text>
+<text x="718.0" y="286.0" font-size="12" fill="#0b0b0b" text-anchor="middle" font-weight="normal">12800</text>
+<text x="20.0" y="316.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">The bars are to scale. One column to the right in any row adds one stop; right in one row and left in another is the same exposure.</text>
+</svg>

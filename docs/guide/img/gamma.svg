@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="380" viewBox="0 0 760 380" font-family="DejaVu Sans,Helvetica,Arial,sans-serif">
+<rect width="100%" height="100%" fill="#fcfcfb"/>
+<text x="20.0" y="24.0" font-size="15" fill="#0b0b0b" text-anchor="start" font-weight="bold">Linear light and its encoding</text>
+<line x1="70.0" y1="62.0" x2="70.0" y2="332.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<line x1="70.0" y1="62.0" x2="400.0" y2="62.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="70.0" y="350.0" font-size="11" fill="#52514e" text-anchor="middle" font-weight="normal">0%</text>
+<text x="62.0" y="336.0" font-size="11" fill="#52514e" text-anchor="end" font-weight="normal">0</text>
+<line x1="152.5" y1="62.0" x2="152.5" y2="332.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<line x1="70.0" y1="129.5" x2="400.0" y2="129.5" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="152.5" y="350.0" font-size="11" fill="#52514e" text-anchor="middle" font-weight="normal">25%</text>
+<text x="62.0" y="268.5" font-size="11" fill="#52514e" text-anchor="end" font-weight="normal">64</text>
+<line x1="235.0" y1="62.0" x2="235.0" y2="332.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<line x1="70.0" y1="197.0" x2="400.0" y2="197.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="235.0" y="350.0" font-size="11" fill="#52514e" text-anchor="middle" font-weight="normal">50%</text>
+<text x="62.0" y="201.0" font-size="11" fill="#52514e" text-anchor="end" font-weight="normal">128</text>
+<line x1="317.5" y1="62.0" x2="317.5" y2="332.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<line x1="70.0" y1="264.5" x2="400.0" y2="264.5" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="317.5" y="350.0" font-size="11" fill="#52514e" text-anchor="middle" font-weight="normal">75%</text>
+<text x="62.0" y="133.5" font-size="11" fill="#52514e" text-anchor="end" font-weight="normal">191</text>
+<line x1="400.0" y1="62.0" x2="400.0" y2="332.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<line x1="70.0" y1="332.0" x2="400.0" y2="332.0" stroke="#d9d8d2" stroke-width="1.0"/>
+<text x="400.0" y="350.0" font-size="11" fill="#52514e" text-anchor="middle" font-weight="normal">100%</text>
+<text x="62.0" y="66.0" font-size="11" fill="#52514e" text-anchor="end" font-weight="normal">255</text>
+<text x="235.0" y="372.0" font-size="12" fill="#52514e" text-anchor="middle" font-weight="normal">light (linear): fraction of white  →</text>
+<text x="20.0" y="50.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">stored value (8 bits)</text>
+<path d="M70.0 332.0 L73.3 305.0 L76.6 291.0 L79.9 280.8 L83.2 272.4 L86.5 265.1 L89.8 258.6 L93.1 252.8 L96.4 247.4 L99.7 242.4 L103.0 237.7 L106.3 233.3 L109.6 229.1 L112.9 225.1 L116.2 221.3 L119.5 217.6 L122.8 214.1 L126.1 210.7 L129.4 207.4 L132.7 204.3 L136.0 201.2 L139.3 198.2 L142.6 195.3 L145.9 192.4 L149.2 189.7 L152.5 187.0 L155.8 184.3 L159.1 181.8 L162.4 179.3 L165.7 176.8 L169.0 174.4 L172.3 172.0 L175.6 169.7 L178.9 167.4 L182.2 165.1 L185.5 162.9 L188.8 160.8 L192.1 158.6 L195.4 156.5 L198.7 154.4 L202.0 152.4 L205.3 150.4 L208.6 148.4 L211.9 146.5 L215.2 144.5 L218.5 142.6 L221.8 140.7 L225.1 138.9 L228.4 137.1 L231.7 135.2 L235.0 133.5 L238.3 131.7 L241.6 129.9 L244.9 128.2 L248.2 126.5 L251.5 124.8 L254.8 123.1 L258.1 121.5 L261.4 119.8 L264.7 118.2 L268.0 116.6 L271.3 115.0 L274.6 113.4 L277.9 111.9 L281.2 110.3 L284.5 108.8 L287.8 107.3 L291.1 105.8 L294.4 104.3 L297.7 102.8 L301.0 101.3 L304.3 99.9 L307.6 98.4 L310.9 97.0 L314.2 95.6 L317.5 94.2 L320.8 92.8 L324.1 91.4 L327.4 90.0 L330.7 88.6 L334.0 87.3 L337.3 85.9 L340.6 84.6 L343.9 83.3 L347.2 82.0 L350.5 80.7 L353.8 79.3 L357.1 78.1 L360.4 76.8 L363.7 75.5 L367.0 74.2 L370.3 73.0 L373.6 71.7 L376.9 70.5 L380.2 69.2 L383.5 68.0 L386.8 66.8 L390.1 65.6 L393.4 64.4 L396.7 63.2 L400.0 62.0" fill="none" stroke="#2a78d6" stroke-width="2.2" stroke-linejoin="round"/>
+<path d="M70.0 332.0 L400.0 62.0" fill="none" stroke="#52514e" stroke-width="1.0" stroke-linejoin="round" stroke-dasharray="2 4"/>
+<text x="169.0" y="116.0" font-size="12" fill="#2a78d6" text-anchor="start" font-weight="bold">sRGB encoding</text>
+<text x="274.6" y="213.2" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">stored = light</text>
+<line x1="129.4" y1="332.0" x2="129.4" y2="207.4" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="4 3"/>
+<line x1="70.0" y1="207.4" x2="129.4" y2="207.4" stroke="#eb6834" stroke-width="1.4" stroke-dasharray="4 3"/>
+<circle cx="129.4" cy="207.4" r="5" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<text x="139.4" y="225.4" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">middle gray: 18% of the light,</text>
+<text x="139.4" y="240.4" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">stored as 118 of 255</text>
+<text x="430.0" y="60.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">Stops down from white, and the share of the</text>
+<text x="430.0" y="76.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">256 code values each one gets</text>
+<text x="500.0" y="100.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">stored linearly</text>
+<text x="645.0" y="100.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">sRGB-encoded</text>
+<text x="430.0" y="126.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="normal">stop 1</text>
+<rect x="500.0" y="114.0" width="101.6" height="14.0" rx="2" fill="#52514e"/>
+<text x="605.6" y="126.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">127</text>
+<rect x="645.0" y="114.0" width="53.6" height="14.0" rx="2" fill="#2a78d6"/>
+<text x="702.6" y="126.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">67</text>
+<text x="430.0" y="156.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="normal">stop 2</text>
+<rect x="500.0" y="144.0" width="51.2" height="14.0" rx="2" fill="#52514e"/>
+<text x="555.2" y="156.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">64</text>
+<rect x="645.0" y="144.0" width="40.8" height="14.0" rx="2" fill="#2a78d6"/>
+<text x="689.8" y="156.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">51</text>
+<text x="430.0" y="186.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="normal">stop 3</text>
+<rect x="500.0" y="174.0" width="25.6" height="14.0" rx="2" fill="#52514e"/>
+<text x="529.6" y="186.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">32</text>
+<rect x="645.0" y="174.0" width="30.4" height="14.0" rx="2" fill="#2a78d6"/>
+<text x="679.4" y="186.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">38</text>
+<text x="430.0" y="216.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="normal">stop 4</text>
+<rect x="500.0" y="204.0" width="12.8" height="14.0" rx="2" fill="#52514e"/>
+<text x="516.8" y="216.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">16</text>
+<rect x="645.0" y="204.0" width="22.4" height="14.0" rx="2" fill="#2a78d6"/>
+<text x="671.4" y="216.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">28</text>
+<text x="430.0" y="246.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="normal">stop 5</text>
+<rect x="500.0" y="234.0" width="6.4" height="14.0" rx="2" fill="#52514e"/>
+<text x="510.4" y="246.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">8</text>
+<rect x="645.0" y="234.0" width="17.6" height="14.0" rx="2" fill="#2a78d6"/>
+<text x="666.6" y="246.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">22</text>
+<text x="430.0" y="276.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="normal">stop 6</text>
+<rect x="500.0" y="264.0" width="3.2" height="14.0" rx="2" fill="#52514e"/>
+<text x="507.2" y="276.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">4</text>
+<rect x="645.0" y="264.0" width="12.0" height="14.0" rx="2" fill="#2a78d6"/>
+<text x="661.0" y="276.0" font-size="11" fill="#0b0b0b" text-anchor="start" font-weight="normal">15</text>
+<text x="430.0" y="320.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">Stored linearly, half the values go to the brightest</text>
+<text x="430.0" y="335.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">stop and the shadows starve. The encoding shares</text>
+<text x="430.0" y="350.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">them out the way the eye needs them.</text>
+</svg>

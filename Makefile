@@ -33,7 +33,7 @@ CORE_OBJ = $(CORE_SRC:.c=.o)
 CLI_OBJ = src/cli/filmlib.o src/cli/recipe.o src/cli/look.o src/cli/serve.o src/cli/heic.o src/cli/dtstyle.o src/cli/curves.o
 ALL_OBJ = $(CORE_OBJ) src/cli/main.o $(CLI_OBJ) src/movie/superjuice.o tests/test_core.o
 
-.PHONY: all clean clean-wasm check check-wasm install install-files install-luts install-dev uninstall fetch-luts fetch-polaroid-lut wasm serve
+.PHONY: all clean clean-wasm check check-wasm install install-files install-luts install-dev uninstall fetch-luts fetch-polaroid-lut wasm serve guide
 
 all: polajuice superjuice libpolajuice.a
 
@@ -59,6 +59,14 @@ check: tests/test_core
 	sh scripts/test_threads.sh
 	sh scripts/test_serve.sh
 	sh scripts/test_install.sh
+	python3 tools/build_guide.py --check
+
+# The guide: docs/GUIDE.md is the text; every picture in it is rendered
+# here by the command printed above it, the diagrams are drawn, and a
+# headless Chrome prints docs/GUIDE.pdf (CHROME=/path/to/chrome if it is
+# not found; without one, docs/GUIDE.html is left to print by hand).
+guide: polajuice superjuice
+	python3 tools/build_guide.py
 
 # WebAssembly build via wasi-sdk (auto-downloaded to third_party/ on
 # first run; see docs/WEB.md). 'make' builds native; 'make wasm' the
@@ -110,6 +118,10 @@ install-files: all
 	install -m 644 web/index.html web/engine.js $(DESTDIR)$(datadir)/web/
 	[ ! -f web/polajuice.wasm ] || install -m 644 web/polajuice.wasm $(DESTDIR)$(datadir)/web/
 	cp -R web/samples web/vendor $(DESTDIR)$(datadir)/web/
+	mkdir -p $(DESTDIR)$(datadir)/doc
+	install -m 644 docs/GUIDE.md $(DESTDIR)$(datadir)/doc/
+	[ ! -f docs/GUIDE.pdf ] || install -m 644 docs/GUIDE.pdf $(DESTDIR)$(datadir)/doc/
+	cp -R docs/guide $(DESTDIR)$(datadir)/doc/
 	for m in polajuice superjuice super8ify; do \
 	    sed "s/@VERSION@/$$(cat VERSION)/" docs/man/$$m.1 > $(DESTDIR)$(mandir)/$$m.1 && chmod 644 $(DESTDIR)$(mandir)/$$m.1; done
 	mkdir -p $(DESTDIR)$(bashcompdir) $(DESTDIR)$(zshcompdir)

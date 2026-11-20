@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="300" viewBox="0 0 760 300" font-family="DejaVu Sans,Helvetica,Arial,sans-serif">
+<rect width="100%" height="100%" fill="#fcfcfb"/>
+<text x="20.0" y="24.0" font-size="15" fill="#0b0b0b" text-anchor="start" font-weight="bold">One color per pixel: the Bayer mosaic</text>
+<rect x="30.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="48.0" y="74.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="68.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="86.0" y="74.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="106.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="124.0" y="74.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="144.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="162.0" y="74.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="182.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="200.0" y="74.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="220.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="238.0" y="74.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="30.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="48.0" y="112.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="68.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="86.0" y="112.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="106.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="124.0" y="112.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="144.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="162.0" y="112.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="182.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="200.0" y="112.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="220.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="238.0" y="112.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="30.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="48.0" y="150.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="68.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="86.0" y="150.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="106.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="124.0" y="150.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="144.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="162.0" y="150.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="182.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="200.0" y="150.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="220.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="238.0" y="150.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="30.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="48.0" y="188.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="68.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="86.0" y="188.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="106.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="124.0" y="188.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="144.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="162.0" y="188.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="182.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="200.0" y="188.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="220.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="238.0" y="188.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="30.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="48.0" y="226.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="68.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="86.0" y="226.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="106.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="124.0" y="226.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="144.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="162.0" y="226.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="182.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="200.0" y="226.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="220.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#f1c4b3" stroke="#52514e"/>
+<text x="238.0" y="226.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">R</text>
+<rect x="30.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="48.0" y="264.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="68.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="86.0" y="264.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="106.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="124.0" y="264.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="144.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="162.0" y="264.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<rect x="182.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#b7d3f6" stroke="#52514e"/>
+<text x="200.0" y="264.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">B</text>
+<rect x="220.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#d9e4d2" stroke="#52514e"/>
+<text x="238.0" y="264.0" font-size="14" fill="#0b0b0b" text-anchor="middle" font-weight="bold">G</text>
+<text x="30.0" y="294.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">what the sensor records: one number per pixel</text>
+<line x1="275.0" y1="150.0" x2="335.0" y2="150.0" stroke="#52514e" stroke-width="1.2"/>
+<line x1="335.0" y1="150.0" x2="328.1" y2="154.1" stroke="#52514e" stroke-width="1.2"/>
+<line x1="335.0" y1="150.0" x2="328.1" y2="145.9" stroke="#52514e" stroke-width="1.2"/>
+<text x="305.0" y="138.0" font-size="11" fill="#52514e" text-anchor="middle" font-weight="normal">demosaic</text>
+<rect x="350.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="368.0" y="73.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="388.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="406.0" y="73.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="426.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="444.0" y="73.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="464.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="482.0" y="73.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="502.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="520.0" y="73.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="540.0" y="50.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="558.0" y="73.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="350.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="368.0" y="111.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="388.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="406.0" y="111.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="426.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="444.0" y="111.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="464.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="482.0" y="111.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="502.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="520.0" y="111.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="540.0" y="88.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="558.0" y="111.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="350.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="368.0" y="149.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="388.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="406.0" y="149.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="426.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="444.0" y="149.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="464.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="482.0" y="149.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="502.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="520.0" y="149.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="540.0" y="126.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="558.0" y="149.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="350.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="368.0" y="187.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="388.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="406.0" y="187.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="426.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="444.0" y="187.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="464.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="482.0" y="187.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="502.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="520.0" y="187.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="540.0" y="164.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="558.0" y="187.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="350.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="368.0" y="225.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="388.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="406.0" y="225.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="426.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="444.0" y="225.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="464.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="482.0" y="225.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="502.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="520.0" y="225.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="540.0" y="202.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="558.0" y="225.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="350.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="368.0" y="263.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="388.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="406.0" y="263.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="426.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="444.0" y="263.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="464.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="482.0" y="263.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="502.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="520.0" y="263.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<rect x="540.0" y="240.0" width="36.0" height="36.0" rx="0" fill="#ececea" stroke="#52514e"/>
+<text x="558.0" y="263.0" font-size="10" fill="#0b0b0b" text-anchor="middle" font-weight="normal">RGB</text>
+<text x="350.0" y="294.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">what you get: three per pixel, two of them estimated</text>
+<text x="596.0" y="66.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">Half the pixels see</text>
+<text x="596.0" y="84.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">green, a quarter red,</text>
+<text x="596.0" y="102.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">a quarter blue.</text>
+<text x="596.0" y="120.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal"></text>
+<text x="596.0" y="138.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">The two missing colors</text>
+<text x="596.0" y="156.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">at each pixel are</text>
+<text x="596.0" y="174.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">estimated from its</text>
+<text x="596.0" y="192.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">neighbors. Fine detail</text>
+<text x="596.0" y="210.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">and hard edges are</text>
+<text x="596.0" y="228.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">where the guess shows:</text>
+<text x="596.0" y="246.0" font-size="12" fill="#52514e" text-anchor="start" font-weight="normal">color fringes and moiré.</text>
+</svg>

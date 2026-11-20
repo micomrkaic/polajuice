@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="250" viewBox="0 0 760 250" font-family="DejaVu Sans,Helvetica,Arial,sans-serif">
+<rect width="100%" height="100%" fill="#fcfcfb"/>
+<text x="20.0" y="24.0" font-size="15" fill="#0b0b0b" text-anchor="start" font-weight="bold">What --crop camera keeps of a 3:2 frame</text>
+<rect x="20.0" y="60.0" width="126.0" height="84.0" rx="0" fill="#e4e3dd" stroke="#52514e"/>
+<rect x="20.0" y="60.0" width="126.0" height="84.0" rx="0" fill="#9ec5f4" stroke="#2a78d6"/>
+<text x="83.0" y="106.0" font-size="11" fill="#0b0b0b" text-anchor="middle" font-weight="normal">kept</text>
+<text x="20.0" y="164.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">35mm, bw-35</text>
+<text x="20.0" y="180.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">the whole frame</text>
+<rect x="168.0" y="60.0" width="126.0" height="84.0" rx="0" fill="#e4e3dd" stroke="#52514e"/>
+<rect x="173.9" y="60.0" width="114.2" height="84.0" rx="0" fill="#9ec5f4" stroke="#2a78d6"/>
+<text x="231.0" y="106.0" font-size="11" fill="#0b0b0b" text-anchor="middle" font-weight="normal">kept</text>
+<text x="168.0" y="164.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">super8</text>
+<text x="168.0" y="180.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">gate 1.36:1</text>
+<rect x="316.0" y="60.0" width="126.0" height="84.0" rx="0" fill="#e4e3dd" stroke="#52514e"/>
+<rect x="321.0" y="60.0" width="115.9" height="84.0" rx="0" fill="#9ec5f4" stroke="#2a78d6"/>
+<text x="379.0" y="106.0" font-size="11" fill="#0b0b0b" text-anchor="middle" font-weight="normal">kept</text>
+<text x="316.0" y="164.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">technicolor</text>
+<text x="316.0" y="180.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">Academy 1.38:1</text>
+<rect x="464.0" y="60.0" width="126.0" height="84.0" rx="0" fill="#e4e3dd" stroke="#52514e"/>
+<rect x="485.0" y="60.0" width="84.0" height="84.0" rx="0" fill="#9ec5f4" stroke="#2a78d6"/>
+<text x="527.0" y="106.0" font-size="11" fill="#0b0b0b" text-anchor="middle" font-weight="normal">kept</text>
+<text x="464.0" y="164.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">toy-camera-120</text>
+<text x="464.0" y="180.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">square</text>
+<rect x="612.0" y="60.0" width="126.0" height="84.0" rx="0" fill="#e4e3dd" stroke="#52514e"/>
+<rect x="631.7" y="60.0" width="86.5" height="84.0" rx="0" fill="#9ec5f4" stroke="#2a78d6"/>
+<text x="675.0" y="106.0" font-size="11" fill="#0b0b0b" text-anchor="middle" font-weight="normal">kept</text>
+<text x="612.0" y="164.0" font-size="12" fill="#0b0b0b" text-anchor="start" font-weight="bold">polaroid-600</text>
+<text x="612.0" y="180.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">print 1.03:1 + border</text>
+<text x="20.0" y="222.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">The gray strips are cut away. --crop full keeps them: the look is applied to the whole picture,</text>
+<text x="20.0" y="238.0" font-size="11" fill="#52514e" text-anchor="start" font-weight="normal">and an instant camera puts its border around all of it.</text>
+</svg>

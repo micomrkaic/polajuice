@@ -1,5 +1,11 @@
 # Polajuice — the juice package
 
+**New here? Read [the guide](docs/GUIDE.md)** ([PDF](docs/GUIDE.pdf)): it
+starts with one command and a picture, teaches the photography behind
+the controls (exposure, tone, color, file formats, film), explains every
+option with an example, and ends with advice on style. This README is
+the reference and the design notes.
+
 One engine, two front-ends: **polajuice** for stills, **superjuice** for
 movies. Both are thin drivers over the same core (`libpolajuice.a`) and
 the same four-axis model — camera, film, developing, age — so a look
@@ -32,6 +38,7 @@ ways in otherwise. TIFF and ICC remain future work.
 make                 # polajuice, superjuice, libpolajuice.a (C17, no dependencies)
 make check           # the test suite
 make install         # to ~/.local: binaries, data, man pages, and the film library
+make guide           # rebuild docs/GUIDE.pdf and its pictures (python3, Chrome)
 ```
 
 `make install` puts `polajuice`, `superjuice` and `super8ify` in

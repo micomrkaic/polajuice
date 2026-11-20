@@ -11,6 +11,8 @@ trap 'rm -rf "$WORK"' EXIT
 PREFIX="$WORK/prefix"
 make -s -C "$ROOT" install-files PREFIX="$PREFIX" >/dev/null
 for f in bin/polajuice bin/superjuice bin/super8ify share/polajuice/web/index.html \
+         share/polajuice/doc/GUIDE.md share/polajuice/doc/guide/photos/cat.jpg \
+         share/polajuice/doc/guide/img/cat-polaroid.jpg \
          share/polajuice/prints/synthetic_minilab.cube share/man/man1/polajuice.1 \
          share/bash-completion/completions/polajuice share/bash-completion/completions/superjuice \
          share/zsh/site-functions/_polajuice; do

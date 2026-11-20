@@ -1,0 +1,63 @@
+1.33.0: the guide
+
+docs/GUIDE.md and docs/GUIDE.pdf: a guide and manual for someone who
+has never set an exposure or opened a terminal, that goes on to the
+last control. Nine chapters and four appendices, about 60 pages:
+
+  1  Start in ten minutes: install, one command, four pictures, the page
+  2  How a photograph is made: the stop, exposure, the histogram, the
+     tone curve, white balance, the lens
+  3  The digital photograph: the sensor, the color mosaic, the steps
+     from sensor to picture, linear light and encoding, bits, raw or JPEG
+  4  File formats and keeping pictures: JPEG and what quality means,
+     PNG, TIFF, PPM, HEIC, raw, metadata, LUTs, backups
+  5  Film, and what polajuice does: film in a page, the order of work,
+     the fourteen cameras, the films, print stocks, strength
+  6  The controls, one by one: what each is in photography, what it
+     does, its range, when to reach for it
+  7  Working: files, recipes, batches, the page, movies, exports, raw,
+     curves
+  8  Style: the order of work, one idea per picture, look against
+     subject, light, black-and-white, color, viewing size, working by
+     numbers (for those who cannot or will not judge color by eye),
+     common mistakes, nine looks to start from
+  9  Advanced: equivalent controls, the exact behavior of exposure and
+     development, reproducibility, speed, paths, limits, the library
+  A  every option in tables; B glossary; C troubleshooting; D reading
+
+Every picture in it is made by the command printed above it.
+tools/build_guide.py (python3, standard library only) reads the
+polajuice lines out of the guide's shell blocks, runs them on six small
+copies of the sample photographs (docs/guide/photos), files the results
+in docs/guide/img, draws the seven diagrams as SVG, converts the
+Markdown to HTML with a small converter of its own, and has a headless
+Chrome print the PDF. 'make guide' runs it.
+
+'make check' runs it with --check, which keeps the guide honest: every
+command in the guide must run; every option in 'polajuice --help' and
+every camera must appear in the guide; the guide may name no option
+that does not exist; every picture must be a photo, a diagram or the
+output of a command in the guide; every contents link must resolve. It
+caught one mistake of mine while writing (an example that wrote into a
+folder that did not exist).
+
+The figures are rendered with no film library in reach, so they are
+the same on every machine and show each camera's built-in color; the
+guide says so, and that with the library installed the colors are the
+real film's. They are saved at JPEG quality 84. There is no side-by-
+side of film stocks for that reason: the library cannot be fetched
+where the guide was built.
+
+New option: --quality N (1..100, default 92) for apply and develop,
+the JPEG quality. The encoder always had the parameter; nothing set
+it. Wanted by the formats chapter, which shows quality 8 against 92,
+and overdue anyway. pj_jpeg_set_quality() in the library. The default
+is unchanged to the byte.
+
+'make install' puts the guide, its PDF and its pictures in
+share/polajuice/doc. README opens with a pointer to it, the man page
+names it, release.sh ignores a leftover docs/GUIDE.html.
+
+Tests: quality (default identical, size follows it, recipe and PNG
+unaffected, range, develop); install (guide files present, uninstall
+clean); the guide check above.

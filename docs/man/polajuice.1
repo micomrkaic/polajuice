@@ -407,6 +407,16 @@ height), 0..1 each.
 Take the look from a recipe: a key=value file, or any JPEG polajuice
 rendered. Flags given after it override it line by line.
 .TP
+.BI \-\-quality " N"
+JPEG quality, 1..100 (default 92): how coarsely the picture is quantized,
+so smaller files below and larger above. It changes nothing about the
+look, and nothing for
+.B .png
+and
+.B .ppm
+output. Also taken by
+.BR develop .
+.TP
 .BI \-\-save\-recipe " FILE"
 Write the look used as a recipe file.
 .TP
@@ -533,6 +543,14 @@ process, unreadable input, a value out of range).
 .SH SEE ALSO
 .BR superjuice (1),
 .BR super8ify (1).
+.PP
+The guide: photography, file formats, every control with example
+pictures, and advice on style, installed as
+.I ~/.local/share/polajuice/doc/GUIDE.pdf
+(and
+.IR GUIDE.md ),
+in the source tree under
+.IR docs/ .
 .PP
 Full documentation, recipe format and preset sources:
 .I https://github.com/micomrkaic/polajuice

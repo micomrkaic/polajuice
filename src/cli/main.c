@@ -33,7 +33,7 @@ static void usage(FILE *stream)
         "COMMANDS\n"
         "  polajuice apply INPUT -c CAMERA [-f FILM] [-o OUTPUT] [options]\n"
         "      render a photograph through a look\n"
-        "  polajuice develop INPUT [-o OUTPUT] [--ev N] [--linear]\n"
+        "  polajuice develop INPUT [-o OUTPUT] [--ev N] [--linear] [--quality N]\n"
         "      the straight print of a raw: no camera, no film\n"
         "  polajuice serve [DIR] [--port 8000] [--web PATH]\n"
         "      the workspace page on http://localhost:8000, rendering here on\n"
@@ -180,6 +180,9 @@ static void usage(FILE *stream)
         "      --recipe FILE       take the look from a recipe file, or from any\n"
         "                          JPEG polajuice rendered (it carries its recipe);\n"
         "                          options given after it override it one by one\n"
+        "      --quality N         JPEG quality, 1..100 (default 92): smaller\n"
+        "                          files below, larger above; the look is\n"
+        "                          the same. Ignored for .png and .ppm\n"
         "      --save-recipe FILE  write the look used as a recipe file\n"
         "      --linear            read a 16-bit PNG or TIFF as scene-linear\n"
         "                          (dcraw -4 -T, darktable's linear export)\n"
@@ -330,6 +333,11 @@ static int develop(int argc, char **argv)
                 fprintf(stderr, "invalid ev (-4..4)\n");
                 return EXIT_FAILURE;
             }
+        } else if (!strcmp(argv[i], "--quality") && i + 1 < argc) {
+            char *end = NULL;
+            long q = strtol(argv[++i], &end, 10);
+            if (!end || *end || q < 1 || q > 100) { fprintf(stderr, "--quality takes 1..100\n"); return EXIT_FAILURE; }
+            pj_jpeg_set_quality((int)q);
         } else if (!strcmp(argv[i], "--linear")) linear_input = true;
         else {
             fprintf(stderr, "unknown or incomplete option: %s\n", argv[i]);
@@ -510,6 +518,11 @@ static int apply(int argc, char **argv)
                 fprintf(stderr, "invalid edge (0..2)\n");
                 return EXIT_FAILURE;
             }
+        } else if (!strcmp(argv[i], "--quality") && i + 1 < argc) {
+            char *end = NULL;
+            long q = strtol(argv[++i], &end, 10);
+            if (!end || *end || q < 1 || q > 100) { fprintf(stderr, "--quality takes 1..100\n"); return EXIT_FAILURE; }
+            pj_jpeg_set_quality((int)q);
         } else if (!strcmp(argv[i], "--seed") && i + 1 < argc) {
             char *end = NULL;
             errno = 0;
