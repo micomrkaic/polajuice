@@ -239,6 +239,18 @@ in \-3..+4 stops in halves (push+1.5),
 .B cross
 (E-6 in C-41) or
 .BR cross+\fIN\fR .
+.BI push+ N
+is the look of film shot
+.I N
+stops under and developed
+.I N
+stops longer: the two cancel at middle gray, so the brightness comes
+out even, and what is left is more contrast (16% a stop), more
+saturation (6%) and coarser grain, each further stop beyond +2 counting
+for less. A pull is the reverse. Adding
+.BI \-\-ev " \-N"
+to a push therefore counts the underexposure twice and gives a darker
+picture, not a truer one.
 Not applicable to instant cameras; cross-processing is dropped on a
 black-and-white camera, which has no color curves to cross.
 .TP
@@ -274,9 +286,8 @@ tone along the film's curve: brightness first, and with it contrast,
 saturation and what is bright enough to halate. A raw file already
 opens one stop up;
 .B \-\-ev
-adds to that. Development does not brighten (see
-.BR \-\-develop ):
-for a real push, set the brightness here.
+adds to that. A push needs no exposure change of its own (see
+.BR \-\-develop ).
 .TP
 .BI \-\-halation " N"
 Scale the camera's halation 0..2 (0 off, default 1).

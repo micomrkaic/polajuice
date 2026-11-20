@@ -1,0 +1,13 @@
+1.31.3: say what a push is
+
+Wording only; no render changes.
+
+--develop push+N is the net look of film shot N stops under and
+developed N stops longer: the two cancel at middle gray, the brightness
+comes out even, and what is left is more contrast, saturation and
+grain. 1.31.1 and 1.31.2 described this as a deficiency ("does not
+brighten: for a real push, set the brightness with --ev"), which reads
+as advice to add exposure. Corrected in --help, the man page and the
+README (its development paragraph and the annex): a push goes on a
+normally exposed picture with --ev left alone, and --ev -N on top of it
+counts the underexposure twice.

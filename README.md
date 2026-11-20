@@ -566,8 +566,11 @@ negative films accordingly.
 Development is its own axis too: `--develop` takes `normal`, `push+N`
 or `pull-N` for any number of stops from -3 to +4 (`push+1.5` is fine),
 `cross` (E-6 slide through C-41 chemistry) or `cross+N` for a pushed
-cross process. Push raises contrast and coarsens grain, pull relaxes
-both, and cross gives the shifted-color lomo signature; all apply after
+cross process. A push is the net look of film shot N stops under and
+developed N stops longer - the brightness comes out even, so it goes on
+a normally exposed picture without touching `--ev` - and what it leaves
+is more contrast and coarser grain; pull relaxes both, and cross gives
+the shifted-color lomo signature; all apply after
 the color stage so they compose with any film LUT, and all are refused
 with a note for instant cameras, whose development happens inside the
 film unit. Within -1..+2 the response is linear and renders exactly as
@@ -855,13 +858,19 @@ lost about mid-scale, with fog and fading), the camera's own curve, and
 - the first keeps the colors' ratios, development steepens each
 channel and so saturates - but they all turn the same knob first.
 
-**`--develop` does not compensate `--ev`.** On film a push is an
-underexposure made good in the developer. Here push models only what
-the longer development does (contrast, saturation, grain); the density
-is `--ev`'s alone. `--ev -1 --develop push+1` is therefore a darker and
-harder picture, not a rescued one: a mid-gray patch comes out 19
-lightness units under, against 17 for `--ev -1` alone. To imitate a
-real push, leave `--ev` where the picture looks right and add the push.
+**A push already contains its underexposure.** On film a push is
+never done alone: the roll is shot N stops under and developed N stops
+longer, and the two cancel at middle gray. `--develop push+N` is that
+net result - the brightness comes out even, and what is left is what
+the longer development leaves behind: +16% contrast a stop, +6%
+saturation, coarser grain, each stop beyond +2 counting for 0.6. It is
+applied to a normally exposed picture, with `--ev` left where the
+picture looks right. Adding `--ev -N` to it counts the underexposure
+twice: `--ev -1 --develop push+1` puts a mid-gray patch 19 lightness
+units under, against 17 for `--ev -1` alone - darker and harder, not
+truer. (What this leaves approximate: a pushed negative's shadows are
+empty because underexposure put them on the film's toe; here the
+contrast pivot stands in for that.)
 
 **`--ev` decides what several other controls can do.** It places the
 tones on the film's curve, so it changes contrast and saturation as
