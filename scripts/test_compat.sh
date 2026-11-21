@@ -277,8 +277,8 @@ text = open(sys.argv[1]).read()
 flags = set()
 for src in sys.argv[2:4]:
     flags |= set(re.findall(r'strcmp\(argv\[[^\]]*\], "(-[^"]*)"\)', open(src).read()))
-keys = re.findall(r'\{"([a-z]+)", -?[0-9.]+f, -?[0-9.]+f, -?[0-9.]+f\}', open(sys.argv[4]).read())
-assert len(keys) >= 27, keys
+keys = re.findall(r'\{"([a-z0-9]+)", -?[0-9.]+f, -?[0-9.]+f, -?[0-9.]+f\}', open(sys.argv[4]).read())
+assert len(keys) >= 39, keys
 missing = [f for f in sorted(flags) if not re.search(r'(?<![\w-])' + re.escape(f) + r'(?![\w-])', text)]
 missing += ["--" + k for k in keys if not re.search(r'--' + k + r'(?![\w-])', text)]
 assert not missing, missing
@@ -448,6 +448,48 @@ assert b[1] > a[1] * 1.5, (a, b)     # twice the size: coarser
 assert b[2] > a[2] * 1.2, (a, b)     # twice the amount: stronger, after darktable's coarseness allowance
 PY
 echo "grain: amount and size rest at 1, 0 is none, recipes replay, old recipes unchanged, LUTs untouched, darktable follows"
+
+# 1.34: the tone equalizer. Flat bands are the default to the byte wherever
+# they sit; a lift changes the picture; the bands ride in the recipe and
+# replay; a recipe from before has none and renders as it did; they are in
+# a color LUT (they are tone); ranges are enforced; the table shows them
+PJ apply "$IN" -c 35mm-negative --no-film -o "$LIB/t_def.png" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --tone1 0 --tone2at 1 --tone3width 2.5 -o "$LIB/t_flat.png" >/dev/null 2>&1
+cmp -s "$LIB/t_def.png" "$LIB/t_flat.png" || { echo "test_compat: flat tone bands changed the picture"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --tone2 1 -o "$LIB/t_lift.png" >/dev/null 2>&1
+cmp -s "$LIB/t_def.png" "$LIB/t_lift.png" && { echo "test_compat: --tone2 1 changed nothing"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --tone2 1 --tone2at -1.5 --tone2width 0.8 --tone4 -0.5 -o "$LIB/t_rec.jpg" >/dev/null 2>&1
+for line in 'tone2=1' 'tone2at=-1.5' 'tone2width=0.8' 'tone4=-0.5' 'tone4at=2' 'tone1=0' 'tone1at=-4'; do
+    ./polajuice inspect "$LIB/t_rec.jpg" | grep -qx -- "$line" || { echo "test_compat: recipe lacks $line"; exit 1; }
+done
+PJ apply "$IN" --recipe "$LIB/t_rec.jpg" -o "$LIB/t_replay.jpg" >/dev/null 2>&1
+cmp -s "$LIB/t_rec.jpg" "$LIB/t_replay.jpg" || { echo "test_compat: tone recipe replay differs"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --save-recipe "$LIB/t_new.recipe" -o "$LIB/t_a.png" >/dev/null 2>&1
+grep -v '^tone[1-4]' "$LIB/t_new.recipe" > "$LIB/t_old.recipe"
+grep -q '^keystonev=' "$LIB/t_old.recipe" || { echo "test_compat: old-recipe fixture lost a keystone key"; exit 1; }
+PJ apply "$IN" --recipe "$LIB/t_old.recipe" -o "$LIB/t_b.png" >/dev/null 2>&1
+cmp -s "$LIB/t_a.png" "$LIB/t_b.png" || { echo "test_compat: a pre-1.34 recipe renders differently"; exit 1; }
+for bad in '--tone1 2.5' '--tone1 -3' '--tone2at 5' '--tone2at -9' '--tone3width 0.2' '--tone3width 4'; do
+    PJ apply "$IN" -c 35mm-negative --no-film $bad -o "$LIB/t_bad.png" >/dev/null 2>&1 && { echo "test_compat: $bad was accepted"; exit 1; }
+done
+PJ apply "$IN" -c 35mm-negative --no-film --tone5 1 -o "$LIB/t_bad.png" >/dev/null 2>&1 && { echo "test_compat: --tone5 was accepted"; exit 1; }
+PJ lut -c 35mm-negative --no-film --size 5 --tone2 1 -o "$LIB/t.cube" >/dev/null
+tail -n +4 "$LIB/t.cube" > "$LIB/t.body"
+cmp -s "$LIB/ga.body" "$LIB/t.body" && { echo "test_compat: the tone equalizer did not reach the color LUT"; exit 1; }
+PJ curves -c 35mm-negative --no-film --tone2 1 --tone3 -2 --tone3width 0.3 --table > "$LIB/t_table.txt"
+grep -q '^tone curve' "$LIB/t_table.txt" || { echo "test_compat: curves --table has no tone curve"; exit 1; }
+grep -q 'band 2 +1.00 stops at -2.0, 1.00 wide' "$LIB/t_table.txt" || { echo "test_compat: curves --table does not list the bands"; cat "$LIB/t_table.txt" | tail -4; exit 1; }
+grep -q 'held at' "$LIB/t_table.txt" || { echo "test_compat: curves --table does not report a held band"; exit 1; }
+python3 - "$LIB/t_table.txt" <<'PY' || { echo "test_compat: the tone table is not a rising curve lifted at band 2"; exit 1; }
+import sys
+rows = [l.split() for l in open(sys.argv[1]) if l.strip() and l.split()[0][0] in "+-" and len(l.split()) == 3]
+rows = [(float(a), float(b), float(c)) for a, b, c in rows]
+assert len(rows) == 24, len(rows)
+assert all(rows[i][2] >= rows[i - 1][2] - 1e-3 for i in range(1, len(rows)))     # never reversing
+near = min(rows, key=lambda r: abs(r[0] + 2.0))
+assert near[2] > near[1] + 0.03, near                                             # lifted where band 2 sits
+PY
+echo "tone equalizer: flat is the default, a lift is not, recipes replay, old recipes unchanged, LUTs carry it, the table shows it"
 
 # 1.33: --quality. The default is 92 to the byte; lower is smaller, higher
 # larger; the recipe rides along at any quality and replays to the same

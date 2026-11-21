@@ -500,6 +500,116 @@ static void apply_scene_tone(PjImage *image, float black, float shadows, float c
     pj_parallel_rows(image->height, scene_tone_band, &ctx);
 }
 
+/*
+ * The tone equalizer. A parametric equalizer in audio has a few bands,
+ * each a bell with a center frequency, a gain and a width; this is the
+ * same thing on the axis of scene brightness in stops. The curve is
+ *
+ *     out = in + sum_i g_i exp(-(in - c_i)^2 / (2 w_i^2))      (in stops)
+ *
+ * so a band lifts or cuts the tones near its center and leaves the rest.
+ * It rises everywhere as long as the bells' combined slope stays above
+ * -1; one bell's steepest slope is 0.607 g/w, so a narrow band with a
+ * large gain would fold the tones over. Rather than refuse such settings
+ * they are limited in two steps, both leaving the steepest fall a tenth
+ * of the original slope. First each band by itself: its gain is held to
+ * 1.48 times its width, so no band folds alone and one band's width does
+ * not change another's effect. Then, if bands of opposite sign crowd
+ * together and their slopes add up past that, all gains are scaled by one
+ * factor. The shape asked for, as much of it as can be had.
+ *
+ * It is a gain found from luminance and applied to R, G and B alike, in
+ * scene light after exposure and before everything else: the film then
+ * answers a differently lit scene, and the equalizer itself moves no hue.
+ */
+static const float tone_rest_at[PJ_TONE_BANDS] = {-4.0f, -2.0f, 0.0f, 2.0f};
+typedef struct { float gain[PJ_TONE_BANDS], at[PJ_TONE_BANDS], width[PJ_TONE_BANDS]; float limit; } ToneEq;
+
+static float tone_eq_stops(const ToneEq *eq, float x)
+{
+    float s = 0.0f;
+    for (int i = 0; i < PJ_TONE_BANDS; ++i) {
+        if (eq->gain[i] == 0.0f) continue;
+        float t = (x - eq->at[i]) / eq->width[i];
+        s += eq->gain[i] * expf(-0.5f * t * t);
+    }
+    return s;
+}
+
+/* the bands as the options give them, limited; false when all are flat */
+static bool tone_eq_resolve(const PjRenderOptions *o, ToneEq *eq)
+{
+    bool any = false;
+    eq->limit = 1.0f;
+    if (!o) return false;
+    for (int i = 0; i < PJ_TONE_BANDS; ++i) {
+        float g = o->tone_gain[i], w = 1.0f + o->tone_width[i];
+        eq->gain[i] = g < -2.0f ? -2.0f : (g > 2.0f ? 2.0f : g);
+        eq->at[i] = tone_rest_at[i] + o->tone_at[i];
+        eq->width[i] = w < 0.3f ? 0.3f : (w > 3.0f ? 3.0f : w);
+        if (eq->gain[i] != 0.0f) any = true;
+        /* a bell's steepest slope is g / (w sqrt e): hold it to 0.9 */
+        float most = 0.9f * 1.6487213f * eq->width[i];
+        if (fabsf(eq->gain[i]) > most) {
+            float k = most / fabsf(eq->gain[i]);
+            if (k < eq->limit) eq->limit = k;
+            eq->gain[i] = eq->gain[i] < 0.0f ? -most : most;
+        }
+    }
+    if (!any) return false;
+    float worst = 0.0f;
+    for (int k = -16 * 32; k <= 16 * 32; ++k) {
+        float x = (float)k / 32.0f, slope = 0.0f;
+        for (int i = 0; i < PJ_TONE_BANDS; ++i) {
+            float t = (x - eq->at[i]) / eq->width[i];
+            slope -= eq->gain[i] * t / eq->width[i] * expf(-0.5f * t * t);
+        }
+        if (slope < worst) worst = slope;
+    }
+    if (worst < -0.9001f) {
+        float k = 0.9f / -worst;
+        if (k < eq->limit) eq->limit = k;
+        for (int i = 0; i < PJ_TONE_BANDS; ++i) eq->gain[i] *= k;
+    }
+    return true;
+}
+
+#define TONE_LO (-16.0f)
+#define TONE_PER_STOP 64
+#define TONE_N (24 * TONE_PER_STOP + 1)      /* -16 .. +8 stops about middle gray */
+
+static void tone_eq_band(size_t y0, size_t y1, void *vctx)
+{
+    Ctx *c = vctx;
+    PjImage *image = c->image;
+    const float *table = c->aux;
+    const float lmid = log2f(0.18f);
+    for (size_t i = y0 * image->width; i < y1 * image->width; ++i) {
+        float *p = image->rgb + i * 3;
+        float y = 0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2];
+        if (y <= 1e-6f) continue;
+        float u = (log2f(y) - lmid - TONE_LO) * (float)TONE_PER_STOP;
+        if (u <= 0.0f || u >= (float)(TONE_N - 1)) continue;   /* past the bells' reach: no change */
+        size_t k = (size_t)u;
+        float f = u - (float)k;
+        float gain = table[k] + (table[k + 1] - table[k]) * f;
+        p[0] *= gain; p[1] *= gain; p[2] *= gain;
+    }
+}
+
+static void apply_tone_eq(PjImage *image, const PjRenderOptions *options)
+{
+    ToneEq eq;
+    if (!tone_eq_resolve(options, &eq)) return;
+    float *table = malloc(TONE_N * sizeof *table);
+    if (!table) return;
+    for (int k = 0; k < TONE_N; ++k)
+        table[k] = exp2f(tone_eq_stops(&eq, TONE_LO + (float)k / (float)TONE_PER_STOP));
+    Ctx ctx = {.image = image, .aux = table};
+    pj_parallel_rows(image->height, tone_eq_band, &ctx);
+    free(table);
+}
+
 /* graduated ND: density rises across a band a quarter of the frame wide,
  * centered where grad_pos puts it, toward the edge grad_angle names */
 static void grad_band(size_t y0, size_t y1, void *vctx)
@@ -1917,6 +2027,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
         if (image->scene_linear) ev += 1.0f;   /* raw opens a stop up */
         apply_exposure(image, ev);
     }
+    apply_tone_eq(image, options);
     if (options) apply_scene_tone(image, options->black, options->shadows, options->contrast);
     stage_mark("crop+clone+exposure");
     apply_contrast_filter(image,
@@ -2038,20 +2149,108 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     return image;
 }
 
-bool pj_look_cube(const char *preset, const PjRenderOptions *options, int n, float *out, PjError *error)
+/* a look reduced to what it does to a color: nothing that depends on
+ * where a pixel is or on its neighbors */
+static PjRenderOptions color_only_options(const PjRenderOptions *options)
 {
-    if (n < 2 || n > 129 || !out) { pj_set_error(error, "cube size must be 2..129"); return false; }
     PjRenderOptions o = {.seed = 1, .strength = 1.0f};
     if (options) o = *options;
     o.color_only = true;
     o.temporal = false;
     o.crop = PJ_CROP_FULL;
-    /* nothing that depends on where a pixel is */
     o.grad = 0.0f; o.radial = 0.0f; o.denoise = 0.0f; o.sharpen = 0.0f;
     o.distortion = 0.0f; o.devignette = 0.0f; o.rotate = 0.0f;
     o.keystone_v = o.keystone_h = 0.0f;
     o.trim_x = o.trim_y = o.trim_w = o.trim_h = 0.0f;
     o.edge = 0.0f;
+    return o;
+}
+
+bool pj_tone_curve(const char *preset, const PjRenderOptions *options, bool scene_linear,
+                   int n, float x_lo, float x_hi, float *ref, float *live,
+                   float handles[PJ_TONE_BANDS][2], float *limit, PjError *error)
+{
+    if (n < 2 || n > 4096 || !(x_hi > x_lo) || !ref || !live) {
+        pj_set_error(error, "tone curve: 2..4096 points over a rising range");
+        return false;
+    }
+    PjRenderOptions with = color_only_options(options);
+    PjRenderOptions rest = with;
+    rest.ev = 0.0f; rest.black = 0.0f; rest.shadows = 0.0f; rest.contrast = 0.0f; rest.highlights = 0.0f;
+    for (int i = 0; i < PJ_TONE_BANDS; ++i) rest.tone_gain[i] = 0.0f;
+    ToneEq eq;
+    bool bands = tone_eq_resolve(&with, &eq);
+    if (limit) *limit = bands ? eq.limit : 1.0f;
+    /* where each band sits on the file's own scale: its center is counted
+     * after exposure, and a raw file opens a stop up before that */
+    float shift = with.ev + (scene_linear ? 1.0f : 0.0f);
+    if (!isfinite(shift)) { pj_set_error(error, "tone curve: the exposure is not a number"); return false; }
+    float hx[PJ_TONE_BANDS];
+    for (int i = 0; i < PJ_TONE_BANDS; ++i)
+        hx[i] = tone_rest_at[i] + with.tone_at[i] - shift;
+    size_t total = (size_t)n + PJ_TONE_BANDS;
+    pj_srgb_tables_init();
+    for (int pass = 0; pass < 2; ++pass) {
+        PjImage *ramp = pj_image_new(total, 1, error);
+        if (!ramp) return false;
+        ramp->scene_linear = scene_linear;
+        for (size_t k = 0; k < total; ++k) {
+            float x = k < (size_t)n ? x_lo + (x_hi - x_lo) * (float)k / (float)(n - 1) : hx[k - (size_t)n];
+            float v = 0.18f * exp2f(x);
+            ramp->rgb[k * 3] = ramp->rgb[k * 3 + 1] = ramp->rgb[k * 3 + 2] = v;
+        }
+        PjImage *out = pj_render(ramp, preset, pass == 0 ? &rest : &with, error);
+        pj_image_free(ramp);
+        if (!out) return false;
+        if (out->width != total || out->height != 1) {
+            pj_image_free(out);
+            pj_set_error(error, "the look changed the ramp's shape");
+            return false;
+        }
+        float *dst = pass == 0 ? ref : live;
+        for (size_t k = 0; k < total; ++k) {
+            const float *p = out->rgb + k * 3;
+            float y = pj_srgb_encode(clamp01(0.2126f * p[0] + 0.7152f * p[1] + 0.0722f * p[2]));
+            if (k < (size_t)n) dst[k] = y;
+            else if (pass == 1 && handles) {
+                handles[k - (size_t)n][0] = hx[k - (size_t)n];
+                handles[k - (size_t)n][1] = y;
+            }
+        }
+        pj_image_free(out);
+    }
+    return true;
+}
+
+size_t pj_tone_curve_json(const char *preset, const PjRenderOptions *options, bool scene_linear,
+                          char *out, size_t size, PjError *error)
+{
+    enum { N = 97 };
+    const float x0 = -9.0f, x1 = 2.5f;
+    float ref[N], live[N], handles[PJ_TONE_BANDS][2], limit = 1.0f;
+    if (!pj_tone_curve(preset, options, scene_linear, N, x0, x1, ref, live, handles, &limit, error))
+        return 0;
+    size_t at = 0;
+    #define PUT(...) do { int k_ = snprintf(out + at, at < size ? size - at : 0, __VA_ARGS__); \
+                          if (k_ < 0 || at + (size_t)k_ >= size) { pj_set_error(error, "tone curve: buffer too small"); return 0; } \
+                          at += (size_t)k_; } while (0)
+    PUT("{\"x0\":%g,\"x1\":%g,\"n\":%d,\"ref\":[", (double)x0, (double)x1, N);
+    for (int i = 0; i < N; ++i) PUT("%s%.4f", i ? "," : "", (double)ref[i]);
+    PUT("],\"live\":[");
+    for (int i = 0; i < N; ++i) PUT("%s%.4f", i ? "," : "", (double)live[i]);
+    PUT("],\"handles\":[");
+    for (int i = 0; i < PJ_TONE_BANDS; ++i)
+        PUT("%s[%.4f,%.4f]", i ? "," : "", (double)handles[i][0], (double)handles[i][1]);
+    PUT("],\"limit\":%.4f,\"shift\":%.4f}",
+        (double)limit, (double)((options ? options->ev : 0.0f) + (scene_linear ? 1.0f : 0.0f)));
+    #undef PUT
+    return at;
+}
+
+bool pj_look_cube(const char *preset, const PjRenderOptions *options, int n, float *out, PjError *error)
+{
+    if (n < 2 || n > 129 || !out) { pj_set_error(error, "cube size must be 2..129"); return false; }
+    PjRenderOptions o = color_only_options(options);
     /* the lattice as an image: n*n wide (green by blue), n... laid out so
      * that index = r + n*(g + n*b) reads straight across */
     size_t nn = (size_t)n;

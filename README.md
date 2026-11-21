@@ -303,6 +303,49 @@ are darktable 4.6's (newer releases upgrade them on import); checked
 there end to end - darktable's render of the style lands within about
 2/255 of polajuice's in color.
 
+### The tone equalizer
+
+The scene controls bend the tone curve in fixed ways: `--ev` slides it,
+`--contrast` turns it, `--shadows` lifts its left half. The tone
+equalizer reaches one part of it and leaves the rest alone. It is a
+parametric equalizer on the scale of scene brightness instead of pitch:
+four bands, each a bell with a lift, a center and a width.
+
+    polajuice apply street.jpg -c 35mm-slide --tone1 1.2 --tone1width 1.5 --tone4 -0.7
+
+`--tone1` .. `--tone4` are the lifts in stops (-2..2, minus cuts);
+`--tone1at` .. `--tone4at` the centers in stops from middle gray (-8..4,
+resting at -4, -2, 0 and +2); `--tone1width` .. `--tone4width` the
+widths in stops (0.3..3, resting at 1). In stops,
+
+    out = in + sum over bands of  lift * exp(-(in - center)^2 / (2 width^2))
+
+It runs after `--ev` and before everything else, as a gain found from a
+pixel's luminance and applied to its three channels alike: the film then
+answers a differently lit scene, and the equalizer itself moves no hue
+(a color's R:G:B ratios are unchanged to four digits, tested). A flat
+band is no change to the bit wherever it sits. Centers are counted after
+exposure, so the bands follow the middle gray you chose.
+
+A bell's steepest slope is 0.607 lift/width; past -1 the curve would
+fold and a darker tone come out brighter than a lighter one. So a band
+is held to 1.48 stops per stop of width, and if bands of opposite sign
+crowd together and still add up to a fold, all four are scaled back by
+one factor. The steepest fall always keeps a tenth of the original
+slope. `polajuice curves --table` prints the resulting curve, the bands
+and whether one was held.
+
+On the page the equalizer is a graph: the look's tone curve as the
+engine computes it (`pj_tone_curve`; dashed with the tone controls at
+rest, solid as set) with the four bands as numbered handles. Dragging
+one sideways moves its center, up and down changes its lift (a stop per
+28 graph units, the same everywhere on the curve), the wheel its width;
+a double-click flattens it. The handles sit on the file's own scale, the
+band's center less the exposure (and less the stop a raw file opens by).
+The twelve values are recipe keys like any other, `superjuice` options
+and `super8ify` variables, and they are in an exported LUT and darktable
+style, being tone.
+
 ### Seeing what a film does: `polajuice curves`
 
 A 3D LUT is not a curve, so one chart cannot show it. `curves` runs the
@@ -946,6 +989,7 @@ measured on what is left.
 | `--film`, `--any-film` | with `--no-film`; on sealed-process cameras |
 | `--trimx`, `--trimy` | while `--trimw` or `--trimh` is 0 |
 | `--gradangle`, `--gradpos`; `--radialx`, `--radialy`, `--radialsize` | while `--grad`; `--radial` is 0 |
+| `--tone1at`, `--tone1width` (and 2, 3, 4) | while that band's `--tone1` is 0: to the bit |
 
 ### D. What is actually independent
 
@@ -959,3 +1003,14 @@ print stock, development, age, strength. Everything else is where
 filters) or texture (grain, softness, halation, edge effects).
 `polajuice curves` shows what any combination does, and two
 combinations whose charts and tables agree are the same edit.
+
+The tone equalizer adds twelve numbers and no dimension of color. It
+bends the one tone curve that `--ev`, `--black`, `--shadows` and
+`--contrast` already bend, with more freedom in its shape, and so it is
+linked to all four by construction: bands raised together act as
+exposure, a cut below middle gray with a lift above it as contrast, a
+wide lift on the left as `--shadows`. None of these is an exact identity
+(a sum of bells is not a constant, a line or a ramp), which is the
+reason to keep the simple controls for the simple jobs and the bands for
+what they cannot reach. The tone table of `polajuice curves --table` is
+the arbiter: two settings with the same table are the same edit.

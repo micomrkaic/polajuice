@@ -175,6 +175,23 @@ typedef struct {
                     the size, 0 the camera's, +1 double (the grainsize key
                     takes the multiplier, 0.5..4). The classic model's
                     grain is never finer than a pixel */
+    /* The tone equalizer: PJ_TONE_BANDS bands, each a bell on the scale of
+     * scene brightness in stops, as a parametric equalizer's bands sit on
+     * the scale of pitch. tone_gain is the lift (+) or cut (-) at the
+     * band's center in stops, -2..2; tone_at where the center is, in
+     * stops from middle gray after exposure, held less the band's resting
+     * place (-4, -2, 0, +2 stops for bands 1..4); tone_width the bell's
+     * standard deviation in stops, held less one. So a zeroed struct is
+     * four flat bands at their resting places, one stop wide: no change.
+     * The gain is found from a pixel's luminance and applied to its three
+     * channels alike, in scene light before the film, so hue and
+     * saturation enter the film as they were. A gain too large for its
+     * width would flatten or reverse the tones, so each band's gain is
+     * held to 1.48 times its width, and if bands of opposite sign still
+     * add up to a reversal all four are scaled back by one factor
+     * (pj_tone_curve reports the limiting). Keys tone1..4, tone1at..4at,
+     * tone1width..4width. */
+    float tone_gain[4], tone_at[4], tone_width[4];
     float recover;  /* raw highlight reconstruction, 0..1: 0 clips every
                     sensor channel at white (dcraw's default); 1 rebuilds
                     a clipped channel from the unclipped ones so a
@@ -370,6 +387,28 @@ char *pj_preset_film_processes(const char *camera, char *buffer, size_t size);
 const char *pj_preset_primary_process(const char *camera);
 bool pj_contrast_filter_known(const char *name);
 /* True for NULL, "classic" and "silver". */
+#define PJ_TONE_BANDS 4
+/* The tone curve of a look, for drawing: n grays, evenly spaced in stops
+ * from x_lo to x_hi about middle gray as the file holds them, through the
+ * look's color path (no grain, glow, softness or frame). 'ref' is the
+ * look with its tone controls at rest (ev, black, shadows, contrast,
+ * highlights and the equalizer); 'live' is with them. Both are the
+ * rendered luminance, sRGB-encoded, 0..1. 'handles', if not NULL, gets
+ * for each equalizer band where it sits on the live curve: x in the same
+ * file stops (its center less the exposure) and y. 'limit', if not NULL,
+ * gets the smallest factor any band's gain was scaled by to keep the
+ * curve rising (1 when nothing was limited). scene_linear says the file is a
+ * raw one, which opens a stop up and has a shoulder above white. */
+bool pj_tone_curve(const char *preset, const PjRenderOptions *options, bool scene_linear,
+                   int n, float x_lo, float x_hi, float *ref, float *live,
+                   float handles[PJ_TONE_BANDS][2], float *limit, PjError *error);
+/* The same as JSON, for a page to draw: 97 points from 9 stops under
+ * middle gray to white (2.5 over). {"x0":,"x1":,"n":,"ref":[..],
+ * "live":[..],"handles":[[x,y],..],"limit":,"shift":} where shift is the
+ * exposure (and a raw file's stop) between the file's scale and the
+ * bands'. Returns the length written, 0 on failure. */
+size_t pj_tone_curve_json(const char *preset, const PjRenderOptions *options, bool scene_linear,
+                          char *out, size_t size, PjError *error);
 bool pj_grain_model_known(const char *name);
 /* The deviation of unit-amount classic grain at a grain size in pixels
  * (1 at one pixel, falling to about three quarters as the noise is

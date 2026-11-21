@@ -146,7 +146,7 @@ PjImage *look_render(Look *look, const PjImage *source, size_t max_dim,
     pj_image_free(small);
     if (!result) return NULL;
     {
-        char comment[1200];
+        char comment[2400];
         size_t n = (size_t)snprintf(comment, sizeof comment, "%s", look->recipe);
         if (n < sizeof comment) pj_geometry_format(&geom, comment + n, sizeof comment - n);
         pj_image_set_comment(result, comment);

@@ -35,6 +35,12 @@ static const PjSceneKey scene_keys[] = {
     /* multipliers of what the camera does: these rest at 1, and the
      * options hold them less one so a zeroed struct is still "no change" */
     {"grainamount", 0.0f, 4.0f, 1.0f}, {"grainsize", 0.5f, 4.0f, 1.0f},
+    /* the tone equalizer's four bands: gain in stops, center in stops from
+     * middle gray (resting at -4, -2, 0, +2), width in stops (resting at 1) */
+    {"tone1", -2.0f, 2.0f, 0.0f}, {"tone1at", -8.0f, 4.0f, -4.0f}, {"tone1width", 0.3f, 3.0f, 1.0f},
+    {"tone2", -2.0f, 2.0f, 0.0f}, {"tone2at", -8.0f, 4.0f, -2.0f}, {"tone2width", 0.3f, 3.0f, 1.0f},
+    {"tone3", -2.0f, 2.0f, 0.0f}, {"tone3at", -8.0f, 4.0f, 0.0f}, {"tone3width", 0.3f, 3.0f, 1.0f},
+    {"tone4", -2.0f, 2.0f, 0.0f}, {"tone4at", -8.0f, 4.0f, 2.0f}, {"tone4width", 0.3f, 3.0f, 1.0f},
 };
 
 const PjSceneKey *pj_scene_keys(size_t *count)
@@ -72,6 +78,12 @@ static float *scene_slot(PjRenderOptions *o, const char *key)
     if (!strcmp(key, "recover")) return &o->recover;
     if (!strcmp(key, "grainamount")) return &o->grain_amount;
     if (!strcmp(key, "grainsize")) return &o->grain_size;
+    if (!strncmp(key, "tone", 4) && key[4] >= '1' && key[4] <= '0' + PJ_TONE_BANDS) {
+        int band = key[4] - '1';
+        if (key[5] == '\0') return &o->tone_gain[band];
+        if (!strcmp(key + 5, "at")) return &o->tone_at[band];
+        if (!strcmp(key + 5, "width")) return &o->tone_width[band];
+    }
     return NULL;
 }
 

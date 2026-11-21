@@ -347,6 +347,33 @@ put its center, as offsets from the frame center in fractions of the
 frame, \-0.5..0.5;
 .BI \-\-radialsize " R"
 is its radius in half-diagonals, 0.05..1 (0 means 0.35).
+.SS The tone equalizer
+Four bands on the scale of scene brightness, as a parametric equalizer
+has bands on the scale of pitch: each lifts or cuts the tones near its
+center and fades to either side. It acts on the light after
+.B \-\-ev
+and before the film, as a gain found from a pixel's luminance and applied
+to its three colors alike, so it shifts no hue. A flat band changes
+nothing wherever it sits.
+.TP
+.BI \-\-tone1 " STOPS\fR, " \-\-tone2 " STOPS\fR, " \-\-tone3 " STOPS\fR, " \-\-tone4 " STOPS"
+The band's lift (+) or cut (\-) at its center, \-2..2.
+.TP
+.BI \-\-tone1at " N\fR, " \-\-tone2at " N\fR, " \-\-tone3at " N\fR, " \-\-tone4at " N"
+The band's center in stops from middle gray, \-8..4. The bands rest at
+\-4, \-2, 0 and 2: deep shadows, shadows, middle tones, highlights.
+.TP
+.BI \-\-tone1width " N\fR, " \-\-tone2width " N\fR, " \-\-tone3width " N\fR, " \-\-tone4width " N"
+The band's width in stops, 0.3..3 (default 1).
+.PP
+A lift too large for its width would reverse the tones, a darker one
+coming out brighter than a lighter one, so a band is held to 1.48 stops
+per stop of width.
+.B polajuice curves \-\-table
+prints the resulting tone curve and says when a band was held. On the
+page of
+.B polajuice serve
+the bands are handles on the curve.
 .SS Lens and framing
 Applied to the input before everything else, in one resampling.
 .TP

@@ -419,13 +419,99 @@ def diagram_histogram(work):
     s.save("histogram.svg")
 
 
+def diagram_tone_eq(work):
+    """The tone equalizer: the bands as bells, and what they do to the curve."""
+    bands = [(1, 1.2, -4.0, 1.5), (4, -0.7, 2.0, 1.0)]          # band, lift, center, width
+    args = []
+    for i, g, at, w in bands:
+        args += ["--tone%d" % i, str(g), "--tone%dat" % i, str(at), "--tone%dwidth" % i, str(w)]
+    env = dict(os.environ)
+    env["POLAJUICE_FILMS"] = os.path.join(work, ".nofilms")
+    r = subprocess.run([POLAJUICE, "curves", "-c", "35mm-slide", "--no-film", "--table"] + args,
+                       cwd=work, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if r.returncode != 0:
+        fail("tone curve table failed: " + r.stderr)
+    rows = []
+    for line in r.stdout.split("\n"):
+        f = line.split()
+        if len(f) == 3 and f[0][0] in "+-":
+            try:
+                rows.append((float(f[0]), float(f[1]), float(f[2])))
+            except ValueError:
+                pass
+    if len(rows) < 10:
+        fail("tone curve table not understood")
+    s = Svg(760, 430)
+    s.text(20, 24, "The tone equalizer: two bands, and what they do to the curve", 15, weight="bold")
+    L, W = 70, 430
+    x_lo, x_hi = -9.0, 2.5
+    X = lambda x: L + W * (x - x_lo) / (x_hi - x_lo)
+    # upper panel: the curve
+    T, H = 44, 210
+    for x in range(-9, 3):
+        s.line(X(x), T, X(x), T + H, "#b9b8b0" if x == 0 else GRID)
+    for j in range(5):
+        s.line(L, T + H * j / 4, L + W, T + H * j / 4, GRID)
+    s.text(L - 8, T + 6, "white", 11, MUTED, "end")
+    s.text(L - 8, T + H, "black", 11, MUTED, "end")
+    s.path([(X(x), T + H * (1 - a)) for x, a, b in rows], MUTED, 1.4, "5 4")
+    s.path([(X(x), T + H * (1 - b)) for x, a, b in rows], BLUE, 2.2)
+
+    def level(x, col):
+        for k in range(1, len(rows)):
+            if rows[k][0] >= x:
+                t = (x - rows[k - 1][0]) / (rows[k][0] - rows[k - 1][0])
+                return rows[k - 1][col] + t * (rows[k][col] - rows[k - 1][col])
+        return rows[-1][col]
+    for i, g, at, w in bands:
+        cx, cy = X(at), T + H * (1 - level(at, 2))
+        s.line(max(L, X(at - w)), cy, min(L + W, X(at + w)), cy, INK, 1.2)
+        s.out.append('<circle cx="%.1f" cy="%.1f" r="9" fill="%s" stroke="%s" stroke-width="1.6"/>' % (cx, cy, SURFACE, INK))
+        s.text(cx, cy + 4, str(i), 11, anchor="middle", weight="bold")
+    # lower panel: the bells, in stops of lift
+    T2, H2 = 300, 80
+    zero = T2 + H2 / 2
+    for x in range(-9, 3):
+        s.line(X(x), T2, X(x), T2 + H2, "#b9b8b0" if x == 0 else GRID)
+        if x % 2 == 0 or x == 0:
+            s.text(X(x), T2 + H2 + 16, "%+d" % x if x else "0", 11, MUTED, "middle")
+    s.line(L, zero, L + W, zero, MUTED, 1.0)
+    for v in (1, -1):
+        s.text(L - 8, zero - v * H2 / 3 + 4, "%+d" % v, 11, MUTED, "end")
+    s.text(L - 8, zero + 4, "0", 11, MUTED, "end")
+    xs = [x_lo + (x_hi - x_lo) * k / 230 for k in range(231)]
+    bell = lambda x: sum(g * math.exp(-0.5 * ((x - at) / w) ** 2) for _, g, at, w in bands)
+    s.path([(X(x), zero - bell(x) * H2 / 3) for x in xs], ORANGE, 2.0)
+    for i, g, at, w in bands:
+        s.text(X(at), zero - g * H2 / 3 + (-8 if g > 0 else 16), "band %d" % i, 11, anchor="middle", weight="bold")
+    s.text(L + W / 2, T2 + H2 + 34, "scene brightness in the file, stops from middle gray  →", 12, MUTED, "middle")
+    s.text(L, T2 - 8, "what the bands add, in stops", 11, MUTED)
+    # the legend and the reading, at the right
+    x = 525
+    s.line(x, 62, x + 36, 62, MUTED, 1.4, "5 4")
+    s.text(x + 44, 66, "the film alone", 12)
+    s.line(x, 86, x + 36, 86, BLUE, 2.2)
+    s.text(x + 44, 90, "with the two bands", 12)
+    s.line(x, 110, x + 36, 110, ORANGE, 2.0)
+    s.text(x + 44, 114, "the bands themselves", 12)
+    for k, t in enumerate(["Band 1 lifts the deep shadows:", "+1.2 stops, centered four stops",
+                           "under middle gray, 1.5 stops", "wide. Band 4 cuts the highlights:",
+                           "-0.7 stops, two stops over, one", "wide.", "",
+                           "Each handle sits on the curve at", "its band's center; the bar through",
+                           "it is the band's width. Between", "the bands the curve is untouched."]):
+        s.text(x, 150 + k * 17, t, 11, MUTED)
+    s.text(x, 356, "--tone1 1.2 --tone1width 1.5", 10)
+    s.text(x, 371, "--tone4 -0.7", 10)
+    s.save("tone-eq.svg")
+
+
 def diagram_pipeline():
     """The order polajuice works in."""
     s = Svg(760, 320)
     s.text(20, 24, "The order of work: light, camera, film, darkroom", 15, weight="bold")
     groups = [
         ("1  The frame", ["read: JPEG, PNG, raw…", "denoise, sharpen", "straighten, keystone", "distortion, corners", "trim, frame shape"]),
-        ("2  The scene", ["white balance", "grad, radial filter", "exposure (--ev)", "black, shadows,", "contrast; lens filter"]),
+        ("2  The scene", ["white balance", "grad, radial filter", "exposure (--ev)", "tone equalizer; black,", "shadows, contrast; filter"]),
         ("3  The camera", ["flash", "lens softness", "vignette", "halation"]),
         ("4  The film", ["color and tone:", "the film stock (-f),", "or built-in color", "edge effects", "silver grain"]),
         ("5  The darkroom", ["print stock", "push, pull, cross", "age", "classic grain", "instant-print border"]),
@@ -471,6 +557,7 @@ DIAGRAMS = {
     "stops.svg": diagram_stops, "curve.svg": diagram_curve, "bayer.svg": diagram_bayer,
     "gamma.svg": diagram_gamma, "pipeline.svg": diagram_pipeline, "formats.svg": diagram_formats,
     "histogram.svg": None,   # needs renders: drawn with the work folder
+    "tone-eq.svg": None,     # needs the engine's curve: drawn with the work folder
 }
 
 
@@ -754,6 +841,8 @@ def main():
                 fn()
         if "histogram.svg" in wanted:
             diagram_histogram(work)
+        if "tone-eq.svg" in wanted:
+            diagram_tone_eq(work)
     print("guide: %d pictures in docs/guide/img" % len(wanted))
     html_path = os.path.join(DOCS, "GUIDE.html")
     with open(html_path, "w", encoding="utf-8") as f:

@@ -46,6 +46,10 @@ render. `key=value` sources into a shell, which is why it is not JSON.
     trimh=0
     grainamount=1
     grainsize=1
+    tone1=0
+    tone1at=-4
+    tone1width=1
+    (and the same three lines for bands 2, 3 and 4)
 
 | key | values |
 |---|---|
@@ -86,9 +90,15 @@ render. `key=value` sources into a shell, which is why it is not JSON.
 | grainamount | how much grain, 0..4, a multiplier of the camera's, film's and development's own: 0 none, **1 unchanged**, 2 double |
 | grainsize | how coarse the grain, 0.5..4, a multiplier of the camera's grain size at the same strength: **1 unchanged** |
 
+| tone1, tone2, tone3, tone4 | the tone equalizer's four bands: stops of lift (+) or cut (-) at the band's center, -2..2 |
+| tone1at .. tone4at | the band's center in stops from middle gray after exposure, -8..4; **at rest -4, -2, 0 and 2** |
+| tone1width .. tone4width | the band's width in stops, 0.3..3; **at rest 1** |
+
 Every key rests at 0 except `halation`, `grainamount` and `grainsize`,
-which are multipliers and rest at 1; a recipe written before 1.32 has no
-grain keys and reads as 1 and 1.
+which are multipliers and rest at 1, and the tone bands' places and
+widths, which rest where the table says. A recipe written before 1.32
+has no grain keys and reads as 1 and 1; one written before 1.34 has no
+tone keys and reads as four flat bands.
 
 The lens profile (`--lens auto`, the page's *apply profile*) is not a
 key: it resolves to `distortion` and `devignette` values at render time,

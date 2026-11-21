@@ -59,7 +59,7 @@
 #include <unistd.h>
 
 #define MAX_HEADER 16384
-#define MAX_PARAMS 48
+#define MAX_PARAMS 96
 
 typedef struct {
     char method[8];
@@ -499,6 +499,27 @@ static PjImage *render_with_params(const Request *r, PjImage *source, size_t max
     return result;
 }
 
+/* the look's tone curve as JSON, for the page's equalizer graph: the
+ * same query as a render (no picture needed), raw=1 for a raw file */
+static void handle_tonecurve(int fd, const Request *r)
+{
+    char msg[512];
+    Look look;
+    if (!look_from_params(&look, r->params, r->nparams, "polajuice serve", msg, sizeof msg) ||
+        !look_prepare(&look, "polajuice serve", msg, sizeof msg)) {
+        respond_error(fd, 400, msg);
+        return;
+    }
+    const char *raw = param(r, "raw");
+    PjError error = {{0}};
+    char json[4096];
+    size_t n = pj_tone_curve_json(look.camera, &look.options, raw && !strcmp(raw, "1"),
+                                  json, sizeof json, &error);
+    look_release(&look);
+    if (!n) { respond_error(fd, 400, error.message); return; }
+    respond_json(fd, json);
+}
+
 static void handle_render(int fd, const Request *r)
 {
     char msg[512];
@@ -831,6 +852,7 @@ static void handle(int fd, Request *r)
     else if (!strcmp(p, "/api/develop")) handle_develop(fd, r);
     else if (!strcmp(p, "/api/stats")) handle_stats(fd, r);
     else if (!strcmp(p, "/api/render")) handle_render(fd, r);
+    else if (!strcmp(p, "/api/tonecurve")) handle_tonecurve(fd, r);
     else if (!strcmp(p, "/api/export")) handle_export(fd, r);
     else if (!strcmp(p, "/api/batch")) handle_batch(fd, r);
     else if (!strcmp(p, "/api/looks")) handle_looks(fd, r);

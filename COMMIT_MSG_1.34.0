@@ -1,0 +1,70 @@
+1.34.0: the tone equalizer
+
+The scene controls bend the tone curve in fixed ways: --ev slides it,
+--contrast turns it, --shadows lifts its left half. There was no way to
+reach one part of it and leave the rest. Now there is, built like a
+parametric equalizer in audio, on the scale of scene brightness instead
+of pitch: four bands, each a bell with a lift, a center and a width.
+
+  --tone1 .. --tone4            lift (+) or cut (-) in stops, -2..2
+  --tone1at .. --tone4at        center, stops from middle gray, -8..4
+                                (resting at -4, -2, 0, +2)
+  --tone1width .. --tone4width  width in stops, 0.3..3 (resting at 1)
+
+In stops: out = in + sum_i lift_i exp(-(in - center_i)^2 / 2 width_i^2).
+
+Where and how. After --ev, before everything else, so the film answers
+a differently lit scene and the centers follow the middle gray chosen
+with the exposure. It is a gain found from luminance and applied to R,
+G and B alike: the equalizer moves no hue (ratios unchanged to four
+digits, tested), and it does not edit a film LUT, whose "tone curve" is
+only its gray axis - it composes with it.
+
+Never reversing. A bell's steepest slope is 0.607 lift/width; past -1
+the curve folds. A band is held to 1.48 stops per stop of width, and if
+bands of opposite sign still add up to a fold all four are scaled back
+by one factor; the steepest fall keeps a tenth of the slope. Settings
+are not refused, they are held, and the holding is reported.
+
+The page. A "Tone curve" group: the look's tone curve as the engine
+computes it (new pj_tone_curve: a gray ramp through the look's color
+path), dashed with the tone controls at rest and solid as set, with the
+four bands as numbered handles on it. Drag sideways for the center, up
+and down for the lift (a stop per 28 graph units, the same everywhere,
+and no further than the width allows), wheel for the width,
+double-click to flatten; "flatten all"; the twelve values as sliders
+under "by numbers". The handles are numbered and the two curves differ
+by dash, not color. The curve comes from the engine in both modes: a
+new endpoint /api/tonecurve in serve, a "tonecurve" command in the
+wasm, toneCurve() in both JavaScript engines.
+
+Everywhere else. The twelve values are scene keys: recipes, superjuice,
+serve queries, super8ify variables (TONE1 ..), completions, and - being
+tone - exported LUTs and darktable styles. 'polajuice curves --table'
+now ends with the tone curve by numbers (output for a gray at each half
+stop, at rest and as set), the bands, and whether one was held.
+
+Flat bands are no change to the bit wherever they sit; with none set,
+output is byte-identical to 1.33.0. A recipe from before 1.34 has no
+tone keys and reads as four flat bands (the page now also resets them,
+and the grain keys, when such a recipe is loaded).
+
+Limits raised to make room for twelve more keys: recipe text buffers
+1024 -> 2048, a serve request's parameters 48 -> 96, a recipe file's
+scene keys 48 -> 64, the wasm scene string 512 -> 1536.
+
+The guide: section 6.15 with a diagram drawn from the engine's curve
+and two examples; the page, style, equivalences, limits and option
+tables updated. README: a section, and the annex says what the
+equalizer is linked to (--ev, --contrast, --shadows: by construction,
+none exactly) and that it adds freedom in the shape of one curve, not a
+dimension of color.
+
+Tests: core (keys and resting places, one band's gain against the
+formula, ratios kept, flat bands bit-identical, the curve at rest, a
+lift where the band is and nowhere far, handles shifted by exposure and
+by raw, held bands reported and still rising, the JSON); CLI (flat
+default, replay, pre-1.34 recipe, ranges, LUT carries it, the table);
+serve (render equals the CLI, the curve endpoint); wasm; page; and in a
+real browser, dragging a handle changes the recipe, the CLI line and
+the curve, and flatten all restores them.

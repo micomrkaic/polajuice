@@ -222,6 +222,29 @@ try {
   const nolens = await engine.lens({ inputBytes: jpgSrc, ext: jpgExt });
   if (nolens !== null) throw new Error("a JPEG reported a lens");
   console.log("highlight recovery and the lens query through the wasm");
+  // 1.34: the tone equalizer. Flat bands are the default wherever they sit; a
+  // lift reaches the engine; and the curve the page draws comes from the
+  // engine itself, with the bands' handles on it
+  {
+    const tbase = { inputBytes: jpgSrc, ext: jpgExt, camera: "35mm-negative", seed: 5 };
+    const tdef = await engine.render(tbase);
+    const tflat = await engine.render({ ...tbase, scene: { tone1: 0, tone2at: 1, tone3width: 2.5 } });
+    const tlift = await engine.render({ ...tbase, scene: { tone2: 1 } });
+    /* the recipes differ (the flat bands' places are written down), the pictures must not */
+    const pixels = b => { const d = Buffer.from(b); return d.subarray(d.lastIndexOf(Buffer.from([0xff, 0xda]))); };
+    if (Buffer.compare(pixels(tdef), pixels(tflat)) !== 0) throw new Error("flat tone bands changed the wasm render");
+    if (Buffer.compare(Buffer.from(tdef), Buffer.from(tlift)) === 0) throw new Error("tone2 did not reach the wasm");
+    if (!/\ntone2=1\ntone2at=-2\ntone2width=1\n/.test(new TextDecoder("latin1").decode(tlift.subarray(0, 4096)))) throw new Error("the wasm recipe lacks the tone band");
+    const rest = await engine.toneCurve({ camera: "35mm-negative" });
+    if (rest.n !== 97 || rest.ref.length !== 97 || rest.live.length !== 97 || rest.handles.length !== 4) throw new Error("tone curve shape");
+    if (rest.ref.some((v, i) => v !== rest.live[i]) || rest.limit !== 1 || rest.shift !== 0) throw new Error("tone curve at rest: the two lines differ");
+    if (rest.handles.map(h => h[0]).join() !== "-4,-2,0,2") throw new Error("tone handles at rest: " + rest.handles);
+    const set = await engine.toneCurve({ camera: "35mm-negative", ev: 0.5, raw: true, scene: { tone2: 1, tone3: -2, tone3width: 0.3 } });
+    if (set.shift !== 1.5 || set.handles[1][0] !== -3.5) throw new Error("tone curve shift: " + set.shift + " " + set.handles[1]);
+    if (!(set.limit < 1)) throw new Error("a band too steep for its width was not reported as held");
+    for (let i = 1; i < set.n; ++i) if (set.live[i] < set.live[i - 1] - 1e-3) throw new Error("tone curve reverses at " + i);
+    console.log("tone equalizer through the wasm (flat is the default, the curve and its handles from the engine)");
+  }
   // 1.32: grain amount and size. They rest at 1, and amount 0 is "no grain",
   // which must reach the engine rather than be dropped as an unset key
   {

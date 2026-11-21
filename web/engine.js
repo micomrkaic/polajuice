@@ -15,10 +15,14 @@ import { WASI, WASIProcExit, File, PreopenDirectory, ConsoleStdout }
 export const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
                            "radial", "radialx", "radialy", "radialsize",
                            "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
-                           "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize"];
+                           "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize",
+                           "tone1", "tone1at", "tone1width", "tone2", "tone2at", "tone2width",
+                           "tone3", "tone3at", "tone3width", "tone4", "tone4at", "tone4width"];
 /* the value at which a key changes nothing: 0, but the multipliers rest at 1
  * (and grainamount=0 is a setting - no grain - not the absence of one) */
-export const SCENE_NEUTRAL = { grainamount: 1, grainsize: 1 };
+export const SCENE_NEUTRAL = { grainamount: 1, grainsize: 1,
+                               tone1at: -4, tone2at: -2, tone3at: 0, tone4at: 2,
+                               tone1width: 1, tone2width: 1, tone3width: 1, tone4width: 1 };
 export const sceneNeutral = k => SCENE_NEUTRAL[k] ?? 0;
 const sceneSet = (scene, k) => scene[k] !== undefined && scene[k] !== null && scene[k] !== "" &&
                                Number.isFinite(Number(scene[k])) && Number(scene[k]) !== sceneNeutral(k);
@@ -105,13 +109,21 @@ async function run(args, workFiles) {
             if (r.code !== 0) throw new Error(r.stderr.trim() || `lens failed (${r.code})`);
             try { return JSON.parse(r.stdout.trim()); } catch (e) { return null; }
         },
+        /* The look's tone curve, for the equalizer's graph: the options of
+         * render (no picture), raw true for a raw file. {x0, x1, n, ref[],
+         * live[], handles[[x,y]..], limit, shift}: see pj_tone_curve_json. */
+        async toneCurve(o) {
+            const r = await this.render({ ...o, inputBytes: null, toneCurve: true });
+            return JSON.parse(r);
+        },
         async render({ inputBytes, ext, camera, cubeText, filmProcess = null,
                        filmStem = null, printCubeText = null, filter = null,
                        strength = 1.0, seed = 42, age = 0, develop = "normal",
                        maxDim = 0, grainModel = "classic", edge = 0,
-                       ev = 0, halation = 1, printStem = null, crop = "camera", scene = null }) {
+                       ev = 0, halation = 1, printStem = null, crop = "camera", scene = null,
+                       toneCurve = false, raw = false }) {
             const inName = "in." + inputExtension(ext);
-            const workFiles = { [inName]: inputBytes };
+            const workFiles = toneCurve ? {} : { [inName]: inputBytes };
             let filmArg = "-";
             if (cubeText != null) {
                 workFiles["film.cube"] = new TextEncoder().encode(cubeText);
@@ -123,7 +135,7 @@ async function run(args, workFiles) {
                 printArg = "work/print.cube";
             }
             const r = await run(
-                ["render", "work/" + inName, camera, filmArg,
+                [toneCurve ? "tonecurve" : "render", toneCurve ? (raw ? "raw" : "display") : "work/" + inName, camera, filmArg,
                  filmProcess || "-", filmStem || "-", printArg,
                  filter || "-",
                  String(strength), String(seed >>> 0), String(age),
@@ -133,6 +145,7 @@ async function run(args, workFiles) {
                  crop || "camera", sceneArg(scene)], workFiles);
             if (r.code !== 0)
                 throw new Error(r.stderr.trim() || `render failed (${r.code})`);
+            if (toneCurve) return r.stdout.trim();
             const out = r.files.get("out.jpg");
             if (!out) throw new Error("render produced no output");
             return out.data;
@@ -203,6 +216,9 @@ export function createNativeEngine(base, info) {
             else r = await fetch(api("/api/render", { ...params, ext: o.ext || "jpg" }),
                                  { method: "POST", body: o.inputBytes });
             return new Uint8Array(await (await expectOk(r)).arrayBuffer());
+        },
+        async toneCurve(o) {
+            return (await expectOk(await fetch(api("/api/tonecurve", { ...lookParams(o), raw: o.raw ? 1 : 0 })))).json();
         },
         async develop(o) {
             const params = { max: o.maxDim || 0 };

@@ -197,6 +197,26 @@ elems["camera"].value = "35mm-slide";
 elems["camera"].handlers["change"]();
 if (elems["develop"].options.find(o => o.value === "cross").disabled) throw new Error("cross stuck disabled on a color camera");
 console.log("1.27 controls present; keys in the recipe and CLI line; cross disabled on B&W");
+// 1.34: the tone equalizer. Twelve sliders behind the graph; flat bands stay
+// off the CLI line wherever they sit only if untouched; a lift is carried
+for (let i = 1; i <= 4; ++i) for (const s of ["", "at", "width"]) if (!elems[`tone${i}${s}`]) throw new Error(`tone${i}${s} control absent`);
+if (!elems["tonegraph"] || !elems["tonegraph"].handlers["pointerdown"]) throw new Error("tone graph not wired");
+if (/--tone\d/.test(elems["cli"].textContent)) throw new Error("CLI line names the tone bands at rest: " + elems["cli"].textContent);
+if (!/\ntone1=0\ntone1at=-4\ntone1width=1\n/.test(elems["recipe"].value)) throw new Error("recipe at rest lacks the tone bands:\n" + elems["recipe"].value);
+/* the stand-in sliders start empty; the curve wants numbers where the real ones have them */
+for (const [id, v] of [["ev", "0"], ["strength", "1"], ["age", "0"], ["edge", "0"], ["halation", "1"], ["develop", "normal"], ["grain", "classic"]])
+  if (elems[id].value === "") elems[id].value = v;
+elems["tone2"].value = "0.75"; elems["tone2at"].value = "-1.5";
+elems["tone2"].handlers["input"]();
+await new Promise(r => setTimeout(r, 500));
+if (!/--tone2 0\.75 --tone2at -1\.5\b/.test(elems["cli"].textContent)) throw new Error("CLI line lacks the tone band: " + elems["cli"].textContent);
+if (!/\ntone2=0\.75\ntone2at=-1\.5\n/.test(elems["recipe"].value)) throw new Error("recipe lacks the tone band:\n" + elems["recipe"].value);
+if (elems["tone2val"].textContent !== "+0.75 at -1.5, 1.00 wide") throw new Error("tone band label: " + elems["tone2val"].textContent);
+if (!/data-band="2"/.test(elems["tonegraph"].innerHTML || "") || !/<path /.test(elems["tonegraph"].innerHTML)) throw new Error("tone graph not drawn from the engine's curve");
+elems["tonereset"].handlers["click"]();
+await new Promise(r => setTimeout(r, 300));
+if (elems["tone2"].value !== "0" || elems["tone2at"].value !== "-2") throw new Error("flatten all left band 2 at " + elems["tone2"].value + " / " + elems["tone2at"].value);
+console.log("tone equalizer: twelve controls, graph drawn from the engine, lift carried to the CLI line and recipe, flatten all");
 // 1.32: grain amount and size. At rest (1 and 1) they stay off the CLI
 // line; amount 0 is a setting and must appear, in the line and the recipe
 for (const id of ["grainamount", "grainsize"]) if (!elems[id]) throw new Error(id + " control absent");

@@ -40,6 +40,8 @@
 #                                   --temp etc.; only set ones are passed
 #   GRAINAMOUNT [1]                 how much grain: 0 none, 1 the camera's
 #                                   own, 2 double (0..4)
+#   TONE1..TONE4, TONE1AT.., TONE1WIDTH..   the tone equalizer's four
+#                                   bands, as polajuice's --tone1 etc.
 #   GRAINSIZE   [1]                 how coarse: 1 the camera's own, 2 twice
 #                                   the size at the same strength (0.5..4)
 #   MOTION   [1]                   gate weave / flicker scale: 0.5 steadier,
@@ -76,7 +78,8 @@ SET_DEVELOP=${DEVELOP+x}; SET_CROP=${CROP+x}
 scene_args() {
     for k in TEMP TINT BLACK SHADOWS HIGHLIGHTS CONTRAST GRAD GRADANGLE GRADPOS RADIAL RADIALX RADIALY RADIALSIZE \
              DENOISE SHARPEN DISTORTION DEVIGNETTE ROTATE KEYSTONEV KEYSTONEH TRIMX TRIMY TRIMW TRIMH \
-             GRAINAMOUNT GRAINSIZE; do
+             GRAINAMOUNT GRAINSIZE \
+             TONE1 TONE1AT TONE1WIDTH TONE2 TONE2AT TONE2WIDTH TONE3 TONE3AT TONE3WIDTH TONE4 TONE4AT TONE4WIDTH; do
         eval "v=\${$k+x}"
         if [ -n "$v" ]; then
             eval "val=\$$k"

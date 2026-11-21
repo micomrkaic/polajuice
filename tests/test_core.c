@@ -1052,7 +1052,7 @@ int main(void)
             assert(pj_scene_set(&t, "gradangle", "270") && t.grad_angle == 270.0f);
             assert(!pj_scene_set(&t, "temp", "3") && !pj_scene_set(&t, "grad", "-1") && !pj_scene_set(&t, "black", "x"));
             assert(pj_scene_get(&t, "temp") == 0.5f);
-            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 27);
+            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 39);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\ntemp=0.5\n") && strstr(text, "\ngradangle=270\n") && strstr(text, "\ngrad=0\n"));
@@ -1255,7 +1255,7 @@ int main(void)
             assert(pj_scene_set(&t, "rotate", "-3.5") && t.rotate == -3.5f);
             assert(pj_scene_set(&t, "trimw", "0.5") && t.trim_w == 0.5f);
             assert(!pj_scene_set(&t, "rotate", "20") && !pj_scene_set(&t, "distortion", "0.5"));
-            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 27);
+            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 39);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\nrotate=-3.5\n") && strstr(text, "\ntrimw=0.5\n") && strstr(text, "\ndenoise=0\n"));
@@ -1408,6 +1408,86 @@ int main(void)
                 pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
                 assert(strstr(text, "\nkeystonev=0.5\n") && strstr(text, "\nradial=-1\n") && strstr(text, "\nrecover=1\n") && strstr(text, "\nsharpen=0\n"));
             }
+            /* 1.34: the tone equalizer. Four bells on the scale of scene
+             * brightness in stops; a gain from luminance on all three
+             * channels. Flat bands change nothing wherever they sit */
+            {
+                PjRenderOptions t = {0};
+                char text[2048];
+                pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
+                assert(strstr(text, "\ntone1=0\ntone1at=-4\ntone1width=1\n") && strstr(text, "\ntone4=0\ntone4at=2\ntone4width=1\n"));
+                assert(pj_scene_get(&t, "tone2at") == -2.0f && pj_scene_get(&t, "tone3at") == 0.0f && pj_scene_get(&t, "tone3width") == 1.0f);
+                assert(pj_scene_set(&t, "tone3", "0.75") && t.tone_gain[2] == 0.75f);
+                assert(pj_scene_set(&t, "tone3at", "1.5") && t.tone_at[2] == 1.5f);          /* 1.5 less its rest at 0 */
+                assert(pj_scene_set(&t, "tone1at", "-5") && t.tone_at[0] == -1.0f);         /* -5 less its rest at -4 */
+                assert(pj_scene_set(&t, "tone3width", "2") && t.tone_width[2] == 1.0f);
+                assert(pj_scene_get(&t, "tone1at") == -5.0f && pj_scene_get(&t, "tone3width") == 2.0f);
+                assert(!pj_scene_set(&t, "tone1", "2.5") && !pj_scene_set(&t, "tone1at", "5") && !pj_scene_set(&t, "tone1width", "0.2"));
+                assert(!pj_scene_set(&t, "tone5", "1") && !pj_scene_set(&t, "tone0", "1") && !pj_scene_set(&t, "tone1x", "1"));
+
+                /* on its own (strength 0: the look out of the way), one band:
+                 * a color keeps its ratios and gains what the bell says */
+                PjImage *px = pj_image_new(8, 8, &error);
+                assert(px);
+                float *q = pj_image_pixels(px);
+                for (int i = 0; i < 64; ++i) { q[i * 3] = 0.2f; q[i * 3 + 1] = 0.1f; q[i * 3 + 2] = 0.05f; }
+                PjRenderOptions flat = {.seed = 3, .strength = 0.0f, .crop = PJ_CROP_FULL};
+                PjRenderOptions one = flat;
+                assert(pj_scene_set(&one, "tone3", "1"));                 /* +1 stop, centered on middle gray, 1 wide */
+                PjImage *a0 = pj_render(px, "35mm-negative", &flat, &error);
+                PjImage *a1 = pj_render(px, "35mm-negative", &one, &error);
+                assert(a0 && a1);
+                const float *p0 = pj_image_pixels(a0), *p1 = pj_image_pixels(a1);
+                double lum = 0.2126 * 0.2 + 0.7152 * 0.1 + 0.0722 * 0.05, xs = log2(lum / 0.18);
+                double want = pow(2.0, exp(-0.5 * xs * xs));
+                assert(fabs(p1[0] / p0[0] - want) < 0.01 * want);
+                assert(fabs(p1[0] / p0[0] - p1[1] / p0[1]) < 1e-4 && fabs(p1[1] / p0[1] - p1[2] / p0[2]) < 1e-4);
+                /* a flat band moved and widened is still no change, to the bit */
+                PjRenderOptions moved = flat;
+                assert(pj_scene_set(&moved, "tone2at", "1") && pj_scene_set(&moved, "tone2width", "2.5"));
+                PjImage *a2 = pj_render(px, "35mm-negative", &moved, &error);
+                assert(a2 && !memcmp(pj_image_pixels(a2), p0, 64 * 3 * sizeof(float)));
+                pj_image_free(a0); pj_image_free(a1); pj_image_free(a2); pj_image_free(px);
+
+                /* the curve: at rest the two lines are one; a lift raises the
+                 * line near its band and nowhere far from it; and whatever is
+                 * asked for, brighter in never comes out darker */
+                enum { N = 93 };          /* -9 .. 2.5 in eighths of a stop */
+                float rest[N], live[N], handles[PJ_TONE_BANDS][2], limit = 0.0f;
+                PjRenderOptions c = {.seed = 1, .strength = 1.0f};
+                assert(pj_tone_curve("35mm-slide", &c, false, N, -9.0f, 2.5f, rest, live, handles, &limit, &error));
+                assert(limit == 1.0f && !memcmp(rest, live, sizeof rest));
+                assert(handles[0][0] == -4.0f && handles[1][0] == -2.0f && handles[2][0] == 0.0f && handles[3][0] == 2.0f);
+                for (int i = 1; i < N; ++i) assert(rest[i] >= rest[i - 1] - 1e-4f);
+                assert(pj_scene_set(&c, "tone2", "1"));                   /* +1 stop at -2 */
+                assert(pj_tone_curve("35mm-slide", &c, false, N, -9.0f, 2.5f, rest, live, handles, &limit, &error));
+                int at_band = (int)lrintf((-2.0f + 9.0f) * 8.0f), far = (int)lrintf((2.0f + 9.0f) * 8.0f);
+                assert(live[at_band] > rest[at_band] + 0.05f && fabsf(live[far] - rest[far]) < 0.002f && limit == 1.0f);
+                assert(fabsf(handles[1][1] - live[at_band]) < 0.002f);
+                /* exposure slides the picture under the bands: the handle sits
+                 * a stop lower on the file's scale, and a raw file one more */
+                c.ev = 1.0f;
+                assert(pj_tone_curve("35mm-slide", &c, false, N, -9.0f, 2.5f, rest, live, handles, &limit, &error));
+                assert(handles[1][0] == -3.0f);
+                assert(pj_tone_curve("35mm-slide", &c, true, N, -9.0f, 2.5f, rest, live, handles, &limit, &error));
+                assert(handles[1][0] == -4.0f);
+                c.ev = 0.0f;
+                /* too much for its width: held, reported, still rising */
+                assert(pj_scene_set(&c, "tone2", "2") && pj_scene_set(&c, "tone2width", "0.3"));
+                assert(pj_scene_set(&c, "tone3", "-2") && pj_scene_set(&c, "tone3at", "-1.4") && pj_scene_set(&c, "tone3width", "0.3"));
+                assert(pj_tone_curve("35mm-slide", &c, false, N, -9.0f, 2.5f, rest, live, handles, &limit, &error));
+                assert(limit < 0.5f && limit > 0.05f);
+                for (int i = 1; i < N; ++i) assert(live[i] >= live[i - 1] - 1e-4f);
+                /* ... and with room, exactly what was asked */
+                PjRenderOptions w = {.seed = 1, .strength = 1.0f};
+                assert(pj_scene_set(&w, "tone2", "2") && pj_scene_set(&w, "tone2width", "1.5"));
+                assert(pj_tone_curve("35mm-slide", &w, false, N, -9.0f, 2.5f, rest, live, handles, &limit, &error) && limit == 1.0f);
+                char json[4096];
+                size_t jn = pj_tone_curve_json("35mm-slide", &w, false, json, sizeof json, &error);
+                assert(jn > 500 && jn < sizeof json && json[0] == '{' && json[jn - 1] == '}');
+                assert(strstr(json, "\"n\":97") && strstr(json, "\"handles\":[[-4.0000,") && strstr(json, "\"limit\":1.0000") && strstr(json, "\"shift\":0.0000"));
+                assert(!pj_tone_curve_json("35mm-slide", &w, false, json, 200, &error));
+            }
             /* 1.32: grain amount and size. Multipliers that rest at 1, held
              * in the options less one so a zeroed struct is the camera's
              * grain; measured on a flat field against the grainless render */
@@ -1430,6 +1510,7 @@ int main(void)
                 const PjSceneKey *keys = pj_scene_keys(&nk);
                 for (size_t i = 0; i < nk; ++i) {
                     bool mult = !strcmp(keys[i].key, "grainamount") || !strcmp(keys[i].key, "grainsize");
+                    if (!strncmp(keys[i].key, "tone", 4)) continue;      /* the equalizer's own resting places: below */
                     assert(keys[i].neutral == (mult ? 1.0f : 0.0f));
                 }
 

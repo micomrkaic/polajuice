@@ -70,6 +70,25 @@ cmp -s "$TMP/clip.jpg" "$TMP/recon.jpg" && { echo "test_serve: recover=1 rendere
 ./polajuice inspect "$TMP/recon.jpg" | grep -q '^recover=1$' || { echo "test_serve: served recipe lacks recover"; exit 1; }
 ./polajuice apply "$TMP/dir/tiny.dng" -c 35mm-negative --no-film --recover 1 -o "$TMP/recon_cli.jpg" >/dev/null 2>&1
 cmp -s "$TMP/recon.jpg" "$TMP/recon_cli.jpg" || { echo "test_serve: served recover render differs from the CLI"; exit 1; }
+# 1.34: the tone equalizer. Its bands are query parameters of a render (the
+# served picture is the CLI's), and /api/tonecurve gives the look's curve
+# for the page's graph without needing a picture
+curl -s "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&max=0&tone2=1&tone2at=-1.5&tone4=-0.5" -o "$TMP/tone.jpg"
+./polajuice apply "$TMP/dir/cat.jpg" -c 35mm-negative --no-film --tone2 1 --tone2at -1.5 --tone4 -0.5 -o "$TMP/tone_cli.jpg" >/dev/null 2>&1
+cmp -s "$TMP/tone.jpg" "$TMP/tone_cli.jpg" || { echo "test_serve: served tone render differs from the CLI"; exit 1; }
+curl -s "http://127.0.0.1:$PORT/api/tonecurve?camera=35mm-negative&film=none&ev=0.5&tone2=1" > "$TMP/curve.json"
+python3 - "$TMP/curve.json" <<'PY' || { echo "test_serve: /api/tonecurve is not the curve"; cat "$TMP/curve.json"; exit 1; }
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["n"] == 97 and len(d["ref"]) == 97 and len(d["live"]) == 97 and len(d["handles"]) == 4, d.keys()
+assert d["x0"] == -9 and d["x1"] == 2.5 and d["limit"] == 1 and d["shift"] == 0.5
+assert d["handles"][1][0] == -2.5                       # band 2 at -2, less half a stop of exposure
+assert all(b >= a - 1e-3 for a, b in zip(d["live"], d["live"][1:]))
+assert max(l - r for l, r in zip(d["live"], d["ref"])) > 0.05
+PY
+curl -s "http://127.0.0.1:$PORT/api/tonecurve?camera=35mm-negative&film=none&raw=1" | grep -q '"shift":1.0000' || { echo "test_serve: raw=1 does not shift the bands a stop"; exit 1; }
+curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/tonecurve?camera=35mm-negative&film=none&tone1=9" | grep -q '^4' || { echo "test_serve: tone1=9 was accepted"; exit 1; }
+curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/tonecurve?camera=nonesuch" | grep -q '^4' || { echo "test_serve: an unknown camera gave a curve"; exit 1; }
 # 1.32: grain amount and size are query parameters; 0 is a setting (no
 # grain), not the absence of one, and the served render is the CLI's
 curl -s "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&max=0" -o "$TMP/gdef.jpg"

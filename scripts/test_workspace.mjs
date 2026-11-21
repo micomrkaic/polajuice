@@ -200,6 +200,34 @@ await page.waitForFunction(() => /\ntemp=0.6\n/.test(document.getElementById("re
 if (!/--temp 0.6/.test(await page.$eval("#cli", e => e.textContent))) fail("CLI line lacks --temp");
 await page.$eval("#temp", e => { e.value = "0"; e.dispatchEvent(new Event("input", { bubbles: true })); });
 await page.waitForFunction(() => /\ntemp=0\n/.test(document.getElementById("recipe").value), null, { timeout: 60000 });
+// 1.34: the tone equalizer. The graph is drawn from the engine's curve with
+// four numbered handles; dragging one up and sideways sets its band's lift
+// and center, re-renders, and comes back in the recipe; flatten all undoes it
+await page.waitForFunction(() => document.querySelectorAll("#tonegraph g.handle").length === 4, null, { timeout: 30000 });
+await page.$eval("#tonegraph", e => e.scrollIntoView({ block: "center" }));
+await page.waitForTimeout(300);
+{
+  /* two curves: the look with its tone controls at rest, and as set (the
+   * steps above may have left an exposure, so they need not coincide) */
+  const before = await page.$$eval("#tonegraph path", ps => ps.map(p => p.getAttribute("d")));
+  if (before.length !== 2) fail("tone graph: expected the resting and the set curve, got " + before.length + " paths");
+  const c = await page.$eval('#tonegraph g.handle[data-band="2"] circle', e => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  await page.mouse.move(c.x + 8, c.y - 12, { steps: 4 });
+  await page.mouse.move(c.x + 16, c.y - 24, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForFunction(() => {
+    const m = /\ntone2=([-0-9.]+)\ntone2at=([-0-9.]+)\n/.exec(document.getElementById("recipe").value);
+    return m && parseFloat(m[1]) > 0.3 && parseFloat(m[2]) > -2 && /rendered in/.test(document.getElementById("status").textContent);
+  }, null, { timeout: 60000 });
+  if (!/--tone2 [0-9.]+ --tone2at -[0-9.]+/.test(await page.$eval("#cli", e => e.textContent))) fail("CLI line lacks the dragged tone band");
+  await page.waitForFunction(was => { const p = document.querySelectorAll("#tonegraph path"); return p.length === 2 && p[0].getAttribute("d") === was[0] && p[1].getAttribute("d") !== was[1]; }, before, { timeout: 30000 });
+  if (!/^\+[0-9.]+ at -[0-9.]+, 1\.00 wide$/.test(await page.$eval("#tone2val", e => e.textContent))) fail("tone band label: " + await page.$eval("#tone2val", e => e.textContent));
+  await page.click("#tonereset");
+  await page.waitForFunction(() => /\ntone2=0\ntone2at=-2\ntone2width=1\n/.test(document.getElementById("recipe").value) && /rendered in/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+  await page.waitForFunction(was => { const p = document.querySelectorAll("#tonegraph path"); return p.length === 2 && p[1].getAttribute("d") === was[1]; }, before, { timeout: 30000 });
+}
 // 1.32: the grain sliders rest at 1; amount 0 is a setting, shown as "none",
 // and comes back in the recipe of the render it made
 if (!/\ngrainamount=1\ngrainsize=1\n/.test(await page.$eval("#recipe", e => e.value))) fail("recipe at rest lacks grainamount=1, grainsize=1");
@@ -323,4 +351,4 @@ const real = errors.filter(e => !/404/.test(e));
 if (real.length) fail("page errors: " + real.join(" | "));
 await browser.close();
 server.close();
-console.log("workspace in Chromium ok: render, recipe from the JPEG, live re-render, A/B, histogram, clipping, wipe, bracket, loupe, kept looks");
+console.log("workspace in Chromium ok: render, recipe from the JPEG, live re-render, A/B, histogram, clipping, wipe, bracket, loupe, tone equalizer, kept looks");

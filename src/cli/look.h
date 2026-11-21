@@ -14,7 +14,7 @@ typedef struct {
     /* resolved by look_prepare */
     PjLut3D *color_lut, *print_lut;
     char film_stem[256], print_stem[256];
-    char recipe[1024];
+    char recipe[2048];
     /* storage for look_from_params */
     char camera_buf[64], film_buf[256], print_buf[256], filter_buf[32], grain_buf[16];
 } Look;

@@ -126,13 +126,16 @@ static int render(int argc, char **argv)
         const char *at = strstr(argv[21], "recover=");
         if (at && (at == argv[21] || at[-1] == ',')) pj_raw_set_recover(strtof(at + 8, NULL));
     }
-    PjImage *image = pj_image_load(in_path, &error);
+    /* "tonecurve" takes render's arguments and no picture: IN is "raw" or
+     * "display", and the look's tone curve goes to stdout as JSON */
+    const bool curve = !strcmp(argv[1], "tonecurve");
+    PjImage *image = curve ? pj_image_new(1, 1, &error) : pj_image_load(in_path, &error);
     if (!image) {
         pj_lut3d_free(lut);
         fprintf(stderr, "%s\n", error.message);
         return 1;
     }
-    image = pj_image_downscale(image, max_dim, &error);
+    if (!curve) image = pj_image_downscale(image, max_dim, &error);
     if (!image) {
         pj_lut3d_free(lut);
         fprintf(stderr, "%s\n", error.message);
@@ -176,7 +179,7 @@ static int render(int argc, char **argv)
     }
     /* scene adjustments as "key=value,key=value" ("-" for none) */
     if (strcmp(argv[21], "-")) {
-        char buf[512];
+        char buf[1536];
         snprintf(buf, sizeof buf, "%s", argv[21]);
         /* a hand-rolled split: WASI libc builds strictly, without strtok_r */
         char *tok = buf;
@@ -195,6 +198,14 @@ static int render(int argc, char **argv)
             tok = next;
         }
     }
+    if (curve) {
+        static char json[4096];
+        size_t n = pj_tone_curve_json(camera, &options, !strcmp(in_path, "raw"), json, sizeof json, &error);
+        pj_image_free(image); pj_lut3d_free(lut); pj_lut3d_free(print_lut);
+        if (!n) { fprintf(stderr, "%s\n", error.message); return 1; }
+        printf("%s\n", json);
+        return 0;
+    }
     PjGeometry geom;
     pj_render_geometry_opt(camera, pj_image_width(image), pj_image_height(image), &options, &geom);
     PjImage *result = pj_render(image, camera, &options, &error);
@@ -206,7 +217,7 @@ static int render(int argc, char **argv)
      * back from the bytes, so the engine is the one source of its text;
      * after it, where the picture landed, for the page's wipe */
     {
-        char recipe[1200];
+        char recipe[2400];
         size_t n = pj_recipe_format(camera, lut ? options.film_stem : "none", print_stem,
                                     &options, recipe, sizeof recipe);
         if (n < sizeof recipe) pj_geometry_format(&geom, recipe + n, sizeof recipe - n);
@@ -268,7 +279,7 @@ int main(int argc, char **argv)
         printf("%s\n", pj_version_string());
         return 0;
     }
-    if (argc >= 2 && !strcmp(argv[1], "render")) return render(argc, argv);
+    if (argc >= 2 && (!strcmp(argv[1], "render") || !strcmp(argv[1], "tonecurve"))) return render(argc, argv);
     fprintf(stderr, "modes: --list-cameras | --version | render ... | develop ... | lens IN\n");
     return 2;
 }

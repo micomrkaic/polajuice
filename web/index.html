@@ -41,6 +41,21 @@
           font:inherit; font-size:0.9rem; border:1px solid var(--line); background:white; }
   input[type=range] { width:100%; margin:0.1rem 0 0; accent-color:var(--accent); }
   .cubeload { font-size:0.75rem; color:var(--muted); margin-top:0.3rem; }
+  #tonegraph { display:block; width:100%; height:auto; background:white; border:1px solid var(--line);
+               touch-action:none; user-select:none; cursor:default; }
+  #tonegraph text { font:9px ui-monospace,Menlo,monospace; fill:var(--muted); }
+  #tonegraph .handle text { font:bold 10px ui-monospace,Menlo,monospace; fill:var(--ink); pointer-events:none; }
+  #tonegraph .handle circle { fill:white; stroke:var(--ink); stroke-width:1.5; cursor:grab; }
+  #tonegraph .handle.on circle { fill:var(--ink); }
+  #tonegraph .handle.on text { fill:white; }
+  #tonegraph .handle.flat circle { stroke-dasharray:2 2; }
+  .tonenote { font-size:0.72rem; color:var(--muted); margin:0.3rem 0; line-height:1.35; }
+  .tonenote.warn { color:var(--accent); }
+  .tonenumbers summary { font-size:0.74rem; text-transform:uppercase; letter-spacing:0.08em;
+                         color:var(--muted); cursor:pointer; padding:0.2rem 0; }
+  .tonerow { display:grid; grid-template-columns:3.2rem 1fr; align-items:center; gap:0.4rem; }
+  .tonerow span { font-size:0.7rem; color:var(--muted); }
+  button.small { font-size:0.72rem; padding:0.15rem 0.5rem; background:none; color:var(--ink); }
   .cubeload input { font-size:0.72rem; max-width:100%; }
   button { font:inherit; font-size:0.85rem; padding:0.4rem 0.9rem; border:1px solid var(--ink);
            background:var(--ink); color:var(--paper); cursor:pointer; }
@@ -224,6 +239,46 @@ white.">Halation <span class="val" id="halval">1.0</span></label>
         <label for="radialsize">size</label><input id="radialsize" type="range" min="0" max="1" step="0.05" value="0">
       </div>
     </div>
+  </details>
+
+  <details class="group" open>
+    <summary>Tone curve</summary>
+    <svg id="tonegraph" viewBox="0 0 320 236" role="img" aria-label="The look's tone curve with the four bands of the tone equalizer"></svg>
+    <div class="tonenote" id="tonenote" title="The tone equalizer: four bands on the scale of scene brightness, like the
+bands of a parametric equalizer on the scale of pitch. Each lifts or cuts
+the tones near its center. It acts on the light after exposure and before
+the film, as a gain from luminance on all three colors, so it shifts no hue.
+Dashed: the film with exposure and the tone controls at rest. Solid: now.
+The bar through a handle is the band's width.">drag a handle: sideways moves the band, up and down lifts or cuts.
+      Scroll on it for width, double-click to flatten it.</div>
+    <button class="small" id="tonereset" title="All four bands flat, at their resting places">flatten all</button>
+    <details class="tonenumbers">
+      <summary>by numbers</summary>
+      <div class="field toneband">
+        <label>Band 1 <span class="val" id="tone1val">flat</span></label>
+        <div class="tonerow"><span>lift</span><input id="tone1" aria-label="band 1 lift in stops" type="range" min="-2" max="2" step="0.05" value="0"></div>
+        <div class="tonerow"><span>at</span><input id="tone1at" aria-label="band 1 center, stops from middle gray" type="range" min="-8" max="4" step="0.1" value="-4"></div>
+        <div class="tonerow"><span>width</span><input id="tone1width" aria-label="band 1 width in stops" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+      </div>
+      <div class="field toneband">
+        <label>Band 2 <span class="val" id="tone2val">flat</span></label>
+        <div class="tonerow"><span>lift</span><input id="tone2" aria-label="band 2 lift in stops" type="range" min="-2" max="2" step="0.05" value="0"></div>
+        <div class="tonerow"><span>at</span><input id="tone2at" aria-label="band 2 center, stops from middle gray" type="range" min="-8" max="4" step="0.1" value="-2"></div>
+        <div class="tonerow"><span>width</span><input id="tone2width" aria-label="band 2 width in stops" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+      </div>
+      <div class="field toneband">
+        <label>Band 3 <span class="val" id="tone3val">flat</span></label>
+        <div class="tonerow"><span>lift</span><input id="tone3" aria-label="band 3 lift in stops" type="range" min="-2" max="2" step="0.05" value="0"></div>
+        <div class="tonerow"><span>at</span><input id="tone3at" aria-label="band 3 center, stops from middle gray" type="range" min="-8" max="4" step="0.1" value="0"></div>
+        <div class="tonerow"><span>width</span><input id="tone3width" aria-label="band 3 width in stops" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+      </div>
+      <div class="field toneband">
+        <label>Band 4 <span class="val" id="tone4val">flat</span></label>
+        <div class="tonerow"><span>lift</span><input id="tone4" aria-label="band 4 lift in stops" type="range" min="-2" max="2" step="0.05" value="0"></div>
+        <div class="tonerow"><span>at</span><input id="tone4at" aria-label="band 4 center, stops from middle gray" type="range" min="-8" max="4" step="0.1" value="2"></div>
+        <div class="tonerow"><span>width</span><input id="tone4width" aria-label="band 4 width in stops" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+      </div>
+    </details>
   </details>
 
   <details class="group">
@@ -536,7 +591,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.33.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.34.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -623,10 +678,16 @@ function parseRecipe(text) {
 const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
                     "radial", "radialx", "radialy", "radialsize",
                     "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
-                    "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize"];
+                    "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize",
+                    "tone1", "tone1at", "tone1width", "tone2", "tone2at", "tone2width",
+                    "tone3", "tone3at", "tone3width", "tone4", "tone4at", "tone4width"];
 /* the value at which a key changes nothing: 0, except the multipliers,
- * which rest at 1 - and there 0 is a setting (no grain), not "unset" */
-const SCENE_NEUTRAL = { grainamount: 1, grainsize: 1 };
+ * which rest at 1 - and there 0 is a setting (no grain), not "unset" -
+ * and the tone bands' places and widths, which rest where a flat band sits */
+const TONE_REST = [-4, -2, 0, 2];
+const SCENE_NEUTRAL = { grainamount: 1, grainsize: 1,
+                        tone1at: -4, tone2at: -2, tone3at: 0, tone4at: 2,
+                        tone1width: 1, tone2width: 1, tone3width: 1, tone4width: 1 };
 const sceneNeutral = k => SCENE_NEUTRAL[k] ?? 0;
 const sceneNum = (k, v) => { const f = parseFloat(v); return Number.isFinite(f) ? f : sceneNeutral(k); };
 /* the trim is four margins in the page (left, top, right, bottom, in %)
@@ -741,6 +802,9 @@ function applyRecipe(r) {
   }
   if (r.crop !== undefined) $("crop").value = r.crop === "full" ? "full" : "camera";
   for (const k of SCENE_KEYS) if (r[k] !== undefined && !k.startsWith("trim")) $(k).value = r[k];
+  /* a whole recipe from before these keys existed: they were at rest */
+  if (r.camera !== undefined)
+    for (const k of SCENE_KEYS) if (r[k] === undefined && /^(tone|grain)/.test(k)) $(k).value = sceneNeutral(k);
   if (r.trimw !== undefined || r.trimx !== undefined) trimToControls(r);
   if (r.age !== undefined) $("age").value = r.age;
   if (r.grain !== undefined) $("grain").value = r.grain;
@@ -933,6 +997,8 @@ async function boot() {
   } catch (e) { /* no samples staged; the drop zone is enough */ }
 
   wireCustomCube();
+  toneWire();
+  scheduleTone();
   await refreshPresetList();
   refreshRecipeFromControls();
   if (engine.native) await listFolder();
@@ -1038,6 +1104,167 @@ function lookFromControls() {
 /* maxDim 0 = full size; overrides patch the look (brackets); quiet
  * skips status, caption and the recipe box (brackets, the loupe);
  * fromRecipe renders a recipe object instead of the controls (A) */
+/* a look as the engine takes it, and which engine: a custom cube is text
+ * the server has no file for, so the wasm engine takes that one;
+ * everything else goes to the engine in charge */
+async function engineLook(look) {
+  const stem = look.stem;
+  const eng = look.custom && engine.native ? wasmEngine : engine;
+  const cubeText = eng.native ? null
+                 : look.custom ? customCube.text : (stem ? await loadFilmCube(stem) : null);
+  const family = (!look.custom && stem)
+      ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
+  const filmProcess = family ? familyToken(family) : null;
+  const printCubeText = look.printStem && !eng.native ? await loadFilmCube(look.printStem) : null;
+  return { eng, look: {
+    camera: look.camera, cubeText, filmChoice: look.filmChoice,
+    filmProcess, filmStem: stem, printCubeText,
+    filter: look.filter, strength: look.strength, seed: look.seed, age: look.age,
+    develop: look.develop, grainModel: look.grainModel, edge: look.edge,
+    ev: look.ev, halation: look.halation, printStem: look.printStem, crop: look.crop,
+    scene: { ...look.scene } } };
+}
+
+/* ---- the tone equalizer --------------------------------------------- *
+ * Four bands, each a bell on the scale of scene brightness: tone<i> its
+ * lift in stops, tone<i>at its center in stops from middle gray after
+ * exposure, tone<i>width its width. The graph is the engine's own curve
+ * (pj_tone_curve): dashed, the look with exposure and the tone controls
+ * at rest; solid, as set. The handles sit on the solid curve where the
+ * bands act, on the file's own scale (center less the exposure). */
+const TG = { w: 320, h: 236, l: 8, r: 8, t: 8, b: 26 };
+const TONE_PX = 28;     /* graph units of vertical drag per stop of lift */
+let toneData = null, toneTimer = null, toneBusy = false, toneAgain = false, toneDrag = null;
+const toneClamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const toneStep = (v, step) => Math.round(v / step) * step;
+function toneBand(i) {
+  return { gain: sceneNum("tone" + i, $("tone" + i).value), at: sceneNum(`tone${i}at`, $(`tone${i}at`).value),
+           width: sceneNum(`tone${i}width`, $(`tone${i}width`).value) };
+}
+function toneSet(i, band) {
+  if (band.gain !== undefined) $("tone" + i).value = String(+toneClamp(toneStep(band.gain, 0.05), -2, 2).toFixed(2));
+  if (band.at !== undefined) $(`tone${i}at`).value = String(+toneClamp(toneStep(band.at, 0.1), -8, 4).toFixed(1));
+  if (band.width !== undefined) $(`tone${i}width`).value = String(+toneClamp(toneStep(band.width, 0.05), 0.3, 3).toFixed(2));
+}
+const toneX = (x, d) => TG.l + (x - d.x0) / (d.x1 - d.x0) * (TG.w - TG.l - TG.r);
+const toneY = y => TG.t + (1 - y) * (TG.h - TG.t - TG.b);
+const toneStops = (px, d) => d.x0 + (px - TG.l) / (TG.w - TG.l - TG.r) * (d.x1 - d.x0);
+function drawTone() {
+  const svg = $("tonegraph"), d = toneData;
+  if (!svg || !d) return;
+  const bottom = TG.h - TG.b, right = TG.w - TG.r;
+  let out = "";
+  for (let x = Math.ceil(d.x0); x <= d.x1; ++x) {
+    const px = toneX(x, d).toFixed(1);
+    out += `<line x1="${px}" y1="${TG.t}" x2="${px}" y2="${bottom}" stroke="${x === 0 ? "#a89f8d" : "#ece7da"}" stroke-width="1"/>`;
+    if (x % 2 === 0) out += `<text x="${px}" y="${bottom + 11}" text-anchor="middle">${x > 0 ? "+" + x : x}</text>`;
+  }
+  out += `<rect x="${TG.l}" y="${TG.t}" width="${right - TG.l}" height="${bottom - TG.t}" fill="none" stroke="#d8d2c4"/>`;
+  out += `<text x="${TG.l}" y="${TG.h - 3}">stops from middle gray, as in the file</text>`;
+  out += `<text x="${TG.l + 3}" y="${TG.t + 9}">white</text><text x="${TG.l + 3}" y="${bottom - 3}">black</text>`;
+  const path = ys => ys.map((y, i) => (i ? "L" : "M") + toneX(d.x0 + (d.x1 - d.x0) * i / (d.n - 1), d).toFixed(1) + " " + toneY(y).toFixed(1)).join("");
+  out += `<path d="${path(d.ref)}" fill="none" stroke="#7a7263" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+  out += `<path d="${path(d.live)}" fill="none" stroke="#1c1a17" stroke-width="1.8"/>`;
+  for (let i = 1; i <= 4; ++i) {
+    const band = toneBand(i), h = d.handles[i - 1];
+    const dragged = toneDrag && toneDrag.i === i;
+    const cx = dragged ? toneDrag.px : toneClamp(toneX(h[0], d), TG.l, right);
+    const cy = toneY(h[1]);
+    const half = band.width / (d.x1 - d.x0) * (right - TG.l);
+    out += `<g class="handle${dragged ? " on" : ""}${band.gain === 0 ? " flat" : ""}" data-band="${i}">` +
+           `<line x1="${Math.max(TG.l, cx - half).toFixed(1)}" y1="${cy.toFixed(1)}" x2="${Math.min(right, cx + half).toFixed(1)}" y2="${cy.toFixed(1)}" stroke="#1c1a17" stroke-width="1"/>` +
+           `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="8"/>` +
+           `<text x="${cx.toFixed(1)}" y="${(cy + 3.5).toFixed(1)}" text-anchor="middle">${i}</text></g>`;
+  }
+  svg.innerHTML = out;
+  const note = $("tonenote");
+  if (d.limit < 0.999) {
+    note.textContent = "A band is lifting or cutting more than its width allows without reversing tones; its effect is held at " +
+                       Math.round(d.limit * 100) + "% of what is set. Widen it, or ask for less.";
+    note.className = "tonenote warn";
+  } else {
+    note.textContent = "drag a handle: sideways moves the band, up and down lifts or cuts. Scroll on it for width, double-click to flatten it.";
+    note.className = "tonenote";
+  }
+}
+async function refreshTone() {
+  if (!engine || !$("camera").value) return;
+  if (toneBusy) { toneAgain = true; return; }
+  toneBusy = true;
+  try {
+    const { eng, look } = await engineLook(lookFromControls());
+    toneData = await eng.toneCurve({ ...look, raw: /^(nef|dng)$/i.test(inputExt || "") });
+    drawTone();
+  } catch (e) { /* the curve is a convenience: a render reports what is wrong */ }
+  finally {
+    toneBusy = false;
+    if (toneAgain) { toneAgain = false; refreshTone(); }
+  }
+}
+function scheduleTone() {
+  if (toneTimer) clearTimeout(toneTimer);
+  toneTimer = setTimeout(() => { toneTimer = null; refreshTone(); }, 60);
+}
+function tonePoint(e) {
+  const r = $("tonegraph").getBoundingClientRect();
+  return { px: (e.clientX - r.left) / r.width * TG.w, py: (e.clientY - r.top) / r.height * TG.h };
+}
+function toneHit(p) {
+  if (!toneData) return 0;
+  let best = 0, bestD = 14 * 14;
+  for (let i = 1; i <= 4; ++i) {
+    const h = toneData.handles[i - 1];
+    const dx = toneClamp(toneX(h[0], toneData), TG.l, TG.w - TG.r) - p.px, dy = toneY(h[1]) - p.py;
+    if (dx * dx + dy * dy < bestD) { bestD = dx * dx + dy * dy; best = i; }
+  }
+  return best;
+}
+function toneWire() {
+  const svg = $("tonegraph");
+  svg.addEventListener("pointerdown", e => {
+    const p = tonePoint(e), i = toneHit(p);
+    if (!i) return;
+    e.preventDefault();
+    if (svg.setPointerCapture) svg.setPointerCapture(e.pointerId);
+    toneDrag = { i, px: p.px, py0: p.py, gain0: toneBand(i).gain };
+    drawTone();
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!toneDrag || !toneData) return;
+    const p = tonePoint(e), d = toneData;
+    toneDrag.px = toneClamp(p.px, TG.l, TG.w - TG.r);
+    /* sideways: the band's center, on the scale after exposure. Up and
+     * down: a stop of lift for every TONE_PX of travel, the same
+     * everywhere on the curve, and no further than the band's width
+     * allows without reversing tones (1.48 stops per stop of width) */
+    const most = Math.min(2, 1.48 * toneBand(toneDrag.i).width);
+    toneSet(toneDrag.i, { at: toneStops(toneDrag.px, d) + d.shift,
+                          gain: toneClamp(toneDrag.gain0 + (toneDrag.py0 - p.py) / TONE_PX, -most, most) });
+    drawTone();
+    onControlChange();
+  });
+  const end = () => { if (toneDrag) { toneDrag = null; drawTone(); scheduleTone(); } };
+  svg.addEventListener("pointerup", end);
+  svg.addEventListener("pointercancel", end);
+  svg.addEventListener("wheel", e => {
+    const i = toneHit(tonePoint(e));
+    if (!i) return;
+    e.preventDefault();
+    toneSet(i, { width: toneBand(i).width * (e.deltaY < 0 ? 1.12 : 1 / 1.12) });
+    onControlChange();
+  }, { passive: false });
+  svg.addEventListener("dblclick", e => {
+    const i = toneHit(tonePoint(e));
+    if (!i) return;
+    toneSet(i, { gain: 0, at: TONE_REST[i - 1], width: 1 });
+    onControlChange();
+  });
+  $("tonereset").addEventListener("click", () => {
+    for (let i = 1; i <= 4; ++i) toneSet(i, { gain: 0, at: TONE_REST[i - 1], width: 1 });
+    onControlChange();
+  });
+}
+
 async function render(maxDim, overrides, quiet, fromRecipe) {
   if ((!inputBytes && !inputServerName) || !engine) return null;
   overrides = overrides || {};
@@ -1048,28 +1275,11 @@ async function render(maxDim, overrides, quiet, fromRecipe) {
     /* the contact sheet overrides the stock: a library film, never the custom cube */
     if (overrides.film) { look.stem = look.filmStem = overrides.film; look.filmChoice = "stem"; look.custom = false; delete overrides.film; }
     const stem = look.stem;
-    /* a custom cube is text the server has no file for: the wasm engine
-     * takes that render; everything else goes to the engine in charge */
-    let eng = engine;
-    if (look.custom && engine.native) {
-      eng = wasmEngine;
-      if (!inputBytes) inputBytes = new Uint8Array(await (await fetch(engine.fileUrl(inputServerName))).arrayBuffer());
-    }
-    const cubeText = eng.native ? null
-                   : look.custom ? customCube.text : (stem ? await loadFilmCube(stem) : null);
-    const family = (!look.custom && stem)
-        ? filmFamilies.find(f => f.stocks.some(s => s.stem === stem)) : null;
-    const filmProcess = family ? familyToken(family) : null;
-    const printCubeText = look.printStem && !eng.native ? await loadFilmCube(look.printStem) : null;
+    const { eng, look: lookParams } = await engineLook(look);
+    if (eng !== engine && !inputBytes)
+      inputBytes = new Uint8Array(await (await fetch(engine.fileUrl(inputServerName))).arrayBuffer());
     const t0 = performance.now();
-    const params = {
-      inputBytes, ext: inputExt, name: eng.native ? inputServerName : null,
-      camera: look.camera, cubeText, filmChoice: look.filmChoice,
-      filmProcess, filmStem: stem, printCubeText,
-      filter: look.filter, strength: look.strength, seed: look.seed, age: look.age,
-      develop: look.develop, maxDim, grainModel: look.grainModel, edge: look.edge,
-      ev: look.ev, halation: look.halation, printStem: look.printStem, crop: look.crop,
-      scene: { ...look.scene } };
+    const params = { inputBytes, ext: inputExt, name: eng.native ? inputServerName : null, maxDim, ...lookParams };
     /* a bracket's override of a scene key goes into the scene */
     for (const [k, v] of Object.entries(overrides))
       if (SCENE_KEYS.includes(k)) params.scene[k] = v; else params[k] = v;
@@ -1132,6 +1342,7 @@ async function renderPreview() {
 }
 
 function scheduleRender() {
+  scheduleTone();     /* the curve needs no picture */
   if (!inputBytes && !inputServerName) return;
   if (renderTimer) clearTimeout(renderTimer);
   renderTimer = setTimeout(() => { renderTimer = null; renderPreview(); }, 250);
@@ -1154,6 +1365,11 @@ function syncValueLabels() {
   $("evval").textContent = (ev > 0 ? "+" : "") + ev.toFixed(1);
   const hal = parseFloat($("halation").value);
   $("halval").textContent = hal === 0 ? "off" : hal.toFixed(1);
+  for (let i = 1; i <= 4; ++i) {
+    const b = toneBand(i);
+    $(`tone${i}val`).textContent = b.gain === 0 ? "flat"
+      : `${b.gain > 0 ? "+" : ""}${b.gain.toFixed(2)} at ${b.at > 0 ? "+" : ""}${b.at.toFixed(1)}, ${b.width.toFixed(2)} wide`;
+  }
   const ga0 = parseFloat($("grainamount").value);
   $("grainamountval").textContent = ga0 === 0 ? "none" : "×" + ga0.toFixed(1);
   $("grainsizeval").textContent = "×" + parseFloat($("grainsize").value).toFixed(1);

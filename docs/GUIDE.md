@@ -12,7 +12,7 @@ advice on style. It assumes nothing: if you have never set an exposure or
 opened a terminal, start at the top. If you have done both for decades, the
 contents will take you where you want to go.
 
-Written for polajuice 1.33 and later. The photographs are the author's own
+Written for polajuice 1.34 and later. The photographs are the author's own
 (© Mico Mrkaic, CC BY 4.0) and ship with the program.
 
 ---
@@ -1142,7 +1142,9 @@ polajuice apply DSC_0412.NEF -c 35mm-negative --recover 1 --highlights -0.5 -o p
 
 **When.** Use the film first: a different stock, a pull, or less
 exposure often solves what these five would patch. Then `--shadows` for
-the dark half, `--black` for the floor, and `--contrast` last.
+the dark half, `--black` for the floor, and `--contrast` last. When you
+need to reach one part of the tonal range and leave its neighbors alone,
+use the tone equalizer of [section 6.15](#615-the-tone-equalizer---tone1-to---tone4).
 
 ## 6.9 Lens filters: `--filter`
 
@@ -1320,6 +1322,74 @@ that look soft; rarely for JPEGs, which the camera has sharpened already.
 Soft cameras (the instant ones, the toy) blur anything you sharpen, so
 there it is wasted.
 
+## 6.15 The tone equalizer: `--tone1` to `--tone4`
+
+**What it is.** A sound engineer shapes a recording with a parametric
+equalizer: a few bands, each with a center pitch, a gain and a width,
+so that the bass can come up without touching the voice. The tone
+equalizer is the same instrument on the scale of brightness. It has four
+bands. Each lifts or cuts the tones near its center and fades away to
+either side.
+
+| Control | Range | Meaning |
+|---|---|---|
+| `--tone1`, `--tone2`, `--tone3`, `--tone4` | −2 to 2 stops | how much the band lifts (plus) or cuts (minus) at its center |
+| `--tone1at`, `--tone2at`, `--tone3at`, `--tone4at` | −8 to 4 | where the center is, in stops from middle gray |
+| `--tone1width`, `--tone2width`, `--tone3width`, `--tone4width` | 0.3 to 3 stops | how wide the band is |
+
+Left alone, the four bands sit at −4, −2, 0 and +2 stops (deep shadows,
+shadows, middle tones, highlights), one stop wide, and flat. A flat band
+does nothing wherever it sits, so you only ever need to type the bands
+you use.
+
+![Two bands of the tone equalizer and what they do to the tone curve](guide/img/tone-eq.svg)
+
+```sh
+polajuice apply street.jpg -c 35mm-slide --tone1 1.2 --tone1width 1.5 -o street-eq-shadows.jpg
+polajuice apply street.jpg -c 35mm-slide --tone1 1.2 --tone1width 1.5 --tone4 -0.7 -o street-eq-both.jpg
+```
+
+| no bands | band 1: `--tone1 1.2 --tone1width 1.5` | and band 4: `--tone4 -0.7` |
+|:-:|:-:|:-:|
+| ![No tone bands](guide/img/street-slide.jpg) | ![The deep shadows lifted](guide/img/street-eq-shadows.jpg) | ![Deep shadows lifted and highlights cut](guide/img/street-eq-both.jpg) |
+
+Band 1 has opened the doorways and the motorcycles without changing the
+sunlit facade. Compare `--shadows 1` in [section 6.8](#68-tone---black---shadows---contrast---highlights---recover),
+which lifts everything below middle gray at once. Band 4 has then pulled
+the sky and the white poster down, and nothing else.
+
+**How it works.** The equalizer acts on the light, after `--ev` and
+before the film, so the film answers a differently lit scene. A band's
+effect on a pixel is found from the pixel's brightness and applied to its
+red, green and blue alike: the equalizer itself shifts no color. The
+centers are counted after exposure, so "two stops under middle gray"
+means two stops under the middle gray you chose with `--ev`.
+
+**One limit.** A narrow band with a large lift would do more than bend
+the curve: it would fold it, making a darker tone come out brighter than
+a lighter one. A band is therefore held to 1.48 stops of lift or cut per
+stop of its width. Ask for more and you get that much; the page and
+`polajuice curves --table` say so when it happens. Widen the band, or
+ask for less.
+
+**On the page** the equalizer is a graph ([section 7.4](#74-the-workspace-page)):
+the look's tone curve with four numbered handles on it. Drag a handle
+sideways to move its band, up and down to lift or cut, scroll on it to
+change the width, and double-click it to flatten it. A dashed line shows
+the film alone, so you always see what you have changed. It is by far the
+easiest way to use it. The numbers can then be read off, or kept in a
+recipe.
+
+**When.** After exposure, white balance and the choice of film, for what
+is still wrong in one part of the range: a face a little too dark in the
+middle tones, a sky a little too bright, shadows that are empty. One or
+two bands of half a stop usually do it. If you find yourself using all
+four at more than a stop, the exposure or the film is wrong, and fixing
+that will look better. `--ev`, `--contrast` and `--shadows` are simpler
+tools for simpler jobs: all four bands raised together are an exposure
+change, and a cut on the left with a lift on the right is contrast
+([section 9.1](#91-controls-that-are-the-same-control)).
+
 # 7. Working: files, recipes, the page, movies, other programs
 
 ## 7.1 Files and names
@@ -1421,6 +1491,10 @@ What is on it:
   against.
 - **Wipe** (key `w`): two versions side by side under a divider you drag,
   aligned on the picture even when one is a cropped instant print.
+- **Tone curve**: the look's tone curve, drawn by the engine, with the
+  four bands of the tone equalizer as handles on it
+  ([section 6.15](#615-the-tone-equalizer---tone1-to---tone4)). Under it,
+  *by numbers* opens the same twelve values as sliders.
 - **Histogram and clipping**: the histogram of what is shown, the share
   of pixels clipped at white and crushed at black, and a button that
   paints them on the picture ([section 2.3](#23-the-range-of-a-scene-and-the-histogram)).
@@ -1578,7 +1652,9 @@ polajuice curves -c 35mm-slide --vs none --table
 
 `--vs FILM` overlays a second film on the same axes (`--vs none` is the
 camera's built-in color), and `--table` prints the numbers instead of, or
-as well as, drawing them.
+as well as, drawing them. The table ends with the tone curve itself: the
+output for a gray at each half stop, with the tone controls at rest and
+as set.
 
 # 8. Style
 
@@ -1600,8 +1676,9 @@ checking at the end.
    [6.13](#613-lens-corrections---distortion---devignette---lens)).
 3. **Set the light.** Exposure first, white balance second.
 4. **Choose the look.** Camera, then film. Use the contact sheet.
-5. **Shape what the look left undone.** Shadows, black, contrast; a grad
-   for the sky; a radial for the subject. Often nothing.
+5. **Shape what the look left undone.** Shadows, black, contrast, or a
+   band of the tone equalizer; a grad for the sky; a radial for the
+   subject. Often nothing.
 6. **Finish.** Development, grain, glow, age, strength.
 7. **Check.** The histogram and the clipping display; the loupe; the wipe
    against the original. Then look at it small, the size of a phone
@@ -1811,6 +1888,7 @@ this is the summary.
 | `--crop camera` | a centered trim followed by `--crop full` | to place the cut yourself, trim to the camera's shape and use `--crop full` |
 | the camera's grain, the film's, `--strength`, a push, `--grainamount` | five multipliers of one number | any of them can stand in for another; only `--grainsize` is separate |
 | a push | contrast, saturation and grain raised together | `--contrast` plus `--grainamount` gives most of it, without the color |
+| the tone equalizer, `--ev`, `--contrast`, `--shadows` | one family: all bend the same curve before the film | four bands raised together are `--ev`; a cut below and a lift above middle gray is `--contrast`; a wide lift on the left is `--shadows`. Use the equalizer for what the simpler ones cannot reach, not on top of them |
 | `--ev` and `--develop` | *not* the same | exposure moves along the film's curve; development changes the curve |
 
 Counted honestly, developing a raw file has about ten independent
@@ -1901,8 +1979,9 @@ RawTherapee collection, with rarer stocks.
 ## 9.6 What polajuice does not do
 
 By design, it is a film-look engine and not a general editor. It has no
-saturation or vibrance slider, no free-form curves, no brushes or masks
-beyond the grad and the radial, no retouching, no resizing, no layers,
+saturation or vibrance slider, no curve editor beyond the four bands of
+the tone equalizer, no separate curves for red, green and blue, no
+brushes or masks beyond the grad and the radial, no retouching, no resizing, no layers,
 no merging of exposures or panoramas, and its output is always sRGB.
 Luminance noise reduction is absent too: film grain is the intended
 answer to it.
@@ -1983,6 +2062,14 @@ recipe format.
 | `--radial` | −2 to 2 stops | 0 | radial filter: plus lightens |
 | `--radialx`, `--radialy` | −0.5 to 0.5 | 0 | its center, from the middle |
 | `--radialsize` | 0.05 to 1 | 0.35 | its radius |
+
+**The tone equalizer**
+
+| Option | Values | Default | Meaning |
+|---|---|---|---|
+| `--tone1`, `--tone2`, `--tone3`, `--tone4` | −2 to 2 stops | 0 | each band's lift (plus) or cut (minus) |
+| `--tone1at`, `--tone2at`, `--tone3at`, `--tone4at` | −8 to 4 | −4, −2, 0, 2 | each band's center, in stops from middle gray |
+| `--tone1width`, `--tone2width`, `--tone3width`, `--tone4width` | 0.3 to 3 stops | 1 | each band's width |
 
 **Lens and framing**
 

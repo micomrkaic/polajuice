@@ -148,6 +148,23 @@ static void usage(FILE *stream)
         "      --radialy Y         from the middle (default: the middle)\n"
         "      --radialsize R      its radius, 0.05..1 of the half-diagonal\n"
         "                          (default 0.35)\n"
+        "\n", stream);
+    fputs(
+        "THE TONE EQUALIZER (four bands on the scale of brightness, like the\n"
+        "bands of a parametric equalizer on the scale of pitch; after --ev,\n"
+        "before the film; a gain from luminance, so it shifts no hue)\n"
+        "      --tone1 STOPS  --tone2 STOPS  --tone3 STOPS  --tone4 STOPS\n"
+        "                          lift (+) or cut (-) at the band's center,\n"
+        "                          -2..2\n"
+        "      --tone1at N  --tone2at N  --tone3at N  --tone4at N\n"
+        "                          the center, in stops from middle gray,\n"
+        "                          -8..4 (default -4, -2, 0 and 2)\n"
+        "      --tone1width N  --tone2width N  --tone3width N  --tone4width N\n"
+        "                          how wide the band is, 0.3..3 stops (default\n"
+        "                          1). A gain too large for its width would\n"
+        "                          reverse the tones and is held to 1.48 x width\n"
+        "                          'polajuice curves' draws the result; the page\n"
+        "                          has the bands as handles on the curve\n"
         "\n"
         "LENS AND FRAMING (applied to the input first)\n"
         "      --lens auto|none    auto: a raw file's lens profile sets\n"
@@ -688,7 +705,42 @@ static int apply(int argc, char **argv)
             CurvesLook a = {name_a, cube_a, N}, b = {name_b, cube_b, N};
             if (output_given && !curves_svg(output, &a, cube_b ? &b : NULL)) goto curves_done;
             if (output_given) printf("%s\n", output);
-            if (curves_table_out) { curves_table(stdout, &a, cube_b ? &b : NULL); curves_spectral_table(stdout, &a, cube_b ? &b : NULL); }
+            if (curves_table_out) {
+                curves_table(stdout, &a, cube_b ? &b : NULL);
+                curves_spectral_table(stdout, &a, cube_b ? &b : NULL);
+                /* the tone curve by numbers: grays through the look, the tone
+                 * controls at rest and as set, and where the equalizer's bands sit */
+                enum { TN = 24 };
+                float rest[TN], set[TN], handles[PJ_TONE_BANDS][2], limit = 1.0f;
+                if (pj_tone_curve(camera, &options, false, TN, -9.0f, 2.5f, rest, set, handles, &limit, &error)) {
+                    printf("\ntone curve (a gray of each brightness through the look; output 0 black .. 1 white, sRGB-encoded)\n");
+                    printf("%8s  %8s  %8s\n", "stops", "at rest", "as set");
+                    for (int k = 0; k < TN; ++k)
+                        printf("%+8.1f  %8.3f  %8.3f\n", -9.0 + 11.5 * k / (TN - 1), (double)rest[k], (double)set[k]);
+                    printf("stops from middle gray in the file. At rest: --ev, --black, --shadows, --contrast and the\n"
+                           "tone equalizer left alone. As set: with them.\n");
+                    bool any = false;
+                    for (int k = 0; k < PJ_TONE_BANDS; ++k) if (options.tone_gain[k] != 0.0f) any = true;
+                    if (any) {
+                        printf("tone equalizer:");
+                        for (int k = 0; k < PJ_TONE_BANDS; ++k)
+                            if (options.tone_gain[k] != 0.0f) {
+                                char key[16];
+                                snprintf(key, sizeof key, "tone%d", k + 1);
+                                float g = pj_scene_get(&options, key);
+                                snprintf(key, sizeof key, "tone%dat", k + 1);
+                                float at = pj_scene_get(&options, key);
+                                snprintf(key, sizeof key, "tone%dwidth", k + 1);
+                                printf("  band %d %+.2f stops at %+.1f, %.2f wide", k + 1, (double)g, (double)at,
+                                       (double)pj_scene_get(&options, key));
+                            }
+                        printf("\n");
+                        if (limit < 0.999f)
+                            printf("a band asks for more than its width allows without reversing tones: held at %.0f%% of what is set\n",
+                                   (double)limit * 100.0);
+                    }
+                }
+            }
             status = EXIT_SUCCESS;
         }
 curves_done:
@@ -757,7 +809,7 @@ curves_done:
         else
             fprintf(stderr, "note: %s names no lens (a manual lens?); corrections left as given\n", input);
     }
-    static char recipe_text[1024];
+    static char recipe_text[2048];
     {
         char print_stem[256];
         const char *pstem = NULL;
