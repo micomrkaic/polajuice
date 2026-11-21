@@ -1052,7 +1052,7 @@ int main(void)
             assert(pj_scene_set(&t, "gradangle", "270") && t.grad_angle == 270.0f);
             assert(!pj_scene_set(&t, "temp", "3") && !pj_scene_set(&t, "grad", "-1") && !pj_scene_set(&t, "black", "x"));
             assert(pj_scene_get(&t, "temp") == 0.5f);
-            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 39);
+            size_t nk = 0; assert(pj_scene_keys(&nk) && nk == 42);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\ntemp=0.5\n") && strstr(text, "\ngradangle=270\n") && strstr(text, "\ngrad=0\n"));
@@ -1255,7 +1255,7 @@ int main(void)
             assert(pj_scene_set(&t, "rotate", "-3.5") && t.rotate == -3.5f);
             assert(pj_scene_set(&t, "trimw", "0.5") && t.trim_w == 0.5f);
             assert(!pj_scene_set(&t, "rotate", "20") && !pj_scene_set(&t, "distortion", "0.5"));
-            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 39);
+            size_t nk = 0; pj_scene_keys(&nk); assert(nk == 42);
             char text[2048];
             pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
             assert(strstr(text, "\nrotate=-3.5\n") && strstr(text, "\ntrimw=0.5\n") && strstr(text, "\ndenoise=0\n"));
@@ -1407,6 +1407,54 @@ int main(void)
                 char text[2048];
                 pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
                 assert(strstr(text, "\nkeystonev=0.5\n") && strstr(text, "\nradial=-1\n") && strstr(text, "\nrecover=1\n") && strstr(text, "\nsharpen=0\n"));
+            }
+            /* 1.35: red, green and blue: the color of the light named by
+             * channel, a stop each. The same three numbers as ev, temp and
+             * tint - ev their mean, temp red less blue, tint two thirds of
+             * red plus blue less twice green */
+            {
+                PjRenderOptions t = {0};
+                char text[2048];
+                pj_recipe_format("35mm-negative", "none", NULL, &t, text, sizeof text);
+                assert(strstr(text, "\ntint=0\nred=0\ngreen=0\nblue=0\nblack=0\n"));
+                assert(pj_scene_set(&t, "red", "0.5") && t.red == 0.5f && pj_scene_set(&t, "green", "-2") && pj_scene_set(&t, "blue", "2"));
+                assert(!pj_scene_set(&t, "red", "2.5") && !pj_scene_set(&t, "blue", "-3"));
+                PjImage *px = pj_image_new(8, 8, &error);
+                assert(px);
+                float *q = pj_image_pixels(px);
+                for (int i = 0; i < 64; ++i) { q[i * 3] = 0.2f; q[i * 3 + 1] = 0.1f; q[i * 3 + 2] = 0.05f; }
+                PjRenderOptions base = {.seed = 3, .strength = 0.0f, .crop = PJ_CROP_FULL};
+                PjImage *a0 = pj_render(px, "35mm-negative", &base, &error);
+                const float *p0 = pj_image_pixels(a0);
+                const char *key[3] = {"red", "green", "blue"};
+                for (int ch = 0; ch < 3; ++ch) {            /* one channel up a stop: that one doubles, the others stay */
+                    PjRenderOptions o = base;
+                    assert(pj_scene_set(&o, key[ch], "1"));
+                    PjImage *a = pj_render(px, "35mm-negative", &o, &error);
+                    const float *p = pj_image_pixels(a);
+                    for (int c2 = 0; c2 < 3; ++c2)
+                        assert(fabsf(p[c2] / p0[c2] - (c2 == ch ? 2.0f : 1.0f)) < 1e-5f);
+                    pj_image_free(a);
+                }
+                /* the identity, on the picture: (red, green, blue) = (0.5, -0.25, 0.25) */
+                PjRenderOptions byc = base, bywb = base;
+                byc.red = 0.5f; byc.green = -0.25f; byc.blue = 0.25f;
+                bywb.ev = (0.5f - 0.25f + 0.25f) / 3.0f;
+                bywb.temp = 0.5f - 0.25f;
+                bywb.tint = (0.5f + 0.25f + 2.0f * 0.25f) * 2.0f / 3.0f;
+                PjImage *a1 = pj_render(px, "35mm-negative", &byc, &error);
+                PjImage *a2 = pj_render(px, "35mm-negative", &bywb, &error);
+                const float *p1 = pj_image_pixels(a1), *p2 = pj_image_pixels(a2);
+                for (int c2 = 0; c2 < 3; ++c2) assert(fabsf(p1[c2] / p2[c2] - 1.0f) < 1e-5f);
+                pj_image_free(a0); pj_image_free(a1); pj_image_free(a2); pj_image_free(px);
+                /* the tone equalizer's bands are placed after the light: a
+                 * stop more green moves a gray's luminance, and the handles
+                 * with it, by log2(0.2126 + 2 x 0.7152 + 0.0722) */
+                enum { N = 24 };
+                float rest[N], live[N], handles[PJ_TONE_BANDS][2], limit;
+                PjRenderOptions g = {.seed = 1, .strength = 1.0f, .green = 1.0f};
+                assert(pj_tone_curve("35mm-slide", &g, false, N, -9.0f, 2.5f, rest, live, handles, &limit, &error));
+                assert(fabsf(handles[2][0] + log2f(0.2126f + 2.0f * 0.7152f + 0.0722f)) < 1e-4f);
             }
             /* 1.34: the tone equalizer. Four bells on the scale of scene
              * brightness in stops; a gain from luminance on all three

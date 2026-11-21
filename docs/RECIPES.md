@@ -21,6 +21,9 @@ render. `key=value` sources into a shell, which is why it is not JSON.
     crop=camera
     temp=0
     tint=0
+    red=0
+    green=0
+    blue=0
     black=0
     shadows=0
     highlights=0
@@ -68,6 +71,7 @@ render. `key=value` sources into a shell, which is why it is not JSON.
 | crop | `camera` (the camera's own format cut from the middle) or `full` (keep the whole input frame; an instant camera borders the full frame) |
 | temp | white balance, warm(+)/cool(-) in stops of red-to-blue ratio, -2..2 |
 | tint | magenta(+)/green(-), -1..1 |
+| red, green, blue | more(+)/less(-) of that color of light, in stops, -2..2. The same three adjustments as ev, temp and tint in other coordinates; they add up |
 | black | black point in scene units: crush(+)/fog(-), -0.1..0.1 |
 | shadows | lift(+)/drop(-) the shadows, stops at four stops under gray, -2..2 |
 | highlights | the raw shoulder's knee: softer(-)/harder(+), -1..1; scene-linear input only |

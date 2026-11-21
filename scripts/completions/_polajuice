@@ -9,6 +9,9 @@ _polajuice_films() { local -a f; f=(${(f)"$(polajuice films 2>/dev/null | awk 'N
 _polajuice_scene_opts=(
   '--temp[white balance warm(+)/cool(-), -2..2]:stops:'
   '--tint[magenta(+)/green(-), -1..1]:stops:'
+  '--red[more(+)/less(-) red light, -2..2]:stops:'
+  '--green[more(+)/less(-) green light, -2..2]:stops:'
+  '--blue[more(+)/less(-) blue light, -2..2]:stops:'
   '--black[black point, -0.1..0.1]:level:'
   '--shadows[lift(+)/drop(-) the shadows, -2..2]:stops:'
   '--highlights[raw shoulder knee, -1..1]:n:'

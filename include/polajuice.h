@@ -175,6 +175,14 @@ typedef struct {
                     the size, 0 the camera's, +1 double (the grainsize key
                     takes the multiplier, 0.5..4). The classic model's
                     grain is never finer than a pixel */
+    /* The three colors of light by name, in stops, -2..2: red +1 doubles
+     * the red light, green -1 halves the green. They are the same three
+     * numbers as ev, temp and tint in other coordinates (ev is their
+     * mean, temp is red less blue, tint two thirds of red plus blue less
+     * twice green) and are multiplied in with them, in scene light before
+     * everything else: here for the photographer who thinks in red, green
+     * and blue rather than in warmth and tint. */
+    float red, green, blue;
     /* The tone equalizer: PJ_TONE_BANDS bands, each a bell on the scale of
      * scene brightness in stops, as a parametric equalizer's bands sit on
      * the scale of pitch. tone_gain is the lift (+) or cut (-) at the

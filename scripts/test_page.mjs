@@ -197,6 +197,17 @@ elems["camera"].value = "35mm-slide";
 elems["camera"].handlers["change"]();
 if (elems["develop"].options.find(o => o.value === "cross").disabled) throw new Error("cross stuck disabled on a color camera");
 console.log("1.27 controls present; keys in the recipe and CLI line; cross disabled on B&W");
+// 1.35: red, green and blue sliders beside warm/cool and tint
+for (const id of ["red", "green", "blue"]) if (!elems[id] || !elems[id + "val"]) throw new Error(id + " control absent");
+elems["red"].value = "0.4"; elems["blue"].value = "-0.25";
+elems["red"].handlers["input"]();
+await new Promise(r => setTimeout(r, 400));
+if (!/--red 0\.4 --blue -0\.25\b/.test(elems["cli"].textContent)) throw new Error("CLI line lacks the channel flags: " + elems["cli"].textContent);
+if (!/\nred=0\.4\ngreen=0\nblue=-0\.25\n/.test(elems["recipe"].value)) throw new Error("recipe lacks the channels:\n" + elems["recipe"].value);
+if (elems["redval"].textContent !== "+0.40" || elems["blueval"].textContent !== "−0.25" && elems["blueval"].textContent !== "-0.25") throw new Error("channel labels: " + elems["redval"].textContent + " / " + elems["blueval"].textContent);
+elems["red"].value = "0"; elems["blue"].value = "0";
+elems["red"].handlers["input"]();
+console.log("red, green and blue: sliders present, carried to the CLI line and recipe");
 // 1.34: the tone equalizer. Twelve sliders behind the graph; flat bands stay
 // off the CLI line wherever they sit only if untouched; a lift is carried
 for (let i = 1; i <= 4; ++i) for (const s of ["", "at", "width"]) if (!elems[`tone${i}${s}`]) throw new Error(`tone${i}${s} control absent`);

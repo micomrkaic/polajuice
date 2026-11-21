@@ -1,0 +1,49 @@
+1.35.0: red, green and blue
+
+--red, --green, --blue: more or less of that color of light, in stops
+(-2..2; +1 doubles it). Sliders "Red", "Green", "Blue" on the page,
+beside Warm / cool and Tint.
+
+They add no freedom, and are there on purpose. A picture's color has
+three global numbers, and polajuice already had them as --ev, --temp
+and --tint. But a beginner thinks "too much red", not "half a stop
+toward magenta", and three numbers read off a gray patch are corrected
+most directly channel by channel. So the same three degrees of freedom
+are now also offered under the names everyone knows:
+
+    red   =  ev + temp/2 + tint/4       ev   = (red + green + blue) / 3
+    green =  ev          - tint/2       temp =  red - blue
+    blue  =  ev - temp/2 + tint/4       tint = (red + blue - 2 green) * 2/3
+
+The two sets add in the exponent of one set of channel gains, applied
+where white balance always was, so they can be mixed freely. Tested:
+all three up a stop is --ev 1 to the pixel; red up half and blue down
+half is --temp 1 to the pixel; the general case agrees to one level's
+rounding. Unlike the --filter identity this one has no conditions: all
+six sit before the tone controls.
+
+The tone equalizer's bands are placed "after exposure"; that now means
+after the light as a whole. A gray's luminance moves with the channel
+gains (and, slightly, with --temp and --tint, which was not accounted
+for in 1.34), so the handles on the page's tone curve are placed by the
+exposure, the raw stop and the luminance of the light's color together.
+Renders are unaffected; only where the handles are drawn.
+
+Scene keys red, green, blue: recipes, superjuice, serve, wasm,
+super8ify (RED, GREEN, BLUE), completions, exported LUTs and darktable
+styles. At zero, output is byte-identical to 1.34.0; a recipe from
+before has no such keys and reads as zero.
+
+Docs. The guide's white balance section gains "The same thing by
+color": the three controls, an example of each, a table of casts and
+their cures by opposite colors, and a plain statement that these are
+--ev, --temp and --tint by another name, with when to prefer which;
+chapter 2, the working-by-numbers table, the equivalence table and the
+option tables are updated. README: the scene section, annex A (identity
+1a, both directions) and annex D (twelve scene controls, still eight
+dimensions). --help, the three man pages, RECIPES.md.
+
+Tests: core (each channel doubles alone, the identity on pixels, keys,
+the tone handles' shift under a channel gain); CLI (each acts, the two
+exact identities, the general one, recipe replay, ranges, --filter red
+still a filter); serve; wasm; page.

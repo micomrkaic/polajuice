@@ -7,7 +7,7 @@
 _polajuice_cameras() { polajuice cameras 2>/dev/null | awk '/^[a-z0-9]/ {print $1}'; }
 _polajuice_films() { polajuice films 2>/dev/null | awk 'NF == 1 {print $1}'; }
 _polajuice_scene_flags() {
-    echo "--temp --tint --black --shadows --highlights --contrast --grad --gradangle --gradpos \
+    echo "--temp --tint --red --green --blue --black --shadows --highlights --contrast --grad --gradangle --gradpos \
 --radial --radialx --radialy --radialsize --denoise --sharpen --recover --grainamount --grainsize --quality --tone1 --tone1at --tone1width --tone2 --tone2at --tone2width --tone3 --tone3at --tone3width --tone4 --tone4at --tone4width --distortion --devignette \
 --rotate --keystonev --keystoneh --trimx --trimy --trimw --trimh"
 }

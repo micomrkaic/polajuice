@@ -221,7 +221,10 @@ exactly as they did before raw input existed.
 Nine knobs act on the light before the camera stage, all scene-linear,
 all identity at zero, so they describe the scene and the framing and
 leave the film to do what it does. `--temp` and `--tint` are white
-balance in stops of channel ratio (+1 temp a stop warmer); `--black`
+balance in stops of channel ratio (+1 temp a stop warmer); `--red`,
+`--green` and `--blue` are the same light named by channel, a stop each
+(+1 doubles that color; all three up one is `--ev 1`), for those who
+think in the three colors rather than in warmth and tint; `--black`
 sets the black point (crush or fog); `--shadows` lifts or drops the
 bottom stops with a soft knee, hue and saturation kept; `--highlights`
 moves the raw shoulder's knee (scene-linear input only, since a JPEG
@@ -848,6 +851,25 @@ are zero (they sit between the exposure and the filter). One
 difference: `--strength` scales the filter and leaves `--temp`,
 `--tint` and `--ev` alone.
 
+**1a. `--red`, `--green` and `--blue` are `--ev`, `--temp` and `--tint`,
+without conditions.** The three equations above read left to right are
+the definition of the channel controls: they are the channel gains
+themselves, a stop each, and add to the other three in the exponent.
+Solved the other way,
+
+    ev   = (red + green + blue) / 3
+    temp =  red - blue
+    tint = (red + blue - 2 green) * 2/3
+
+so `--red 1 --green 1 --blue 1` is `--ev 1` and `--red 0.5 --blue -0.5`
+is `--temp 1`, both to the pixel, and `--red 0.5 --green -0.25 --blue
+0.25` is `--ev 0.1667 --temp 0.25 --tint 0.8333` to one level's rounding
+(two products of gains against one). Unlike the filter, all six sit
+before the tone controls, so the identity does not depend on `--black`,
+`--shadows` or `--contrast`. They exist because red, green and blue are
+how a beginner thinks about color, and because three numbers read off a
+gray patch can be corrected channel by channel; they add no freedom.
+
 **2. `--shadows` is `--contrast`, from middle gray to four stops under
 it.** Both scale the luminance in log space about middle gray (0.18);
 contrast everywhere, shadows only below gray, saturating four stops
@@ -993,10 +1015,11 @@ measured on what is left.
 
 ### D. What is actually independent
 
-For the color of a picture, the nine scene controls - `--ev`, `--temp`,
-`--tint`, `--filter`, `--black`, `--shadows`, `--contrast`,
-`--highlights`, `--recover` - span eight dimensions (the filter lies in
-the plane of the first three), six of them on a non-raw. Beyond those
+For the color of a picture, the twelve scene controls - `--ev`, `--temp`,
+`--tint`, `--red`, `--green`, `--blue`, `--filter`, `--black`,
+`--shadows`, `--contrast`, `--highlights`, `--recover` - span eight
+dimensions (the three channel controls and the filter lie in the space
+of the first three), six of them on a non-raw. Beyond those
 the look is a handful of choices rather than dials: camera, film,
 print stock, development, age, strength. Everything else is where
 (crop, trim, straighten, perspective, the graduated and radial

@@ -278,7 +278,7 @@ flags = set()
 for src in sys.argv[2:4]:
     flags |= set(re.findall(r'strcmp\(argv\[[^\]]*\], "(-[^"]*)"\)', open(src).read()))
 keys = re.findall(r'\{"([a-z0-9]+)", -?[0-9.]+f, -?[0-9.]+f, -?[0-9.]+f\}', open(sys.argv[4]).read())
-assert len(keys) >= 39, keys
+assert len(keys) >= 42, keys
 missing = [f for f in sorted(flags) if not re.search(r'(?<![\w-])' + re.escape(f) + r'(?![\w-])', text)]
 missing += ["--" + k for k in keys if not re.search(r'--' + k + r'(?![\w-])', text)]
 assert not missing, missing
@@ -448,6 +448,42 @@ assert b[1] > a[1] * 1.5, (a, b)     # twice the size: coarser
 assert b[2] > a[2] * 1.2, (a, b)     # twice the amount: stronger, after darktable's coarseness allowance
 PY
 echo "grain: amount and size rest at 1, 0 is none, recipes replay, old recipes unchanged, LUTs untouched, darktable follows"
+
+# 1.35: --red, --green, --blue. One channel changes the picture; they ride
+# in the recipe and replay; and they are --ev, --temp and --tint by another
+# name: all three up a stop is --ev 1 and red up half with blue down half is
+# --temp 1 to the pixel, and the general identity holds to a level's rounding
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 -o "$LIB/c_def.png" >/dev/null 2>&1
+for ch in red green blue; do
+    PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --$ch 0.5 -o "$LIB/c_$ch.png" >/dev/null 2>&1
+    cmp -s "$LIB/c_def.png" "$LIB/c_$ch.png" && { echo "test_compat: --$ch 0.5 changed nothing"; exit 1; }
+done
+cmp -s "$LIB/c_red.png" "$LIB/c_blue.png" && { echo "test_compat: --red and --blue are the same picture"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --red 1 --green 1 --blue 1 -o "$LIB/c_all.png" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --ev 1 -o "$LIB/c_ev.png" >/dev/null 2>&1
+cmp -s "$LIB/c_all.png" "$LIB/c_ev.png" || { echo "test_compat: red, green and blue up a stop is not --ev 1"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --red 0.5 --blue -0.5 -o "$LIB/c_warm.png" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --temp 1 -o "$LIB/c_temp.png" >/dev/null 2>&1
+cmp -s "$LIB/c_warm.png" "$LIB/c_temp.png" || { echo "test_compat: red up half, blue down half is not --temp 1"; exit 1; }
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --red 0.5 --green -0.25 --blue 0.25 -o "$LIB/c_a.ppm" >/dev/null 2>&1
+PJ apply "$IN" -c 35mm-negative --no-film --grainamount 0 --ev 0.16666667 --temp 0.25 --tint 0.83333333 -o "$LIB/c_b.ppm" >/dev/null 2>&1
+python3 - "$LIB/c_a.ppm" "$LIB/c_b.ppm" <<'PY' || { echo "test_compat: red/green/blue is not ev/temp/tint in other coordinates"; exit 1; }
+import sys
+a, b = (open(p, "rb").read() for p in sys.argv[1:3])
+# two products of gains against one: equal but for a rounding of one level
+assert len(a) == len(b) and max(abs(x - y) for x, y in zip(a, b)) <= 1, [(x, y) for x, y in zip(a, b) if x != y][:6]
+PY
+PJ apply "$IN" -c 35mm-negative --no-film --red 0.3 --green -0.2 --blue 0.1 -o "$LIB/c_rec.jpg" >/dev/null 2>&1
+for line in 'red=0.3' 'green=-0.2' 'blue=0.1'; do
+    ./polajuice inspect "$LIB/c_rec.jpg" | grep -qx -- "$line" || { echo "test_compat: recipe lacks $line"; exit 1; }
+done
+PJ apply "$IN" --recipe "$LIB/c_rec.jpg" -o "$LIB/c_replay.jpg" >/dev/null 2>&1
+cmp -s "$LIB/c_rec.jpg" "$LIB/c_replay.jpg" || { echo "test_compat: channel recipe replay differs"; exit 1; }
+for bad in '--red 2.5' '--green -2.5' '--blue 3'; do
+    PJ apply "$IN" -c 35mm-negative --no-film $bad -o "$LIB/c_bad.png" >/dev/null 2>&1 && { echo "test_compat: $bad was accepted"; exit 1; }
+done
+PJ apply "$IN" -c bw-35 --no-film --grainamount 0 --filter red -o "$LIB/c_filter.png" >/dev/null 2>&1 || { echo "test_compat: --filter red broke beside --red"; exit 1; }
+echo "red, green, blue: each acts, together they are --ev, --temp and --tint, recipes replay"
 
 # 1.34: the tone equalizer. Flat bands are the default to the byte wherever
 # they sit; a lift changes the picture; the bands ride in the recipe and

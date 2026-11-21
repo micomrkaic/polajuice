@@ -70,6 +70,11 @@ cmp -s "$TMP/clip.jpg" "$TMP/recon.jpg" && { echo "test_serve: recover=1 rendere
 ./polajuice inspect "$TMP/recon.jpg" | grep -q '^recover=1$' || { echo "test_serve: served recipe lacks recover"; exit 1; }
 ./polajuice apply "$TMP/dir/tiny.dng" -c 35mm-negative --no-film --recover 1 -o "$TMP/recon_cli.jpg" >/dev/null 2>&1
 cmp -s "$TMP/recon.jpg" "$TMP/recon_cli.jpg" || { echo "test_serve: served recover render differs from the CLI"; exit 1; }
+# 1.35: red, green and blue are query parameters like any scene key
+curl -s "http://127.0.0.1:$PORT/api/render?name=cat.jpg&camera=35mm-negative&film=none&max=0&red=0.4&green=-0.2&blue=0.1" -o "$TMP/rgb.jpg"
+./polajuice apply "$TMP/dir/cat.jpg" -c 35mm-negative --no-film --red 0.4 --green -0.2 --blue 0.1 -o "$TMP/rgb_cli.jpg" >/dev/null 2>&1
+cmp -s "$TMP/rgb.jpg" "$TMP/rgb_cli.jpg" || { echo "test_serve: served red/green/blue render differs from the CLI"; exit 1; }
+curl -s "http://127.0.0.1:$PORT/api/tonecurve?camera=35mm-negative&film=none&red=1&green=1&blue=1" | grep -q '"shift":1.0000' || { echo "test_serve: red, green and blue up a stop do not shift the bands a stop"; exit 1; }
 # 1.34: the tone equalizer. Its bands are query parameters of a render (the
 # served picture is the CLI's), and /api/tonecurve gives the look's curve
 # for the page's graph without needing a picture

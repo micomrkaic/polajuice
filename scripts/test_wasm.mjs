@@ -222,6 +222,23 @@ try {
   const nolens = await engine.lens({ inputBytes: jpgSrc, ext: jpgExt });
   if (nolens !== null) throw new Error("a JPEG reported a lens");
   console.log("highlight recovery and the lens query through the wasm");
+  // 1.35: red, green and blue reach the engine, and all three up a stop is a
+  // stop of exposure
+  {
+    const cbase = { inputBytes: jpgSrc, ext: jpgExt, camera: "35mm-negative", seed: 5 };
+    const scan = b => { const d = Buffer.from(b); return d.subarray(d.lastIndexOf(Buffer.from([0xff, 0xda]))); };
+    const cdef = await engine.render(cbase);
+    const cred = await engine.render({ ...cbase, scene: { red: 0.5 } });
+    const cblue = await engine.render({ ...cbase, scene: { blue: 0.5 } });
+    if (Buffer.compare(scan(cdef), scan(cred)) === 0) throw new Error("red did not reach the wasm");
+    if (Buffer.compare(scan(cred), scan(cblue)) === 0) throw new Error("red and blue are the same picture through the wasm");
+    const call = await engine.render({ ...cbase, scene: { red: 1, green: 1, blue: 1 } });
+    const cev = await engine.render({ ...cbase, ev: 1 });
+    if (Buffer.compare(scan(call), scan(cev)) !== 0) throw new Error("red, green and blue up a stop is not ev 1 through the wasm");
+    const curve = await engine.toneCurve({ camera: "35mm-negative", scene: { red: 1, green: 1, blue: 1 } });
+    if (Math.abs(curve.shift - 1) > 1e-3) throw new Error("the tone bands do not follow the channel gains: shift " + curve.shift);
+    console.log("red, green and blue through the wasm (each acts; together they are exposure)");
+  }
   // 1.34: the tone equalizer. Flat bands are the default wherever they sit; a
   // lift reaches the engine; and the curve the page draws comes from the
   // engine itself, with the bands' handles on it

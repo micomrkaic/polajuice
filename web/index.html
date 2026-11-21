@@ -200,6 +200,22 @@ white.">Halation <span class="val" id="halval">1.0</span></label>
       <input id="tint" type="range" min="-1" max="1" step="0.05" value="0">
     </div>
     <div class="field">
+      <label for="red" title="More or less red light, in stops: +1 doubles the red, -1 halves it.
+Red, green and blue are the same three adjustments as Exposure,
+Warm / cool and Tint, named by color: all three up together is more
+exposure; red up with blue down is warmer; green down is toward
+magenta. Use whichever you think in - they add up.">Red <span class="val" id="redval">0</span></label>
+      <input id="red" type="range" min="-2" max="2" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="green" title="More or less green light, in stops. See Red.">Green <span class="val" id="greenval">0</span></label>
+      <input id="green" type="range" min="-2" max="2" step="0.05" value="0">
+    </div>
+    <div class="field">
+      <label for="blue" title="More or less blue light, in stops. See Red.">Blue <span class="val" id="blueval">0</span></label>
+      <input id="blue" type="range" min="-2" max="2" step="0.05" value="0">
+    </div>
+    <div class="field">
       <label for="black" title="Black point in scene units: positive crushes the bottom into black and rescales, negative fogs (lifts everything).">Black point <span class="val" id="blackval">0</span></label>
       <input id="black" type="range" min="-0.1" max="0.1" step="0.005" value="0">
     </div>
@@ -591,7 +607,7 @@ Ignored for instant cameras.">Edge effects <span class="val" id="edgeval">off</s
 "use strict";
 import { createEngine, probeNativeEngine } from "./engine.js";
 const $ = id => document.getElementById(id);
-const PAGE_VERSION = "1.34.0";   // kept in step by scripts/release checks
+const PAGE_VERSION = "1.35.0";   // kept in step by scripts/release checks
 
 /* ---- state --------------------------------------------------------- */
 let engine = null;      /* the engine renders go to: native when served by polajuice, else wasm */
@@ -675,7 +691,7 @@ function parseRecipe(text) {
 
 /* what the page would send: a recipe built from the controls, for the
  * CLI line before any render has happened */
-const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
+const SCENE_KEYS = ["temp", "tint", "red", "green", "blue", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
                     "radial", "radialx", "radialy", "radialsize",
                     "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
                     "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize",
@@ -1376,6 +1392,7 @@ function syncValueLabels() {
   const signed = (v, d) => (v > 0 ? "+" : "") + v.toFixed(d);
   $("tempval").textContent = signed(parseFloat($("temp").value), 2);
   $("tintval").textContent = signed(parseFloat($("tint").value), 2);
+  for (const k of ["red", "green", "blue"]) $(k + "val").textContent = signed(sceneNum(k, $(k).value), 2);
   $("blackval").textContent = signed(parseFloat($("black").value), 3);
   $("shadowsval").textContent = signed(parseFloat($("shadows").value), 1);
   $("highlightsval").textContent = signed(parseFloat($("highlights").value), 1);

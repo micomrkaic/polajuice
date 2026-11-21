@@ -12,7 +12,7 @@ import { WASI, WASIProcExit, File, PreopenDirectory, ConsoleStdout }
     from "./vendor/browser_wasi_shim/index.js";
 
 /* the scene adjustments as the engine's one argument: "k=v,k=v", "-" for none */
-export const SCENE_KEYS = ["temp", "tint", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
+export const SCENE_KEYS = ["temp", "tint", "red", "green", "blue", "black", "shadows", "highlights", "contrast", "grad", "gradangle", "gradpos",
                            "radial", "radialx", "radialy", "radialsize",
                            "denoise", "sharpen", "recover", "distortion", "devignette", "rotate", "keystonev", "keystoneh",
                            "trimx", "trimy", "trimw", "trimh", "grainamount", "grainsize",

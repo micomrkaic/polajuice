@@ -447,15 +447,36 @@ static void apply_scene_shoulder_at(PjImage *image, float highlights)
 
 /* ---- scene adjustments: the light before the camera ------------------ */
 
-/* white balance: R and B against G, in stops; tint moves G against both */
-static void apply_white_balance(PjImage *image, float temp, float tint)
+/* The color of the light, as three channel gains. White balance moves R
+ * and B against G, in stops, and tint moves G against both; red, green
+ * and blue are the same three degrees of freedom named by channel, a
+ * stop each, and simply add to those in the exponent. */
+static void light_gains(const PjRenderOptions *o, float gain[3])
 {
-    if (temp == 0.0f && tint == 0.0f) return;
-    float r = exp2f(temp * 0.5f + tint * 0.25f);
-    float g = exp2f(-tint * 0.5f);
-    float b = exp2f(-temp * 0.5f + tint * 0.25f);
-    Ctx ctx = {.image = image, .f = {r, g, b}};
+    gain[0] = exp2f(o->temp * 0.5f + o->tint * 0.25f + o->red);
+    gain[1] = exp2f(-o->tint * 0.5f + o->green);
+    gain[2] = exp2f(-o->temp * 0.5f + o->tint * 0.25f + o->blue);
+}
+
+static void apply_white_balance(PjImage *image, const PjRenderOptions *o)
+{
+    if (o->temp == 0.0f && o->tint == 0.0f && o->red == 0.0f && o->green == 0.0f && o->blue == 0.0f) return;
+    float gain[3];
+    light_gains(o, gain);
+    Ctx ctx = {.image = image, .f = {gain[0], gain[1], gain[2]}};
     pj_parallel_rows(image->height, gain3_band, &ctx);
+}
+
+/* How far, in stops, a neutral gray travels between the file and the
+ * tone equalizer: the exposure, the stop a raw file opens by, and what
+ * the color of the light does to a gray's luminance. The bands' centers
+ * are counted after all three. */
+static float scene_gray_shift(const PjRenderOptions *o, bool scene_linear)
+{
+    float gain[3];
+    light_gains(o, gain);
+    return o->ev + (scene_linear ? 1.0f : 0.0f) +
+           log2f(0.2126f * gain[0] + 0.7152f * gain[1] + 0.0722f * gain[2]);
 }
 
 static void scene_tone_band(size_t y0, size_t y1, void *vctx)
@@ -2018,7 +2039,7 @@ PjImage *pj_render(const PjImage *input, const char *preset_name,
     }
     if (options) {
         /* the light: white balance and the filter on the lens */
-        apply_white_balance(image, options->temp, options->tint);
+        apply_white_balance(image, options);
         apply_grad_nd(image, options->grad, options->grad_angle, options->grad_pos);
         apply_radial(image, options->radial, options->radial_x, options->radial_y, options->radial_size);
     }
@@ -2183,7 +2204,7 @@ bool pj_tone_curve(const char *preset, const PjRenderOptions *options, bool scen
     if (limit) *limit = bands ? eq.limit : 1.0f;
     /* where each band sits on the file's own scale: its center is counted
      * after exposure, and a raw file opens a stop up before that */
-    float shift = with.ev + (scene_linear ? 1.0f : 0.0f);
+    float shift = scene_gray_shift(&with, scene_linear);
     if (!isfinite(shift)) { pj_set_error(error, "tone curve: the exposure is not a number"); return false; }
     float hx[PJ_TONE_BANDS];
     for (int i = 0; i < PJ_TONE_BANDS; ++i)
@@ -2241,8 +2262,9 @@ size_t pj_tone_curve_json(const char *preset, const PjRenderOptions *options, bo
     PUT("],\"handles\":[");
     for (int i = 0; i < PJ_TONE_BANDS; ++i)
         PUT("%s[%.4f,%.4f]", i ? "," : "", (double)handles[i][0], (double)handles[i][1]);
+    PjRenderOptions none = {0};
     PUT("],\"limit\":%.4f,\"shift\":%.4f}",
-        (double)limit, (double)((options ? options->ev : 0.0f) + (scene_linear ? 1.0f : 0.0f)));
+        (double)limit, (double)scene_gray_shift(options ? options : &none, scene_linear));
     #undef PUT
     return at;
 }

@@ -319,6 +319,16 @@ White balance warm(+)/cool(\-), \-2..2.
 .BI \-\-tint " STOPS"
 Magenta(+)/green(\-), \-1..1.
 .TP
+.BI \-\-red " STOPS\fR, " \-\-green " STOPS\fR, " \-\-blue " STOPS"
+More (+) or less (\-) of that color of light, \-2..2: +1 doubles it.
+These are
+.BR \-\-ev ", " \-\-temp " and " \-\-tint
+named by color, and add to them: all three up one stop is
+.BR "\-\-ev 1" ,
+red up half and blue down half is
+.BR "\-\-temp 1" .
+Use whichever you think in.
+.TP
 .BI \-\-black " LEVEL"
 Black point: crush(+)/fog(\-), \-0.1..0.1.
 .TP

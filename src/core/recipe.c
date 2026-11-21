@@ -22,7 +22,10 @@ static void put_num(char *out, size_t size, float v)
 }
 
 static const PjSceneKey scene_keys[] = {
-    {"temp", -2.0f, 2.0f, 0.0f}, {"tint", -1.0f, 1.0f, 0.0f}, {"black", -0.1f, 0.1f, 0.0f},
+    {"temp", -2.0f, 2.0f, 0.0f}, {"tint", -1.0f, 1.0f, 0.0f},
+    /* the same light named by channel, a stop each */
+    {"red", -2.0f, 2.0f, 0.0f}, {"green", -2.0f, 2.0f, 0.0f}, {"blue", -2.0f, 2.0f, 0.0f},
+    {"black", -0.1f, 0.1f, 0.0f},
     {"shadows", -2.0f, 2.0f, 0.0f}, {"highlights", -1.0f, 1.0f, 0.0f}, {"contrast", -1.0f, 1.0f, 0.0f},
     {"grad", 0.0f, 3.0f, 0.0f}, {"gradangle", 0.0f, 360.0f, 0.0f}, {"gradpos", -0.5f, 0.5f, 0.0f},
     {"denoise", 0.0f, 3.0f, 0.0f}, {"distortion", -0.3f, 0.3f, 0.0f}, {"devignette", 0.0f, 2.0f, 0.0f},
@@ -53,6 +56,9 @@ static float *scene_slot(PjRenderOptions *o, const char *key)
 {
     if (!strcmp(key, "temp")) return &o->temp;
     if (!strcmp(key, "tint")) return &o->tint;
+    if (!strcmp(key, "red")) return &o->red;
+    if (!strcmp(key, "green")) return &o->green;
+    if (!strcmp(key, "blue")) return &o->blue;
     if (!strcmp(key, "black")) return &o->black;
     if (!strcmp(key, "shadows")) return &o->shadows;
     if (!strcmp(key, "highlights")) return &o->highlights;

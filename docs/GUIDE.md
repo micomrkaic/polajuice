@@ -12,7 +12,7 @@ advice on style. It assumes nothing: if you have never set an exposure or
 opened a terminal, start at the top. If you have done both for decades, the
 contents will take you where you want to go.
 
-Written for polajuice 1.34 and later. The photographs are the author's own
+Written for polajuice 1.35 and later. The photographs are the author's own
 (© Mico Mrkaic, CC BY 4.0) and ship with the program.
 
 ---
@@ -336,6 +336,10 @@ polajuice apply can.jpg -c 35mm-negative --temp 0.6 -o can-warm.jpg
 | `--temp -0.6`: cooler | no `--temp` | `--temp 0.6`: warmer |
 |:-:|:-:|:-:|
 | ![Cooler white balance](guide/img/can-cool.jpg) | ![White balance as shot](guide/img/can-negative.jpg) | ![Warmer white balance](guide/img/can-warm.jpg) |
+
+If you would sooner think in the three colors themselves, `--red`,
+`--green` and `--blue` do the same job by another route
+([section 6.7](#67-white-balance---temp-and---tint)).
 
 Two controls cover it. `--temp` moves between blue and orange, the
 direction along which daylight and lamps differ. `--tint` moves between
@@ -1093,6 +1097,60 @@ go cooler; open shade: go warmer), then, if you like, push a little past
 neutral for mood. `--tint` is for the green of fluorescent light and for
 foliage reflecting onto faces.
 
+#### The same thing by color: `--red`, `--green`, `--blue`
+
+If warmth and tint feel abstract, think in the three colors a picture is
+made of. Three controls say how much of each there is.
+
+| Control | Range | Meaning |
+|---|---|---|
+| `--red` | −2 to 2 stops | more (plus) or less (minus) red light |
+| `--green` | −2 to 2 stops | more or less green light |
+| `--blue` | −2 to 2 stops | more or less blue light |
+
+They are in stops, like everything else: `--red 1` doubles the red light
+and `--red -1` halves it. Small numbers go a long way; start with 0.1
+to 0.3.
+
+```sh
+polajuice apply can.jpg -c 35mm-negative --red 0.6 -o can-red.jpg
+polajuice apply can.jpg -c 35mm-negative --green 0.6 -o can-green.jpg
+polajuice apply can.jpg -c 35mm-negative --blue 0.6 -o can-blue.jpg
+```
+
+| `--red 0.6` | `--green 0.6` | `--blue 0.6` |
+|:-:|:-:|:-:|
+| ![More red light](guide/img/can-red.jpg) | ![More green light](guide/img/can-green.jpg) | ![More blue light](guide/img/can-blue.jpg) |
+
+A color cast is fixed by taking away the color there is too much of, or
+adding the one that is missing. Every color has an opposite, and too
+much of one is too little of the other:
+
+| The picture is too… | Take away | or add |
+|---|---|---|
+| red | `--red` down | green and blue |
+| green | `--green` down | red and blue |
+| blue | `--blue` down | red and green |
+| yellow (orange, "warm") | red and green | `--blue` up |
+| magenta (pink, purple) | red and blue | `--green` up |
+| cyan (blue-green) | green and blue | `--red` up |
+
+**These are not new controls.** Red, green and blue are exactly `--ev`,
+`--temp` and `--tint`, described another way, and you can mix the two
+sets freely: they add up.
+
+- All three up by the same amount is more exposure: `--red 1 --green 1
+  --blue 1` is `--ev 1`.
+- Red up and blue down is warmer: `--red 0.5 --blue -0.5` is `--temp 1`.
+- Green down is toward magenta, green up toward green: that is `--tint`.
+
+Which set to use is a matter of how you think. Warmth and tint keep the
+brightness roughly where it was, which is why photographers prefer them
+for white balance. Red, green and blue are the plainest description of
+what is happening, and they are the ones to reach for when you have read
+three numbers off a gray patch and want to make them equal
+([section 8.8](#88-working-by-numbers)).
+
 ## 6.8 Tone: `--black`, `--shadows`, `--contrast`, `--highlights`, `--recover`
 
 Five controls shape the tones before the film sees them.
@@ -1804,7 +1862,7 @@ color at all. Most judgments in this guide can be checked with a number.
 
 | Question | The check |
 |---|---|
-| Is the white balance neutral? | Find something that should be gray or white. Read its pixel values with any image viewer's color picker. Red, green and blue should be equal; adjust `--temp` (red against blue) and `--tint` (green against the other two) until they are. |
+| Is the white balance neutral? | Find something that should be gray or white. Read its pixel values with any image viewer's color picker. Red, green and blue should be equal. If they are not, lower the channel that reads highest or raise the one that reads lowest with `--red`, `--green`, `--blue`, a tenth of a stop at a time; or use `--temp` (red against blue) and `--tint` (green against the other two). |
 | Is anything blown or blocked? | The page's histogram reports the percentage clipped at white and at black. For a raw file, `polajuice inspect` reports what the sensor itself clipped. |
 | Is the exposure about right? | For an average scene, the bulk of the histogram sits near the middle. A subject of middle brightness should be near 118 of 255. |
 | How do two films differ? | `polajuice curves --vs` with `--table`: change in lightness, saturation in percent and hue in degrees for 24 standard colors. |
@@ -1882,6 +1940,7 @@ this is the summary.
 
 | These | Are | So |
 |---|---|---|
+| `--red`, `--green`, `--blue` | exactly `--ev`, `--temp` and `--tint` in other coordinates: exposure is their average, warmth is red less blue, tint is two thirds of red plus blue less twice green | use one set or the other for a correction; using both means adjusting the same thing twice |
 | `--filter` | a fixed mix of `--ev`, `--temp` and `--tint` | a filter and a white-balance change can cancel each other |
 | `--shadows` and `--contrast` | the same reshaping of the tones below middle gray | lifting shadows and adding contrast fight; pick one for the dark half |
 | `--devignette` and the camera's vignette | opposite signs of one thing | correcting your lens's corners and then choosing a vignetting camera is double work |
@@ -2050,6 +2109,7 @@ recipe format.
 |---|---|---|---|
 | `--temp` | −2 to 2 stops | 0 | white balance: plus warmer |
 | `--tint` | −1 to 1 stops | 0 | plus magenta, minus green |
+| `--red`, `--green`, `--blue` | −2 to 2 stops | 0 | more or less of that color of light (the same adjustments as `--ev`, `--temp`, `--tint`, by color) |
 | `--filter` | `yellow`, `orange`, `red`, `green`, `blue` | none | a lens filter, for black-and-white |
 | `--black` | −0.1 to 0.1 | 0 | black point: plus crushes, minus fogs |
 | `--shadows` | −2 to 2 stops | 0 | lift or deepen the tones below middle gray |
