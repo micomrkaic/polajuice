@@ -1,0 +1,41 @@
+{
+ "credit": "Sample photos (c) Mico Mrkaic, CC BY 4.0",
+ "samples": [
+  {
+   "file": "sleeping-cat.jpg",
+   "thumb": "sleeping-cat_thumb.jpg",
+   "caption": "A very relaxed supervisor",
+   "suggest": "polaroid-600"
+  },
+  {
+   "file": "driftwood-beach.jpg",
+   "thumb": "driftwood-beach_thumb.jpg",
+   "caption": "Driftwood beach, boneyard trees",
+   "suggest": "35mm-slide"
+  },
+  {
+   "file": "pepsi-time.jpg",
+   "thumb": "pepsi-time_thumb.jpg",
+   "caption": "Pepsi time, two ways",
+   "suggest": "35mm-negative"
+  },
+  {
+   "file": "geneva-street.jpg",
+   "thumb": "geneva-street_thumb.jpg",
+   "caption": "Geneva street, watchmakers' corner",
+   "suggest": "midcentury-rangefinder"
+  },
+  {
+   "file": "bell-tower.jpg",
+   "thumb": "bell-tower_thumb.jpg",
+   "caption": "Bell tower against a deep sky",
+   "suggest": "autochrome"
+  },
+  {
+   "file": "classic-jaguar.jpg",
+   "thumb": "classic-jaguar_thumb.jpg",
+   "caption": "Jaguar Mk2 outside the dealer",
+   "suggest": "technicolor-3strip"
+  }
+ ]
+}
